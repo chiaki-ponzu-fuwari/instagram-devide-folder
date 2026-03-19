@@ -127,8 +127,15 @@
       font-size:12px; color:var(--txt3); background:var(--bg3);
       padding:1px 7px; border-radius:10px; min-width:20px; text-align:center;
     }
-    .f-chev { font-size:11px; color:var(--txt3); transition:transform .2s; flex-shrink:0; width:14px; text-align:center; }
-    .f-chev.coll { transform:rotate(-90deg); }
+    .f-chev {
+      font-size:18px; color:var(--txt3); transition:transform .2s;
+      flex-shrink:0; width:44px; height:44px;
+      display:flex; align-items:center; justify-content:center;
+      border-radius:10px; margin-right:-8px;
+      transform:rotate(90deg);
+    }
+    .f-chev:active { background:var(--fill); }
+    .f-chev.coll { transform:rotate(0deg); }
     .f-row.d1 { padding-left:30px; }
     .f-row.d2 { padding-left:46px; }
     .f-row.d3 { padding-left:62px; }
@@ -533,10 +540,10 @@ const SK = 'ig_dm_mgr_v1';
 const COLORS = ['#E1306C','#F77737','#FCAF45','#4CAF50','#26C6DA','#29B6F6','#5C6BC0','#AB47BC','#78909C','#FF5722'];
 const AVATAR_COLORS = ['#E1306C','#F77737','#dc2743','#4CAF50','#29B6F6','#5C6BC0','#AB47BC','#26C6DA','#FF5722','#8D6E63'];
 const DEFAULT_FOLDERS = [
-  { id:'f1', name:'相互フォロー',     color:'#4CAF50', parentId:null, order:0, collapsed:false },
-  { id:'f2', name:'配信関連',         color:'#29B6F6', parentId:null, order:1, collapsed:false },
-  { id:'f3', name:'案件依頼（有）',   color:'#F77737', parentId:null, order:2, collapsed:false },
-  { id:'f4', name:'案件依頼（悩）',   color:'#AB47BC', parentId:null, order:3, collapsed:false },
+  { id:'f1', name:'相互フォロー',     color:'#4CAF50', parentId:null, order:0, collapsed:true },
+  { id:'f2', name:'配信関連',         color:'#29B6F6', parentId:null, order:1, collapsed:true },
+  { id:'f3', name:'案件依頼（有）',   color:'#F77737', parentId:null, order:2, collapsed:true },
+  { id:'f4', name:'案件依頼（悩）',   color:'#AB47BC', parentId:null, order:3, collapsed:true },
 ];
 
 // =========================================================
@@ -645,10 +652,10 @@ function buildFolderRow(container, f, depth) {
   row.className = `f-row${depth > 0 ? ` d${depth}` : ''}${active ? ' sel' : ''}`;
   row.dataset.fid = f.id;
   row.innerHTML = `
-    <span class="f-chev${f.collapsed ? ' coll' : ''}" data-chev="${f.id}">${children.length ? '▾' : ''}</span>
     <span class="f-dot" style="background:${esc(f.color)}"></span>
     <span class="f-name">${esc(f.name)}</span>
     <span class="f-cnt">${cnt}</span>
+    <span class="f-chev${f.collapsed ? ' coll' : ''}" data-chev="${f.id}">${children.length ? '›' : ''}</span>
   `;
 
   // tap chevron = collapse/expand
@@ -660,8 +667,15 @@ function buildFolderRow(container, f, depth) {
     renderTree();
   });
 
-  // tap row = select folder
-  row.addEventListener('click', () => selectFolder(f.id));
+  // tap row = 子あり→展開/折りたたみ切替 & 選択、子なし→選択のみ
+  row.addEventListener('click', () => {
+    if (children.length) {
+      f.collapsed = !f.collapsed;
+      save();
+      renderTree();
+    }
+    selectFolder(f.id);
+  });
 
   // long press = action sheet
   let timer;
@@ -907,7 +921,8 @@ function saveFolder() {
     toast('フォルダーを更新しました');
   } else {
     const maxOrd = S.folders.reduce((m,f) => Math.max(m, f.order||0), -1);
-    S.folders.push({ id:uid(), name, color, parentId, order:maxOrd+1, collapsed:false });
+    S.folders.push({ id:uid(), name, color, parentId, order:maxOrd+1, collapsed:true });
+    if (parentId) { const p = folder(parentId); if (p) p.collapsed = false; }
     save(); renderTree();
     toast('フォルダーを追加しました');
   }
