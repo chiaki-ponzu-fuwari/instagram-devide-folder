@@ -1,0 +1,18 @@
+{
+  "name": "Instagram DM管理",
+  "short_name": "DM管理",
+  "description": "InstagramのDM相手をフォルダーで整理・管理するアプリ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#E1306C",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
