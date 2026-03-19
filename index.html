@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DM管理">
+  <meta name="theme-color" content="#E1306C">
+  <title>Instagram DM管理</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <style>
+    /* ===== BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #F2F2F7;
+      --bg2:       #FFFFFF;
+      --bg3:       #F2F2F7;
+      --card:      #FFFFFF;
+      --txt:       #000000;
+      --txt2:      rgba(60,60,67,.85);
+      --txt3:      rgba(60,60,67,.55);
+      --sep:       rgba(60,60,67,.22);
+      --fill:      rgba(116,116,128,.10);
+      --accent:    #E1306C;
+      --ig-grad:   linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);
+      --sidebar-w: 270px;
+      --hdr-h:     56px;
+      --st:        env(safe-area-inset-top,    0px);
+      --sb:        env(safe-area-inset-bottom, 0px);
+      --sl:        env(safe-area-inset-left,   0px);
+      --sr:        env(safe-area-inset-right,  0px);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:   #000;
+        --bg2:  #1C1C1E;
+        --bg3:  #2C2C2E;
+        --card: #1C1C1E;
+        --txt:  #FFF;
+        --txt2: rgba(235,235,245,.85);
+        --txt3: rgba(235,235,245,.50);
+        --sep:  rgba(84,84,88,.55);
+        --fill: rgba(116,116,128,.18);
+      }
+    }
+
+    html, body {
+      height: 100%; overflow: hidden;
+      background: var(--bg); color: var(--txt);
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      -webkit-text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none; -webkit-user-select: none;
+    }
+
+    /* ===== APP SHELL ===== */
+    #app { display:flex; flex-direction:column; height:100%; padding-top:var(--st); }
+
+    /* ===== HEADER ===== */
+    .hdr {
+      display:flex; align-items:center; gap:4px;
+      height:var(--hdr-h); padding:0 8px 0 4px;
+      background:rgba(255,255,255,.85);
+      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-bottom:.5px solid var(--sep);
+      position:relative; z-index:20; flex-shrink:0;
+    }
+    @media (prefers-color-scheme:dark) {
+      .hdr { background:rgba(28,28,30,.88); }
+    }
+    .hdr-title {
+      flex:1; font-size:17px; font-weight:600; text-align:center;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .ico-btn {
+      min-width:44px; height:44px; padding:0 6px;
+      display:flex; align-items:center; justify-content:center;
+      border:none; background:none; color:var(--accent);
+      font-size:20px; cursor:pointer; border-radius:10px;
+    }
+    .ico-btn:active { background:var(--fill); }
+    .ico-btn svg { width:22px; height:22px; fill:none; stroke:var(--accent); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+    /* ===== BODY AREA ===== */
+    .body { display:flex; flex:1; overflow:hidden; position:relative; }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      width:var(--sidebar-w); background:var(--bg2);
+      border-right:.5px solid var(--sep);
+      display:flex; flex-direction:column; overflow:hidden; flex-shrink:0;
+      transition:transform .3s cubic-bezier(.25,.46,.45,.94);
+    }
+    @media (max-width:768px) {
+      .sidebar {
+        position:absolute; left:0; top:0; bottom:0; z-index:100;
+        transform:translateX(-100%);
+      }
+      .sidebar.open {
+        transform:translateX(0);
+        box-shadow:6px 0 24px rgba(0,0,0,.25);
+      }
+    }
+    .sidebar-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 16px 10px;
+      border-bottom:.5px solid var(--sep); flex-shrink:0;
+    }
+    .sidebar-label { font-size:12px; font-weight:700; color:var(--txt3); text-transform:uppercase; letter-spacing:.8px; }
+    .sidebar-scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:6px 0 40px; }
+
+    /* Folder rows */
+    .f-row {
+      display:flex; align-items:center; gap:8px;
+      padding:9px 14px; cursor:pointer;
+      transition:background .1s; min-height:44px; position:relative;
+    }
+    .f-row:active, .f-row.sel { background:rgba(225,48,108,.10); }
+    .f-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+    .f-name { flex:1; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .f-row.sel .f-name { color:var(--accent); font-weight:600; }
+    .f-cnt {
+      font-size:12px; color:var(--txt3); background:var(--bg3);
+      padding:1px 7px; border-radius:10px; min-width:20px; text-align:center;
+    }
+    .f-chev {
+      font-size:18px; color:var(--txt3); transition:transform .2s;
+      flex-shrink:0; width:44px; height:44px;
+      display:flex; align-items:center; justify-content:center;
+      border-radius:10px; margin-right:-8px;
+      transform:rotate(90deg);
+    }
+    .f-chev:active { background:var(--fill); }
+    .f-chev.coll { transform:rotate(0deg); }
+    .f-row.d1 { padding-left:30px; }
+    .f-row.d2 { padding-left:46px; }
+    .f-row.d3 { padding-left:62px; }
+
+    /* Overlay */
+    .overlay {
+      display:none; position:absolute; inset:0;
+      background:rgba(0,0,0,.42); z-index:99;
+      transition:opacity .25s;
+    }
+    .overlay.show { display:block; }
+
+    /* ===== MAIN ===== */
+    .main { flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); }
+
+    /* Search */
+    .srch-wrap {
+      padding:8px 14px; background:var(--bg2);
+      border-bottom:.5px solid var(--sep); flex-shrink:0;
+    }
+    .srch-inner {
+      display:flex; align-items:center; gap:8px;
+      background:var(--fill); border-radius:10px; padding:7px 10px;
+    }
+    .srch-ico { font-size:14px; color:var(--txt3); flex-shrink:0; }
+    .srch-input {
+      flex:1; border:none; background:none; font-size:15px;
+      color:var(--txt); outline:none; -webkit-appearance:none;
+      font-family:inherit;
+    }
+    .srch-input::placeholder { color:var(--txt3); }
+    .srch-clr { font-size:13px; color:var(--txt3); cursor:pointer; display:none; padding:2px 4px; }
+    .srch-clr.vis { display:block; }
+
+    /* Info bar */
+    .info-bar {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:6px 16px; flex-shrink:0;
+    }
+    .info-bar-name { font-size:13px; color:var(--txt3); font-weight:500; }
+    .info-bar-cnt  { font-size:13px; color:var(--txt3); }
+
+    /* Account list */
+    .acc-list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:0 14px calc(90px + var(--sb)); }
+
+    .sec-hdr {
+      font-size:11px; font-weight:700; color:var(--txt3);
+      text-transform:uppercase; letter-spacing:.8px; padding:14px 2px 6px;
+    }
+
+    /* Empty states */
+    .empty {
+      display:flex; flex-direction:column; align-items:center;
+      justify-content:center; padding:60px 20px; color:var(--txt3); text-align:center; gap:8px;
+    }
+    .empty-ico { font-size:52px; }
+    .empty-ttl { font-size:17px; font-weight:600; color:var(--txt2); }
+    .empty-sub { font-size:14px; }
+
+    /* ===== ACCOUNT CARD ===== */
+    .acc-card {
+      background:var(--card); border-radius:14px;
+      margin-bottom:8px; overflow:hidden;
+      transition:transform .1s;
+    }
+    .acc-card:active { transform:scale(.985); }
+
+    .acc-main {
+      display:flex; align-items:center; gap:12px;
+      padding:12px 14px; cursor:pointer;
+    }
+    .acc-avatar {
+      width:46px; height:46px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:19px; font-weight:700; flex-shrink:0; color:#fff;
+    }
+    .acc-info { flex:1; min-width:0; }
+    .acc-user {
+      font-size:15px; font-weight:600; color:var(--txt);
+      display:flex; align-items:center; gap:6px;
+      overflow:hidden; white-space:nowrap;
+    }
+    .acc-user span { overflow:hidden; text-overflow:ellipsis; }
+    .new-badge {
+      background:var(--accent); color:#fff;
+      font-size:9px; font-weight:800; padding:2px 6px;
+      border-radius:6px; letter-spacing:.6px; flex-shrink:0;
+    }
+    .acc-sub {
+      font-size:13px; color:var(--txt3);
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;
+    }
+    .acc-more {
+      min-width:36px; height:36px; display:flex; align-items:center;
+      justify-content:center; border:none; background:none;
+      cursor:pointer; color:var(--txt3); font-size:20px; border-radius:50%;
+    }
+    .acc-more:active { background:var(--fill); }
+
+    /* Expanded detail */
+    .acc-detail {
+      display:none; border-top:.5px solid var(--sep); padding:10px 14px 14px;
+    }
+    .acc-detail.open { display:block; }
+    .d-row {
+      display:flex; align-items:flex-start; gap:10px;
+      padding:8px 0; border-bottom:.5px solid var(--sep);
+    }
+    .d-row:last-of-type { border-bottom:none; }
+    .d-lbl { font-size:12px; color:var(--txt3); min-width:52px; padding-top:1px; flex-shrink:0; }
+    .d-val { font-size:14px; color:var(--txt); flex:1; word-break:break-all; line-height:1.5; }
+    .d-link { color:var(--accent); text-decoration:none; }
+
+    .d-btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+    .d-btn {
+      padding:10px 6px; border-radius:10px; border:none;
+      font-size:13px; font-weight:600; cursor:pointer; text-align:center;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .d-btn:active { opacity:.7; }
+    .btn-edit   { background:var(--fill);                     color:var(--txt); }
+    .btn-new    { background:rgba(225,48,108,.12);             color:var(--accent); }
+    .btn-new.on { background:var(--accent);                   color:#fff; }
+    .btn-move   { background:rgba(10,132,255,.12);             color:#0A84FF; }
+    .btn-del    { background:rgba(255,59,48,.12);              color:#FF3B30; }
+
+    /* ===== FAB ===== */
+    .fab {
+      position:fixed; right:calc(18px + var(--sr)); bottom:calc(22px + var(--sb));
+      width:58px; height:58px; border-radius:50%;
+      background:var(--ig-grad); color:#fff; font-size:30px;
+      border:none; cursor:pointer; box-shadow:0 4px 22px rgba(225,48,108,.45);
+      display:none; align-items:center; justify-content:center;
+      z-index:50; transition:transform .1s, box-shadow .1s;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .fab:active { transform:scale(.88); box-shadow:0 2px 10px rgba(225,48,108,.3); }
+
+    /* ===== MODALS (bottom sheet) ===== */
+    .modal-ov {
+      position:fixed; inset:0; background:rgba(0,0,0,.45);
+      z-index:300; display:flex; align-items:flex-end;
+      opacity:0; pointer-events:none; transition:opacity .22s;
+    }
+    .modal-ov.show { opacity:1; pointer-events:all; }
+    .modal-sheet {
+      width:100%; background:var(--bg2);
+      border-radius:20px 20px 0 0;
+      padding:0;
+      transform:translateY(100%);
+      transition:transform .3s cubic-bezier(.25,.46,.45,.94);
+      max-height:92vh; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    }
+    .modal-ov.show .modal-sheet { transform:translateY(0); }
+    .modal-handle { width:36px; height:4px; background:var(--sep); border-radius:2px; margin:10px auto 14px; }
+    .modal-ttl {
+      font-size:17px; font-weight:700; text-align:center;
+      padding:0 16px 14px; border-bottom:.5px solid var(--sep);
+    }
+    .modal-body { padding:16px; }
+
+    .fg { margin-bottom:14px; }
+    .fg label { display:block; font-size:13px; font-weight:600; color:var(--txt2); margin-bottom:6px; }
+    .fi {
+      width:100%; padding:12px; border:.5px solid var(--sep);
+      border-radius:10px; background:var(--bg3); color:var(--txt);
+      font-size:15px; outline:none; -webkit-appearance:none; font-family:inherit;
+    }
+    .fi:focus { border-color:var(--accent); }
+    .fi-ta { resize:none; min-height:80px; }
+
+    /* Color picker */
+    .cpick { display:flex; gap:10px; flex-wrap:wrap; }
+    .c-opt {
+      width:34px; height:34px; border-radius:50%; cursor:pointer;
+      border:2.5px solid transparent; transition:transform .1s, border-color .1s;
+    }
+    .c-opt.sel { border-color:var(--txt); transform:scale(1.18); }
+
+    .modal-actions {
+      display:flex; gap:10px; padding:14px 16px calc(16px + var(--sb));
+      position:sticky; bottom:0;
+      background:var(--bg2);
+      border-top:.5px solid var(--sep);
+    }
+    .btn-row { flex:1; padding:13px; border-radius:12px; border:none; font-size:15px; font-weight:700; cursor:pointer; }
+    .btn-row:active { opacity:.7; }
+    .btn-cancel  { background:var(--fill); color:var(--txt); }
+    .btn-primary { background:var(--ig-grad); color:#fff; }
+
+    /* Folder picker (move modal) */
+    .fpick-list { max-height:52vh; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+    .fp-item {
+      display:flex; align-items:center; gap:12px;
+      padding:13px 16px; cursor:pointer;
+      border-bottom:.5px solid var(--sep); min-height:44px;
+    }
+    .fp-item:last-child { border-bottom:none; }
+    .fp-item:active { background:var(--fill); }
+    .fp-item.sel { background:rgba(225,48,108,.08); }
+    .fp-name { flex:1; font-size:15px; }
+    .fp-check { color:var(--accent); font-size:16px; }
+
+    /* ===== ACTION SHEET ===== */
+    .as-ov {
+      position:fixed; inset:0; background:rgba(0,0,0,.42);
+      z-index:400; display:flex; align-items:flex-end;
+      padding:0 8px calc(8px + var(--sb));
+      opacity:0; pointer-events:none; transition:opacity .2s;
+    }
+    .as-ov.show { opacity:1; pointer-events:all; }
+    .as-wrap { width:100%; transform:translateY(20px); transition:transform .25s cubic-bezier(.25,.46,.45,.94); }
+    .as-ov.show .as-wrap { transform:translateY(0); }
+    .as-group { background:var(--bg2); border-radius:14px; overflow:hidden; margin-bottom:8px; }
+    .as-ttl {
+      font-size:13px; color:var(--txt3); text-align:center;
+      padding:12px 16px 10px; border-bottom:.5px solid var(--sep);
+    }
+    .as-item {
+      display:flex; align-items:center; justify-content:center;
+      padding:14px 16px; font-size:17px; color:var(--txt);
+      cursor:pointer; border-top:.5px solid var(--sep); min-height:44px;
+    }
+    .as-item:first-child { border-top:none; }
+    .as-item:active { background:var(--fill); }
+    .as-item.danger { color:#FF3B30; }
+    .as-cancel {
+      background:var(--bg2); border-radius:14px;
+      display:flex; align-items:center; justify-content:center;
+      padding:14px; font-size:17px; font-weight:700; color:var(--txt);
+      cursor:pointer;
+    }
+    .as-cancel:active { background:var(--bg3); }
+
+    /* ===== TOAST ===== */
+    .toast {
+      position:fixed; bottom:calc(88px + var(--sb)); left:50%;
+      transform:translateX(-50%);
+      background:rgba(0,0,0,.82); color:#fff;
+      padding:10px 20px; border-radius:20px;
+      font-size:14px; z-index:999; white-space:nowrap;
+      pointer-events:none; opacity:0; transition:opacity .3s;
+    }
+    @media (prefers-color-scheme:dark) { .toast { background:rgba(72,72,74,.96); } }
+    .toast.show { opacity:1; }
+
+    /* ===== DESKTOP OVERRIDE ===== */
+    @media (min-width:769px) {
+      .sidebar { transform:none !important; box-shadow:none; }
+      .ham { display:none !important; }
+    }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width:3px; }
+    ::-webkit-scrollbar-thumb { background:var(--sep); border-radius:2px; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header class="hdr">
+    <button class="ico-btn ham" id="hamBtn" aria-label="メニュー">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/></svg>
+    </button>
+    <h1 class="hdr-title" id="hdrTitle">📱 DM管理</h1>
+    <button class="ico-btn" id="addFolderBtn" aria-label="フォルダー追加">
+      <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+    </button>
+  </header>
+
+  <!-- Body -->
+  <div class="body">
+    <div class="overlay" id="overlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-hdr">
+        <span class="sidebar-label">フォルダー</span>
+        <button class="ico-btn" id="sideAddFolder" style="width:36px;height:36px;font-size:22px;" aria-label="追加">＋</button>
+      </div>
+      <div class="sidebar-scroll" id="folderTree"></div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="srch-wrap">
+        <div class="srch-inner">
+          <span class="srch-ico">🔍</span>
+          <input type="search" class="srch-input" id="srchInput" placeholder="検索（アカウント名・メモ）" autocomplete="off">
+          <span class="srch-clr" id="srchClr">✕</span>
+        </div>
+      </div>
+      <div id="mainArea">
+        <div class="empty" style="padding-top:80px">
+          <div class="empty-ico">📁</div>
+          <div class="empty-ttl">フォルダーを選択</div>
+          <div class="empty-sub">左のフォルダーをタップするか<br>フォルダーを新規作成してください</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fab" aria-label="アカウント追加">＋</button>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Action Sheet -->
+<div class="as-ov" id="asOv">
+  <div class="as-wrap">
+    <div class="as-group" id="asGroup"></div>
+    <div class="as-cancel" id="asCancel">キャンセル</div>
+  </div>
+</div>
+
+<!-- Modal: Folder -->
+<div class="modal-ov" id="folderModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl" id="folderModalTtl">フォルダーを追加</div>
+    <div class="modal-body">
+      <div class="fg">
+        <label>フォルダー名</label>
+        <input type="text" class="fi" id="fldName" placeholder="フォルダー名を入力">
+      </div>
+      <div class="fg">
+        <label>カラー</label>
+        <div class="cpick" id="cpick"></div>
+      </div>
+      <div class="fg" id="parentGroup">
+        <label>親フォルダー（サブフォルダーにする場合）</label>
+        <select class="fi" id="parentSel">
+          <option value="">なし（ルート）</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-row btn-cancel"  id="fldCancel">キャンセル</button>
+      <button class="btn-row btn-primary" id="fldSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Account -->
+<div class="modal-ov" id="accModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl" id="accModalTtl">アカウントを追加</div>
+    <div class="modal-body">
+      <div class="fg">
+        <label>アカウント名（@ユーザー名）</label>
+        <input type="text" class="fi" id="accUser" placeholder="@username" autocomplete="off" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="fg">
+        <label>Instagram URL</label>
+        <input type="url" class="fi" id="accUrl" placeholder="https://www.instagram.com/username/">
+      </div>
+      <div class="fg">
+        <label>メモ</label>
+        <textarea class="fi fi-ta" id="accMemo" placeholder="自由記述メモ..."></textarea>
+      </div>
+      <div class="fg">
+        <label>フォルダー</label>
+        <select class="fi" id="accFolder"></select>
+      </div>
+      <div class="fg">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" id="accNewDm" style="width:20px;height:20px;accent-color:var(--accent)">
+          <span>NEW DMフラグを立てる</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-row btn-cancel"  id="accCancel">キャンセル</button>
+      <button class="btn-row btn-primary" id="accSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Move -->
+<div class="modal-ov" id="moveModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl">移動先フォルダーを選択</div>
+    <div class="fpick-list" id="fpickList"></div>
+    <div class="modal-actions">
+      <button class="btn-row btn-cancel" id="moveCancel">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// =========================================================
+// CONSTANTS
+// =========================================================
+const SK = 'ig_dm_mgr_v1';
+const COLORS = ['#E1306C','#F77737','#FCAF45','#4CAF50','#26C6DA','#29B6F6','#5C6BC0','#AB47BC','#78909C','#FF5722'];
+const AVATAR_COLORS = ['#E1306C','#F77737','#dc2743','#4CAF50','#29B6F6','#5C6BC0','#AB47BC','#26C6DA','#FF5722','#8D6E63'];
+const DEFAULT_FOLDERS = [
+  { id:'f1', name:'相互フォロー',     color:'#4CAF50', parentId:null, order:0, collapsed:true },
+  { id:'f2', name:'配信関連',         color:'#29B6F6', parentId:null, order:1, collapsed:true },
+  { id:'f3', name:'案件依頼（有）',   color:'#F77737', parentId:null, order:2, collapsed:true },
+  { id:'f4', name:'案件依頼（悩）',   color:'#AB47BC', parentId:null, order:3, collapsed:true },
+];
+
+// =========================================================
+// STATE
+// =========================================================
+let S = {
+  folders: [],
+  accounts: [],
+  currentFolderId: null,
+  searchQuery: '',
+  sidebarOpen: false,
+  editingFolderId: null,
+  editingAccountId: null,
+  movingAccountId: null,
+  selectedColor: COLORS[0],
+};
+
+// =========================================================
+// PERSISTENCE
+// =========================================================
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SK) || '{}');
+    S.folders  = d.folders  || JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
+    S.accounts = d.accounts || [];
+  } catch {
+    S.folders  = JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
+    S.accounts = [];
+  }
+}
+function save() {
+  localStorage.setItem(SK, JSON.stringify({ folders: S.folders, accounts: S.accounts }));
+}
+
+// =========================================================
+// UTILS
+// =========================================================
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function folder(id)  { return S.folders.find(f => f.id === id); }
+function account(id) { return S.accounts.find(a => a.id === id); }
+
+function descendants(fid) {
+  const ids = [fid];
+  S.folders.filter(f => f.parentId === fid).forEach(f => ids.push(...descendants(f.id)));
+  return ids;
+}
+function folderCount(fid) {
+  const ids = descendants(fid);
+  return S.accounts.filter(a => ids.includes(a.folderId)).length;
+}
+function folderPath(fid) {
+  const f = folder(fid);
+  if (!f) return '';
+  return f.parentId ? folderPath(f.parentId) + ' › ' + f.name : f.name;
+}
+function avatarColor(username) {
+  let h = 0;
+  for (let i = 0; i < username.length; i++) h = username.charCodeAt(i) + ((h << 5) - h);
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+function initial(username) {
+  return (username.replace('@','').charAt(0) || '?').toUpperCase();
+}
+function normUser(v) {
+  v = v.trim();
+  if (v && !v.startsWith('@')) v = '@' + v;
+  return v;
+}
+
+// =========================================================
+// SIDEBAR
+// =========================================================
+function toggleSidebar() {
+  S.sidebarOpen = !S.sidebarOpen;
+  applySidebar();
+}
+function closeSidebar() {
+  S.sidebarOpen = false;
+  applySidebar();
+}
+function applySidebar() {
+  document.getElementById('sidebar').classList.toggle('open', S.sidebarOpen);
+  document.getElementById('overlay').classList.toggle('show', S.sidebarOpen);
+}
+
+// =========================================================
+// FOLDER TREE
+// =========================================================
+function renderTree() {
+  const container = document.getElementById('folderTree');
+  container.innerHTML = '';
+  const roots = S.folders.filter(f => !f.parentId).sort((a,b) => a.order - b.order);
+  roots.forEach(f => buildFolderRow(container, f, 0));
+}
+
+function buildFolderRow(container, f, depth) {
+  const children = S.folders.filter(c => c.parentId === f.id).sort((a,b) => a.order - b.order);
+  const cnt      = folderCount(f.id);
+  const active   = S.currentFolderId === f.id;
+
+  const row = document.createElement('div');
+  row.className = `f-row${depth > 0 ? ` d${depth}` : ''}${active ? ' sel' : ''}`;
+  row.dataset.fid = f.id;
+  row.innerHTML = `
+    <span class="f-dot" style="background:${esc(f.color)}"></span>
+    <span class="f-name">${esc(f.name)}</span>
+    <span class="f-cnt">${cnt}</span>
+    <span class="f-chev${f.collapsed ? ' coll' : ''}" data-chev="${f.id}">${children.length ? '›' : ''}</span>
+  `;
+
+  // tap chevron = collapse/expand
+  row.querySelector('[data-chev]').addEventListener('click', e => {
+    if (!children.length) return;
+    e.stopPropagation();
+    f.collapsed = !f.collapsed;
+    save();
+    renderTree();
+  });
+
+  // tap row = 子あり→展開/折りたたみ切替 & 選択、子なし→選択のみ
+  row.addEventListener('click', () => {
+    if (children.length) {
+      f.collapsed = !f.collapsed;
+      save();
+      renderTree();
+    }
+    selectFolder(f.id);
+  });
+
+  // long press = action sheet
+  let timer;
+  row.addEventListener('touchstart', () => { timer = setTimeout(() => showFolderAS(f.id), 600); }, { passive:true });
+  row.addEventListener('touchend',   () => clearTimeout(timer));
+  row.addEventListener('touchmove',  () => clearTimeout(timer));
+  row.addEventListener('contextmenu', e => { e.preventDefault(); showFolderAS(f.id); });
+
+  container.appendChild(row);
+  if (!f.collapsed) children.forEach(c => buildFolderRow(container, c, depth + 1));
+}
+
+function selectFolder(fid) {
+  S.currentFolderId = fid;
+  if (window.innerWidth <= 768) closeSidebar();
+  const f = folder(fid);
+  document.getElementById('hdrTitle').textContent = f ? f.name : '📱 DM管理';
+  document.getElementById('fab').style.display = 'flex';
+  renderTree();
+  renderMain();
+}
+
+// =========================================================
+// MAIN AREA
+// =========================================================
+function renderMain() {
+  const el = document.getElementById('mainArea');
+  const q  = S.searchQuery;
+
+  if (!S.currentFolderId && !q) {
+    el.innerHTML = `<div class="empty" style="padding-top:80px">
+      <div class="empty-ico">📁</div>
+      <div class="empty-ttl">フォルダーを選択</div>
+      <div class="empty-sub">左のフォルダーをタップするか<br>フォルダーを新規作成してください</div>
+    </div>`;
+    document.getElementById('fab').style.display = 'none';
+    return;
+  }
+
+  let accs;
+  if (q) {
+    const lq = q.toLowerCase();
+    accs = S.accounts.filter(a =>
+      a.username.toLowerCase().includes(lq) ||
+      (a.memo && a.memo.toLowerCase().includes(lq))
+    );
+  } else {
+    accs = S.accounts.filter(a => a.folderId === S.currentFolderId);
+  }
+
+  const newAccs    = accs.filter(a =>  a.newDM);
+  const otherAccs  = accs.filter(a => !a.newDM);
+  const f          = folder(S.currentFolderId);
+
+  let html = `<div class="info-bar">
+    <span class="info-bar-name">${q ? '検索結果' : esc(f ? f.name : '')}</span>
+    <span class="info-bar-cnt">${accs.length}件</span>
+  </div>
+  <div class="acc-list" id="accList">`;
+
+  if (accs.length === 0) {
+    html += `<div class="empty">
+      <div class="empty-ico">${q ? '🔍' : '👤'}</div>
+      <div class="empty-ttl">${q ? '見つかりません' : 'アカウントがありません'}</div>
+      <div class="empty-sub">${q ? '別のキーワードで試してください' : '右下の ＋ で追加できます'}</div>
+    </div>`;
+  } else {
+    if (newAccs.length)   html += `<div class="sec-hdr">NEW DM</div>`  + newAccs.map(cardHTML).join('');
+    if (otherAccs.length) html += (newAccs.length ? `<div class="sec-hdr">アカウント</div>` : '') + otherAccs.map(cardHTML).join('');
+  }
+  html += '</div>';
+  el.innerHTML = html;
+  bindCards();
+}
+
+function cardHTML(a) {
+  const memo = a.memo ? a.memo.trim() : '';
+  const sub  = S.searchQuery ? esc(folderPath(a.folderId)) : (memo ? esc(memo) : '');
+  return `
+  <div class="acc-card" data-aid="${esc(a.id)}">
+    <div class="acc-main">
+      <div class="acc-avatar" style="background:${avatarColor(a.username)}">${esc(initial(a.username))}</div>
+      <div class="acc-info">
+        <div class="acc-user">
+          <span>${esc(a.username)}</span>
+          ${a.newDM ? '<span class="new-badge">NEW</span>' : ''}
+        </div>
+        ${sub ? `<div class="acc-sub">${sub}</div>` : ''}
+      </div>
+      <button class="acc-more" data-aid-more="${esc(a.id)}" aria-label="メニュー">⋯</button>
+    </div>
+    <div class="acc-detail" id="det-${esc(a.id)}">
+      ${a.url ? `<div class="d-row"><span class="d-lbl">URL</span><a class="d-val d-link" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a></div>` : ''}
+      ${memo    ? `<div class="d-row"><span class="d-lbl">メモ</span><span class="d-val">${esc(memo).replace(/\n/g,'<br>')}</span></div>` : ''}
+      ${S.searchQuery ? `<div class="d-row"><span class="d-lbl">フォルダー</span><span class="d-val">${esc(folderPath(a.folderId))}</span></div>` : ''}
+      <div class="d-btns">
+        <button class="d-btn btn-edit"  data-act="edit"   data-aid="${esc(a.id)}">✏️ 編集</button>
+        <button class="d-btn btn-new${a.newDM?' on':''}"  data-act="newdm"  data-aid="${esc(a.id)}">${a.newDM ? '✓ NEW ON' : '🔔 NEW DM'}</button>
+        <button class="d-btn btn-move"  data-act="move"   data-aid="${esc(a.id)}">📁 移動</button>
+        <button class="d-btn btn-del"   data-act="del"    data-aid="${esc(a.id)}">🗑️ 削除</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindCards() {
+  document.querySelectorAll('.acc-card').forEach(card => {
+    const aid = card.dataset.aid;
+
+    // tap main = toggle detail
+    card.querySelector('.acc-main').addEventListener('click', () => toggleDetail(aid));
+
+    // ⋯ button
+    card.querySelector('[data-aid-more]').addEventListener('click', e => {
+      e.stopPropagation();
+      showAccAS(aid);
+    });
+
+    // detail action buttons
+    card.querySelectorAll('[data-act]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        const id  = btn.dataset.aid;
+        if (act === 'edit')  openEditAcc(id);
+        if (act === 'newdm') doToggleNewDM(id);
+        if (act === 'move')  openMoveModal(id);
+        if (act === 'del')   doDeleteAcc(id);
+      });
+    });
+
+    // long press = action sheet
+    let timer;
+    card.addEventListener('touchstart', () => { timer = setTimeout(() => showAccAS(aid), 650); }, { passive:true });
+    card.addEventListener('touchend',   () => clearTimeout(timer));
+    card.addEventListener('touchmove',  () => clearTimeout(timer));
+    card.addEventListener('contextmenu', e => { e.preventDefault(); showAccAS(aid); });
+  });
+}
+
+function toggleDetail(aid) {
+  document.querySelectorAll('.acc-detail.open').forEach(d => {
+    if (d.id !== `det-${aid}`) d.classList.remove('open');
+  });
+  const det = document.getElementById(`det-${aid}`);
+  if (det) det.classList.toggle('open');
+}
+
+// =========================================================
+// SEARCH
+// =========================================================
+function initSearch() {
+  const inp = document.getElementById('srchInput');
+  const clr = document.getElementById('srchClr');
+
+  inp.addEventListener('input', () => {
+    S.searchQuery = inp.value.trim();
+    clr.classList.toggle('vis', S.searchQuery.length > 0);
+    if (S.searchQuery) {
+      document.getElementById('hdrTitle').textContent = '検索';
+      document.getElementById('fab').style.display = 'none';
+    } else {
+      const f = folder(S.currentFolderId);
+      document.getElementById('hdrTitle').textContent = f ? f.name : '📱 DM管理';
+      if (S.currentFolderId) document.getElementById('fab').style.display = 'flex';
+    }
+    renderMain();
+  });
+
+  clr.addEventListener('click', () => {
+    inp.value = '';
+    inp.dispatchEvent(new Event('input'));
+    inp.focus();
+  });
+}
+
+// =========================================================
+// FOLDER CRUD
+// =========================================================
+function openAddFolder(preParentId = null) {
+  S.editingFolderId = null;
+  document.getElementById('folderModalTtl').textContent = 'フォルダーを追加';
+  document.getElementById('fldName').value = '';
+  setupCpick(COLORS[Math.floor(Math.random() * COLORS.length)]);
+  setupParentSel(preParentId, null);
+  showModal('folderModal');
+  setTimeout(() => document.getElementById('fldName').focus(), 350);
+}
+function openEditFolder(fid) {
+  const f = folder(fid);
+  if (!f) return;
+  S.editingFolderId = fid;
+  document.getElementById('folderModalTtl').textContent = 'フォルダーを編集';
+  document.getElementById('fldName').value = f.name;
+  setupCpick(f.color);
+  setupParentSel(f.parentId, fid);
+  showModal('folderModal');
+}
+function setupCpick(sel) {
+  S.selectedColor = sel || COLORS[0];
+  const el = document.getElementById('cpick');
+  el.innerHTML = '';
+  COLORS.forEach(c => {
+    const d = document.createElement('div');
+    d.className = `c-opt${c === S.selectedColor ? ' sel' : ''}`;
+    d.style.background = c;
+    d.addEventListener('click', () => {
+      el.querySelectorAll('.c-opt').forEach(o => o.classList.remove('sel'));
+      d.classList.add('sel');
+      S.selectedColor = c;
+    });
+    el.appendChild(d);
+  });
+}
+function setupParentSel(selectedPid, excludeFid) {
+  const sel = document.getElementById('parentSel');
+  sel.innerHTML = '<option value="">なし（ルート）</option>';
+  function addOpts(pid, depth) {
+    S.folders
+      .filter(f => f.parentId === pid && f.id !== excludeFid)
+      .sort((a,b) => a.order - b.order)
+      .forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = '　'.repeat(depth) + f.name;
+        if (f.id === selectedPid) opt.selected = true;
+        sel.appendChild(opt);
+        addOpts(f.id, depth + 1);
+      });
+  }
+  addOpts(null, 0);
+}
+function saveFolder() {
+  const name = document.getElementById('fldName').value.trim();
+  if (!name) { toast('フォルダー名を入力してください'); return; }
+  const color    = S.selectedColor;
+  const parentId = document.getElementById('parentSel').value || null;
+
+  if (S.editingFolderId) {
+    const f = folder(S.editingFolderId);
+    if (f) { f.name = name; f.color = color; f.parentId = parentId; }
+    save(); renderTree(); renderMain();
+    toast('フォルダーを更新しました');
+  } else {
+    const maxOrd = S.folders.reduce((m,f) => Math.max(m, f.order||0), -1);
+    S.folders.push({ id:uid(), name, color, parentId, order:maxOrd+1, collapsed:true });
+    // 親フォルダーを展開して新しいサブフォルダーを見えるようにする
+    if (parentId) { const p = folder(parentId); if (p) p.collapsed = false; }
+    save(); renderTree();
+    toast('フォルダーを追加しました');
+  }
+  hideModal('folderModal');
+}
+function doDeleteFolder(fid) {
+  const f = folder(fid);
+  if (!f) return;
+  const ids = descendants(fid);
+  const cnt = S.accounts.filter(a => ids.includes(a.folderId)).length;
+  const msg = cnt > 0
+    ? `「${f.name}」を削除しますか？\n含まれる${cnt}件のアカウントも削除されます。`
+    : `「${f.name}」を削除しますか？`;
+  if (!confirm(msg)) return;
+
+  S.accounts = S.accounts.filter(a => !ids.includes(a.folderId));
+  S.folders  = S.folders.filter(f => !ids.includes(f.id));
+  if (S.currentFolderId && ids.includes(S.currentFolderId)) {
+    S.currentFolderId = null;
+    document.getElementById('hdrTitle').textContent = '📱 DM管理';
+    document.getElementById('fab').style.display = 'none';
+  }
+  save(); renderTree(); renderMain();
+  toast('フォルダーを削除しました');
+}
+
+// =========================================================
+// ACCOUNT CRUD
+// =========================================================
+function setupAccFolderSel(selectedFid) {
+  const sel = document.getElementById('accFolder');
+  sel.innerHTML = '';
+  function addOpts(pid, depth) {
+    S.folders
+      .filter(f => f.parentId === pid)
+      .sort((a,b) => a.order - b.order)
+      .forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = '　'.repeat(depth) + f.name;
+        if (f.id === selectedFid) opt.selected = true;
+        sel.appendChild(opt);
+        addOpts(f.id, depth + 1);
+      });
+  }
+  addOpts(null, 0);
+}
+function openAddAcc() {
+  if (!S.currentFolderId) { toast('フォルダーを選択してください'); return; }
+  S.editingAccountId = null;
+  document.getElementById('accModalTtl').textContent = 'アカウントを追加';
+  document.getElementById('accUser').value  = '';
+  document.getElementById('accUrl').value   = '';
+  document.getElementById('accMemo').value  = '';
+  document.getElementById('accNewDm').checked = false;
+  setupAccFolderSel(S.currentFolderId);
+  showModal('accModal');
+  setTimeout(() => document.getElementById('accUser').focus(), 350);
+}
+function openEditAcc(aid) {
+  const a = account(aid);
+  if (!a) return;
+  S.editingAccountId = aid;
+  document.getElementById('accModalTtl').textContent = 'アカウントを編集';
+  document.getElementById('accUser').value  = a.username;
+  document.getElementById('accUrl').value   = a.url  || '';
+  document.getElementById('accMemo').value  = a.memo || '';
+  document.getElementById('accNewDm').checked = !!a.newDM;
+  setupAccFolderSel(a.folderId);
+  showModal('accModal');
+}
+function saveAcc() {
+  const username = normUser(document.getElementById('accUser').value);
+  if (!username) { toast('アカウント名を入力してください'); return; }
+  const url      = document.getElementById('accUrl').value.trim();
+  const memo     = document.getElementById('accMemo').value.trim();
+  const newDM    = document.getElementById('accNewDm').checked;
+  const folderId = document.getElementById('accFolder').value;
+  if (!folderId) { toast('フォルダーを選択してください'); return; }
+
+  if (S.editingAccountId) {
+    const a = account(S.editingAccountId);
+    if (a) Object.assign(a, { username, url, memo, newDM, folderId });
+    toast('アカウントを更新しました');
+  } else {
+    S.accounts.push({ id:uid(), username, url, memo, newDM, folderId, createdAt:Date.now() });
+    toast('アカウントを追加しました');
+  }
+  save(); renderTree(); renderMain();
+  hideModal('accModal');
+}
+function doDeleteAcc(aid) {
+  const a = account(aid);
+  if (!a) return;
+  if (!confirm(`「${a.username}」を削除しますか？`)) return;
+  S.accounts = S.accounts.filter(x => x.id !== aid);
+  save(); renderTree(); renderMain();
+  toast('削除しました');
+}
+function doToggleNewDM(aid) {
+  const a = account(aid);
+  if (!a) return;
+  a.newDM = !a.newDM;
+  save(); renderTree(); renderMain();
+  toast(a.newDM ? 'NEW DM フラグをONにしました' : 'NEW DM フラグをOFFにしました');
+}
+function openMoveModal(aid) {
+  S.movingAccountId = aid;
+  const a   = account(aid);
+  const list = document.getElementById('fpickList');
+  list.innerHTML = '';
+
+  function addItems(pid, depth) {
+    S.folders
+      .filter(f => f.parentId === pid)
+      .sort((a,b) => a.order - b.order)
+      .forEach(f => {
+        const item = document.createElement('div');
+        item.className = `fp-item${f.id === (a && a.folderId) ? ' sel' : ''}`;
+        item.style.paddingLeft = `${16 + depth * 16}px`;
+        item.innerHTML = `
+          <span class="f-dot" style="background:${esc(f.color)}"></span>
+          <span class="fp-name">${esc(f.name)}</span>
+          ${f.id === (a && a.folderId) ? '<span class="fp-check">✓</span>' : ''}
+        `;
+        item.addEventListener('click', () => {
+          if (a) { a.folderId = f.id; save(); renderTree(); renderMain(); toast(`「${f.name}」に移動しました`); }
+          hideModal('moveModal');
+        });
+        list.appendChild(item);
+        addItems(f.id, depth + 1);
+      });
+  }
+  addItems(null, 0);
+  showModal('moveModal');
+}
+
+// =========================================================
+// ACTION SHEETS
+// =========================================================
+function showFolderAS(fid) {
+  const f = folder(fid);
+  if (!f) return;
+  showAS(f.name, [
+    { label:'✏️ 名前・カラーを編集',   fn:() => openEditFolder(fid) },
+    { label:'📁 サブフォルダーを追加', fn:() => openAddFolder(fid) },
+    { label:'🗑️ 削除',               fn:() => doDeleteFolder(fid), danger:true },
+  ]);
+}
+function showAccAS(aid) {
+  const a = account(aid);
+  if (!a) return;
+  const items = [
+    { label: a.newDM ? '🔕 NEW DM をOFFにする' : '🔔 NEW DM をONにする', fn:() => doToggleNewDM(aid) },
+    { label:'✏️ 編集',           fn:() => openEditAcc(aid) },
+    { label:'📁 フォルダーを移動', fn:() => openMoveModal(aid) },
+  ];
+  if (a.url) items.push({ label:'🔗 Instagramを開く', fn:() => window.open(a.url, '_blank', 'noopener') });
+  items.push({ label:'🗑️ 削除', fn:() => doDeleteAcc(aid), danger:true });
+  showAS(a.username, items);
+}
+function showAS(title, items) {
+  const grp = document.getElementById('asGroup');
+  grp.innerHTML = '';
+  if (title) {
+    const t = document.createElement('div');
+    t.className = 'as-ttl';
+    t.textContent = title;
+    grp.appendChild(t);
+  }
+  items.forEach(item => {
+    const el = document.createElement('div');
+    el.className = `as-item${item.danger ? ' danger' : ''}`;
+    el.textContent = item.label;
+    el.addEventListener('click', () => { hideAS(); setTimeout(item.fn, 60); });
+    grp.appendChild(el);
+  });
+  document.getElementById('asOv').classList.add('show');
+}
+function hideAS() { document.getElementById('asOv').classList.remove('show'); }
+
+// =========================================================
+// MODALS
+// =========================================================
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function initModals() {
+  // Close on backdrop tap
+  ['folderModal','accModal','moveModal'].forEach(id => {
+    document.getElementById(id).addEventListener('click', e => {
+      if (e.target === document.getElementById(id)) hideModal(id);
+    });
+  });
+  document.getElementById('asOv').addEventListener('click', e => {
+    if (e.target === document.getElementById('asOv')) hideAS();
+  });
+  document.getElementById('asCancel').addEventListener('click', hideAS);
+
+  // Folder modal buttons
+  document.getElementById('fldCancel').addEventListener('click', () => hideModal('folderModal'));
+  document.getElementById('fldSave').addEventListener('click', saveFolder);
+
+  // Account modal buttons
+  document.getElementById('accCancel').addEventListener('click', () => hideModal('accModal'));
+  document.getElementById('accSave').addEventListener('click', saveAcc);
+
+  // Move modal
+  document.getElementById('moveCancel').addEventListener('click', () => hideModal('moveModal'));
+
+  // Header add-folder button
+  document.getElementById('addFolderBtn').addEventListener('click', () => openAddFolder());
+  document.getElementById('sideAddFolder').addEventListener('click', () => openAddFolder());
+
+  // FAB
+  document.getElementById('fab').addEventListener('click', openAddAcc);
+
+  // Hamburger
+  document.getElementById('hamBtn').addEventListener('click', toggleSidebar);
+  document.getElementById('overlay').addEventListener('click', closeSidebar);
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-ov.show').forEach(m => m.classList.remove('show'));
+      hideAS();
+      closeSidebar();
+    }
+  });
+
+  // Resize
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768 && S.sidebarOpen) { S.sidebarOpen = false; applySidebar(); }
+  });
+}
+
+// =========================================================
+// TOAST
+// =========================================================
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// =========================================================
+// INIT
+// =========================================================
+function init() {
+  load();
+  initModals();
+  initSearch();
+  renderTree();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+
+init();
+</script>
+</body>
+</html>

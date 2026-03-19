@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f09433"/>
+      <stop offset="25%" stop-color="#e6683c"/>
+      <stop offset="50%" stop-color="#dc2743"/>
+      <stop offset="75%" stop-color="#cc2366"/>
+      <stop offset="100%" stop-color="#bc1888"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="44" fill="url(#g)"/>
+  <!-- Chat bubble -->
+  <path d="M38 60 C38 49 47 40 58 40 L134 40 C145 40 154 49 154 60 L154 108 C154 119 145 128 134 128 L108 128 L88 152 L88 128 L58 128 C47 128 38 119 38 108 Z" fill="white" opacity="0.95"/>
+  <!-- DM text -->
+  <text x="96" y="98" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="40" font-weight="800" fill="url(#g)" text-anchor="middle">DM</text>
+</svg>
