@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DM管理">
   <meta name="theme-color" content="#E1306C">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
   <title>Instagram DM管理</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.svg">
@@ -175,7 +176,7 @@
       display:flex; align-items:center; justify-content:space-between;
       padding:6px 16px; flex-shrink:0;
     }
-    .info-bar-name { font-size:13px; color:var(--txt3); font-weight:500; }
+    .info-bar-name { font-size:16px; color:var(--txt); font-weight:700; }
     .info-bar-cnt  { font-size:13px; color:var(--txt3); }
 
     /* Account list */
@@ -229,11 +230,12 @@
       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;
     }
     .acc-more {
-      min-width:36px; height:36px; display:flex; align-items:center;
-      justify-content:center; border:none; background:none;
-      cursor:pointer; color:var(--txt3); font-size:20px; border-radius:50%;
+      height:30px; padding:0 10px; display:flex; align-items:center;
+      justify-content:center; border:none; cursor:pointer;
+      font-size:12px; font-weight:700; border-radius:8px;
+      color:var(--accent); background:rgba(225,48,108,.10); flex-shrink:0;
     }
-    .acc-more:active { background:var(--fill); }
+    .acc-more:active { background:rgba(225,48,108,.22); }
 
     /* Expanded detail */
     .acc-detail {
@@ -388,9 +390,214 @@
       .ham { display:none !important; }
     }
 
+    /* ===== SETTINGS & TEMPLATES ===== */
+    .settings-ov {
+      position:fixed; inset:0; z-index:200;
+      background:var(--bg); display:flex; flex-direction:column;
+      padding-top:var(--st);
+      transform:translateY(100%);
+      transition:transform .3s cubic-bezier(.25,.46,.45,.94);
+    }
+    .settings-ov.show { transform:translateY(0); }
+    .settings-hdr {
+      display:flex; align-items:center; gap:4px;
+      height:var(--hdr-h); padding:0 8px;
+      background:rgba(255,255,255,.85);
+      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-bottom:.5px solid var(--sep); flex-shrink:0;
+    }
+    @media (prefers-color-scheme:dark) { .settings-hdr { background:rgba(28,28,30,.88); } }
+    .settings-body {
+      flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+      padding:20px 14px calc(40px + var(--sb));
+    }
+    .settings-section-ttl {
+      font-size:12px; font-weight:700; color:var(--txt3);
+      text-transform:uppercase; letter-spacing:.8px;
+      padding:0 2px 10px;
+    }
+    .tmpl-card {
+      background:var(--card); border-radius:14px;
+      margin-bottom:10px; overflow:hidden; transition:transform .1s;
+    }
+    .tmpl-card:active { transform:scale(.985); }
+    .tmpl-row {
+      display:flex; align-items:center; gap:10px;
+      padding:14px 16px; cursor:pointer; min-height:48px;
+    }
+    .tmpl-title { flex:1; font-size:15px; font-weight:600; }
+    .tmpl-chev { color:var(--txt3); font-size:18px; transition:transform .2s; }
+    .tmpl-chev.open { transform:rotate(90deg); }
+    .tmpl-detail {
+      display:none; border-top:.5px solid var(--sep);
+      padding:12px 14px 14px;
+    }
+    .tmpl-detail.open { display:block; }
+    .tmpl-body {
+      font-size:14px; color:var(--txt2); line-height:1.6;
+      white-space:pre-wrap; word-break:break-all; margin-bottom:12px;
+    }
+    .tmpl-btns { display:flex; gap:8px; }
+    .tmpl-btn {
+      flex:1; padding:9px 4px; border-radius:8px; border:none;
+      font-size:13px; font-weight:600; cursor:pointer; text-align:center;
+    }
+    .tmpl-btn:active { opacity:.7; }
+    .tmpl-copy { background:var(--fill);               color:var(--txt2); }
+    .tmpl-edit { background:rgba(10,132,255,.12);       color:#0A84FF; }
+    .tmpl-del  { background:rgba(255,59,48,.12);        color:#FF3B30; }
+    .add-tmpl-btn {
+      width:100%; padding:13px; border-radius:12px; border:none;
+      background:var(--ig-grad); color:#fff;
+      font-size:15px; font-weight:700; cursor:pointer; margin-top:4px;
+    }
+    .add-tmpl-btn:active { opacity:.85; }
+
+    /* ===== DRAG & DROP ===== */
+    .drag-ghost {
+      border-radius:14px; border:2px dashed var(--accent);
+      background:rgba(225,48,108,.06); pointer-events:none;
+    }
+    .is-dragging {
+      opacity:.45; box-shadow:0 6px 24px rgba(0,0,0,.35);
+      border-radius:14px; position:relative; z-index:50;
+    }
+
+    /* ===== SORT BUTTON ===== */
+    .sort-order-btn {
+      padding:4px 10px; border-radius:8px; border:none;
+      font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap;
+      background:var(--fill); color:var(--txt2); flex-shrink:0;
+    }
+    .sort-order-btn:active { background:var(--sep); }
+
+    /* ===== DM PARSE ===== */
+    .dm-toggle {
+      width:100%; padding:11px 14px; border-radius:10px;
+      border:.5px solid var(--sep); background:var(--bg3);
+      color:var(--accent); font-size:14px; font-weight:600;
+      cursor:pointer; text-align:left; display:flex; align-items:center; gap:8px;
+    }
+    .dm-toggle:active { background:var(--fill); }
+    .dm-area { margin-top:10px; display:none; }
+    .dm-area.open { display:block; }
+    .dm-analyze {
+      width:100%; margin-top:8px; padding:11px; border-radius:10px;
+      border:none; background:var(--ig-grad); color:#fff;
+      font-size:14px; font-weight:700; cursor:pointer;
+    }
+    .dm-analyze:active { opacity:.8; }
+
+    /* ===== PIN & PRIORITY ===== */
+    .pin-btn {
+      width:32px; height:44px; border:none; background:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      font-size:15px; flex-shrink:0; border-radius:8px;
+      opacity:.22; transition:opacity .15s;
+    }
+    .pin-btn.on { opacity:1; }
+    .pin-btn:active { background:var(--fill); opacity:1; }
+
+    .pri-btn {
+      height:28px; padding:0 9px; border-radius:8px; border:none;
+      font-size:12px; font-weight:700; cursor:pointer; flex-shrink:0;
+      background:var(--fill); color:var(--txt3); transition:all .15s;
+    }
+    .pri-btn:active { opacity:.7; }
+    .pri-高 { background:rgba(255,59,48,.15);  color:#FF3B30; }
+    .pri-中 { background:rgba(247,119,55,.15); color:#F77737; }
+    .pri-低 { background:rgba(41,182,246,.15); color:#29B6F6; }
+
+    /* ===== FOLDER CARDS (main area) ===== */
+    .folder-cards { padding:12px 14px calc(90px + var(--sb)); display:flex; flex-direction:column; gap:8px; }
+    .fcard {
+      background:var(--card); border-radius:14px;
+      padding:14px 16px; display:flex; align-items:center; gap:12px;
+      cursor:pointer; transition:transform .1s;
+    }
+    .fcard:active { transform:scale(.985); }
+    .fcard-dot  { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+    .fcard-name { flex:1; font-size:16px; font-weight:600; }
+    .fcard-meta { font-size:13px; color:var(--txt3); }
+    .fcard-chev { color:var(--txt3); font-size:20px; line-height:1; }
+
     /* ===== SCROLLBAR ===== */
     ::-webkit-scrollbar { width:3px; }
     ::-webkit-scrollbar-thumb { background:var(--sep); border-radius:2px; }
+
+    /* ===== STATUS BADGE ===== */
+    .status-badge {
+      display:inline-flex; align-items:center;
+      padding:2px 7px; border-radius:8px;
+      font-size:10px; font-weight:700; letter-spacing:.3px; flex-shrink:0;
+    }
+    .s-相談中  { background:rgba(41,182,246,.15);  color:#29B6F6; }
+    .s-決定済み { background:rgba(76,175,80,.15);   color:#4CAF50; }
+    .s-保留中  { background:rgba(247,119,55,.15);   color:#F77737; }
+    .s-終了    { background:rgba(120,144,156,.18);  color:#78909C; }
+
+    /* ===== PROJECT MODAL ===== */
+    .status-sel { display:flex; gap:6px; }
+    .st-btn {
+      flex:1; padding:8px 2px; border-radius:10px;
+      border:1.5px solid var(--sep); background:var(--bg3);
+      font-size:12px; font-weight:700; cursor:pointer; text-align:center;
+      color:var(--txt3); transition:all .15s;
+    }
+    .st-btn:active { opacity:.7; }
+    .st-btn.on { border-color:var(--c); background:var(--bgc); color:var(--c); }
+
+    .copy-row { display:flex; gap:8px; align-items:flex-start; }
+    .copy-row .fi { flex:1; }
+    .copy-btn {
+      width:44px; height:44px; flex-shrink:0;
+      border:none; background:var(--fill); border-radius:10px;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      font-size:16px; color:var(--txt2);
+    }
+    .copy-btn:active { background:var(--sep); }
+    .btn-proj { background:rgba(225,48,108,.08); color:var(--accent); }
+
+    /* ===== SCHEDULE OVERLAY ===== */
+    .sched-ov {
+      position:fixed; inset:0; z-index:200;
+      background:var(--bg); display:flex; flex-direction:column;
+      padding-top:var(--st);
+      transform:translateY(100%);
+      transition:transform .3s cubic-bezier(.25,.46,.45,.94);
+    }
+    .sched-ov.show { transform:translateY(0); }
+    .sched-hdr {
+      display:flex; align-items:center; gap:4px;
+      height:var(--hdr-h); padding:0 8px;
+      background:rgba(255,255,255,.85);
+      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-bottom:.5px solid var(--sep); flex-shrink:0;
+    }
+    @media (prefers-color-scheme:dark) { .sched-hdr { background:rgba(28,28,30,.88); } }
+    .sched-list {
+      flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+      padding:8px 14px calc(40px + var(--sb));
+    }
+    .sched-month { font-size:12px; font-weight:700; color:var(--txt3); padding:14px 2px 6px; letter-spacing:.5px; }
+    .sched-card {
+      background:var(--card); border-radius:14px; padding:12px 14px;
+      margin-bottom:8px; display:flex; align-items:center; gap:12px; cursor:pointer;
+    }
+    .sched-card:active { opacity:.7; }
+    .sched-cal { text-align:center; flex-shrink:0; min-width:38px; }
+    .sched-cal-m { font-size:10px; font-weight:700; color:var(--txt3); }
+    .sched-cal-d { font-size:26px; font-weight:800; color:var(--txt); line-height:1.1; }
+    .sched-cal-w { font-size:10px; color:var(--txt3); }
+    .sched-vl { width:.5px; height:38px; background:var(--sep); flex-shrink:0; }
+    .sched-body { flex:1; min-width:0; }
+    .sched-kind { font-size:11px; font-weight:700; letter-spacing:.4px; margin-bottom:1px; }
+    .sched-kind.shoot { color:#29B6F6; }
+    .sched-kind.dl    { color:var(--accent); }
+    .sched-pname { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sched-user  { font-size:13px; color:var(--txt3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sched-hm { font-size:12px; color:var(--txt3); flex-shrink:0; }
+    .sched-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 20px; color:var(--txt3); text-align:center; gap:8px; }
   </style>
 </head>
 <body>
@@ -402,8 +609,11 @@
       <svg viewBox="0 0 24 24"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/></svg>
     </button>
     <h1 class="hdr-title" id="hdrTitle">📱 DM管理</h1>
-    <button class="ico-btn" id="addFolderBtn" aria-label="フォルダー追加">
-      <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+    <button class="ico-btn" id="schedBtn" aria-label="スケジュール">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    </button>
+    <button class="ico-btn" id="settingsBtn" aria-label="設定">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
   </header>
 
@@ -425,7 +635,7 @@
       <div class="srch-wrap">
         <div class="srch-inner">
           <span class="srch-ico">🔍</span>
-          <input type="search" class="srch-input" id="srchInput" placeholder="検索（アカウント名・メモ）" autocomplete="off">
+          <input type="search" class="srch-input" id="srchInput" placeholder="検索（アカウント名・メモ・タグ）" autocomplete="off">
           <span class="srch-clr" id="srchClr">✕</span>
         </div>
       </div>
@@ -489,12 +699,25 @@
     <div class="modal-ttl" id="accModalTtl">アカウントを追加</div>
     <div class="modal-body">
       <div class="fg">
-        <label>アカウント名（@ユーザー名）</label>
-        <input type="text" class="fi" id="accUser" placeholder="@username" autocomplete="off" autocorrect="off" autocapitalize="none">
+        <button type="button" class="dm-toggle" id="dmToggle">📋 DMテキストから自動入力</button>
+        <div class="dm-area" id="dmArea">
+          <textarea class="fi fi-ta" id="dmText" placeholder="DMの文章をそのまま貼り付けてください..."></textarea>
+          <button type="button" class="dm-analyze" id="dmAnalyzeBtn">解析して自動入力する</button>
+        </div>
       </div>
       <div class="fg">
-        <label>Instagram URL</label>
-        <input type="url" class="fi" id="accUrl" placeholder="https://www.instagram.com/username/">
+        <label>アカウント名（@ユーザー名）</label>
+        <div class="copy-row">
+          <input type="text" class="fi" id="accUser" placeholder="@username" autocomplete="off" autocorrect="off" autocapitalize="none">
+          <button class="copy-btn" data-copy="accUser">⎘</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label>アカウントURL</label>
+        <div class="copy-row">
+          <input type="url" class="fi" id="accUrl" placeholder="https://www.instagram.com/username/">
+          <button class="copy-btn" data-copy="accUrl">⎘</button>
+        </div>
       </div>
       <div class="fg">
         <label>メモ</label>
@@ -516,6 +739,122 @@
       <button class="btn-row btn-primary" id="accSave">保存</button>
     </div>
   </div>
+</div>
+
+<!-- Modal: Project -->
+<div class="modal-ov" id="projModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl" id="projModalTtl">案件管理</div>
+    <div class="modal-body">
+      <div class="fg">
+        <label>ステータス</label>
+        <div class="status-sel">
+          <button class="st-btn" data-st="相談中">相談中</button>
+          <button class="st-btn" data-st="決定済み">決定済み</button>
+          <button class="st-btn" data-st="保留中">保留中</button>
+          <button class="st-btn" data-st="終了">終了</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label>案件名</label>
+        <div class="copy-row">
+          <input type="text" class="fi" id="projName" placeholder="案件名を入力">
+          <button class="copy-btn" data-copy="projName">⎘</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label>撮影日時</label>
+        <div class="copy-row">
+          <input type="datetime-local" class="fi" id="projShoot">
+          <button class="copy-btn" data-copy="projShoot">⎘</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label>締め切り日時</label>
+        <div class="copy-row">
+          <input type="datetime-local" class="fi" id="projDeadline">
+          <button class="copy-btn" data-copy="projDeadline">⎘</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label>指示のメモ</label>
+        <div class="copy-row">
+          <textarea class="fi fi-ta" id="projInstr" placeholder="撮影指示・注意事項など..."></textarea>
+          <button class="copy-btn" data-copy="projInstr">⎘</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label>タグ</label>
+        <div class="copy-row">
+          <button class="copy-btn" id="hashBtn" style="background:rgba(225,48,108,.12);color:var(--accent);font-weight:700;font-size:18px">#</button>
+          <input type="text" class="fi" id="projTags" placeholder="#タグ #複数OK">
+          <button class="copy-btn" data-copy="projTags">⎘</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label>マップURL</label>
+        <div class="copy-row">
+          <input type="url" class="fi" id="projMapUrl" placeholder="https://maps.google.com/...">
+          <button class="copy-btn" data-copy="projMapUrl">⎘</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-row btn-cancel" id="projCancel">キャンセル</button>
+      <button class="btn-row btn-primary" id="projSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings View -->
+<div class="settings-ov" id="settingsOv">
+  <div class="settings-hdr">
+    <button class="ico-btn" id="settingsClose" aria-label="閉じる">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <span class="hdr-title">設定</span>
+    <span style="min-width:44px"></span>
+  </div>
+  <div class="settings-body">
+    <div class="settings-section-ttl">テンプレート</div>
+    <div id="templateList"></div>
+    <button class="add-tmpl-btn" id="addTmplBtn">＋ テンプレートを追加</button>
+  </div>
+</div>
+
+<!-- Modal: Template -->
+<div class="modal-ov" id="tmplModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl" id="tmplModalTtl">テンプレートを追加</div>
+    <div class="modal-body">
+      <div class="fg">
+        <label>タイトル</label>
+        <input type="text" class="fi" id="tmplTitle" placeholder="例：案件お断り">
+      </div>
+      <div class="fg">
+        <label>テンプレート</label>
+        <textarea class="fi fi-ta" id="tmplBody" placeholder="テンプレート本文..." style="min-height:120px"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-row btn-cancel" id="tmplCancel">キャンセル</button>
+      <button class="btn-row btn-primary" id="tmplSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule View -->
+<div class="sched-ov" id="schedOv">
+  <div class="sched-hdr">
+    <button class="ico-btn" id="schedClose" aria-label="閉じる">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <span class="hdr-title">スケジュール</span>
+    <span style="min-width:44px"></span>
+  </div>
+  <div class="sched-list" id="schedList"></div>
 </div>
 
 <!-- Modal: Move -->
@@ -559,6 +898,7 @@ let S = {
   editingAccountId: null,
   movingAccountId: null,
   selectedColor: COLORS[0],
+  sortMode: 'priority',
 };
 
 // =========================================================
@@ -567,21 +907,29 @@ let S = {
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(SK) || '{}');
-    S.folders  = d.folders  || JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
-    S.accounts = d.accounts || [];
+    S.folders   = d.folders   || JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
+    S.accounts  = d.accounts  || [];
+    S.templates = d.templates || [];
   } catch {
     S.folders  = JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
     S.accounts = [];
   }
 }
 function save() {
-  localStorage.setItem(SK, JSON.stringify({ folders: S.folders, accounts: S.accounts }));
+  localStorage.setItem(SK, JSON.stringify({ folders: S.folders, accounts: S.accounts, templates: S.templates }));
 }
 
 // =========================================================
 // UTILS
 // =========================================================
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function sanitizeUrl(url) {
+  if (!url) return '';
+  const u = url.trim();
+  if (/^https?:\/\//i.test(u)) return u;
+  if (/^[a-zA-Z0-9]/.test(u)) return 'https://' + u;
+  return '';
+}
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -641,6 +989,7 @@ function renderTree() {
   container.innerHTML = '';
   const roots = S.folders.filter(f => !f.parentId).sort((a,b) => a.order - b.order);
   roots.forEach(f => buildFolderRow(container, f, 0));
+  initFolderSortable();
 }
 
 function buildFolderRow(container, f, depth) {
@@ -651,6 +1000,7 @@ function buildFolderRow(container, f, depth) {
   const row = document.createElement('div');
   row.className = `f-row${depth > 0 ? ` d${depth}` : ''}${active ? ' sel' : ''}`;
   row.dataset.fid = f.id;
+  row.dataset.pid = f.parentId || '';
   row.innerHTML = `
     <span class="f-dot" style="background:${esc(f.color)}"></span>
     <span class="f-name">${esc(f.name)}</span>
@@ -706,72 +1056,107 @@ function renderMain() {
   const q  = S.searchQuery;
 
   if (!S.currentFolderId && !q) {
-    el.innerHTML = `<div class="empty" style="padding-top:80px">
-      <div class="empty-ico">📁</div>
-      <div class="empty-ttl">フォルダーを選択</div>
-      <div class="empty-sub">左のフォルダーをタップするか<br>フォルダーを新規作成してください</div>
-    </div>`;
+    let html = infoBarHTML('すべてのアカウント', S.accounts.length);
+    html += `<div class="acc-list" id="accList">` + accListHTML(S.accounts) + '</div>';
+    el.innerHTML = html;
+    bindCards(); bindSortBtn(el);
     document.getElementById('fab').style.display = 'none';
     return;
   }
 
-  let accs;
   if (q) {
     const lq = q.toLowerCase();
-    accs = S.accounts.filter(a =>
-      a.username.toLowerCase().includes(lq) ||
-      (a.memo && a.memo.toLowerCase().includes(lq))
-    );
-  } else {
-    accs = S.accounts.filter(a => a.folderId === S.currentFolderId);
+    const keywords = lq.split(/\s+/).filter(Boolean);
+    const accs = sortAccounts(S.accounts.filter(a => {
+      const haystack = [
+        a.username,
+        a.memo || '',
+        (a.project && a.project.tags) || '',
+      ].join(' ').toLowerCase();
+      return keywords.every(kw => haystack.includes(kw));
+    }));
+    let html = `<div class="info-bar">
+      <span class="info-bar-name">検索結果</span>
+      <span class="info-bar-cnt">${accs.length}件</span>
+    </div><div class="acc-list" id="accList">`;
+    if (!accs.length) {
+      html += `<div class="empty"><div class="empty-ico">🔍</div><div class="empty-ttl">見つかりません</div><div class="empty-sub">別のキーワードで試してください</div></div>`;
+    } else {
+      html += accs.map(cardHTML).join('');
+    }
+    html += '</div>';
+    el.innerHTML = html;
+    bindCards();
+    return;
   }
 
-  const newAccs    = accs.filter(a =>  a.newDM);
-  const otherAccs  = accs.filter(a => !a.newDM);
+  // フォルダーに子フォルダーがある場合はフォルダー一覧を表示
+  const children = S.folders.filter(f => f.parentId === S.currentFolderId).sort((a,b) => a.order - b.order);
+  if (children.length) {
+    const f = folder(S.currentFolderId);
+    let html = `<div class="info-bar">
+      <span class="info-bar-name">${esc(f ? f.name : '')}</span>
+      <span class="info-bar-cnt">${children.length}フォルダー</span>
+    </div><div class="folder-cards">`;
+    children.forEach(c => {
+      const subCount  = S.folders.filter(x => x.parentId === c.id).length;
+      const accCount  = folderCount(c.id);
+      const meta = subCount ? `${subCount}フォルダー` : `${accCount}件`;
+      html += `<div class="fcard" data-fid="${esc(c.id)}">
+        <span class="fcard-dot" style="background:${esc(c.color)}"></span>
+        <span class="fcard-name">${esc(c.name)}</span>
+        <span class="fcard-meta">${meta}</span>
+        <span class="fcard-chev">›</span>
+      </div>`;
+    });
+    html += '</div>';
+    el.innerHTML = html;
+    el.querySelectorAll('.fcard').forEach(card => {
+      card.addEventListener('click', () => selectFolder(card.dataset.fid));
+    });
+    return;
+  }
+
+  // 末端フォルダー → アカウント一覧
+  const folderAccs = S.accounts.filter(a => a.folderId === S.currentFolderId);
   const f          = folder(S.currentFolderId);
 
-  let html = `<div class="info-bar">
-    <span class="info-bar-name">${q ? '検索結果' : esc(f ? f.name : '')}</span>
-    <span class="info-bar-cnt">${accs.length}件</span>
-  </div>
-  <div class="acc-list" id="accList">`;
-
-  if (accs.length === 0) {
-    html += `<div class="empty">
-      <div class="empty-ico">${q ? '🔍' : '👤'}</div>
-      <div class="empty-ttl">${q ? '見つかりません' : 'アカウントがありません'}</div>
-      <div class="empty-sub">${q ? '別のキーワードで試してください' : '右下の ＋ で追加できます'}</div>
-    </div>`;
-  } else {
-    if (newAccs.length)   html += `<div class="sec-hdr">NEW DM</div>`  + newAccs.map(cardHTML).join('');
-    if (otherAccs.length) html += (newAccs.length ? `<div class="sec-hdr">アカウント</div>` : '') + otherAccs.map(cardHTML).join('');
-  }
-  html += '</div>';
+  let html = infoBarHTML(esc(f ? f.name : ''), folderAccs.length);
+  html += `<div class="acc-list" id="accList">` + accListHTML(folderAccs) + '</div>';
   el.innerHTML = html;
-  bindCards();
+  bindCards(); bindSortBtn(el);
 }
 
 function cardHTML(a) {
-  const memo = a.memo ? a.memo.trim() : '';
-  const sub  = S.searchQuery ? esc(folderPath(a.folderId)) : (memo ? esc(memo) : '');
+  const memo     = a.memo ? a.memo.trim() : '';
+  const projName = a.project && a.project.name ? a.project.name : '';
+  const sub      = S.searchQuery
+    ? esc(folderPath(a.folderId))
+    : esc(projName);
+  const statusBadge = (a.project && a.project.status)
+    ? `<span class="status-badge s-${esc(a.project.status)}">${esc(a.project.status)}</span>` : '';
   return `
   <div class="acc-card" data-aid="${esc(a.id)}">
     <div class="acc-main">
+      <button class="pin-btn${a.pinned?' on':''}" data-aid-pin="${esc(a.id)}" aria-label="ピン留め">📌</button>
       <div class="acc-avatar" style="background:${avatarColor(a.username)}">${esc(initial(a.username))}</div>
       <div class="acc-info">
         <div class="acc-user">
           <span>${esc(a.username)}</span>
           ${a.newDM ? '<span class="new-badge">NEW</span>' : ''}
+          ${statusBadge}
         </div>
         ${sub ? `<div class="acc-sub">${sub}</div>` : ''}
       </div>
-      <button class="acc-more" data-aid-more="${esc(a.id)}" aria-label="メニュー">⋯</button>
+      <button class="pri-btn${a.priority?' pri-'+esc(a.priority):''}" data-aid-pri="${esc(a.id)}">${a.priority||'—'}</button>
+      <button class="acc-more" data-aid-more="${esc(a.id)}" aria-label="案件管理">管理</button>
     </div>
     <div class="acc-detail" id="det-${esc(a.id)}">
       ${a.url ? `<div class="d-row"><span class="d-lbl">URL</span><a class="d-val d-link" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a></div>` : ''}
       ${memo    ? `<div class="d-row"><span class="d-lbl">メモ</span><span class="d-val">${esc(memo).replace(/\n/g,'<br>')}</span></div>` : ''}
       ${S.searchQuery ? `<div class="d-row"><span class="d-lbl">フォルダー</span><span class="d-val">${esc(folderPath(a.folderId))}</span></div>` : ''}
       <div class="d-btns">
+        <button class="d-btn btn-proj" style="grid-column:1/-1" data-act="proj" data-aid="${esc(a.id)}">📋 案件管理を開く</button>
         <button class="d-btn btn-edit"  data-act="edit"   data-aid="${esc(a.id)}">✏️ 編集</button>
         <button class="d-btn btn-new${a.newDM?' on':''}"  data-act="newdm"  data-aid="${esc(a.id)}">${a.newDM ? '✓ NEW ON' : '🔔 NEW DM'}</button>
         <button class="d-btn btn-move"  data-act="move"   data-aid="${esc(a.id)}">📁 移動</button>
@@ -788,10 +1173,22 @@ function bindCards() {
     // tap main = toggle detail
     card.querySelector('.acc-main').addEventListener('click', () => toggleDetail(aid));
 
-    // ⋯ button
+    // ピン留め
+    card.querySelector('[data-aid-pin]').addEventListener('click', e => {
+      e.stopPropagation();
+      togglePin(aid);
+    });
+
+    // 優先度
+    card.querySelector('[data-aid-pri]').addEventListener('click', e => {
+      e.stopPropagation();
+      cyclePriority(aid);
+    });
+
+    // 管理ボタン
     card.querySelector('[data-aid-more]').addEventListener('click', e => {
       e.stopPropagation();
-      showAccAS(aid);
+      toggleDetail(aid);
     });
 
     // detail action buttons
@@ -804,6 +1201,7 @@ function bindCards() {
         if (act === 'newdm') doToggleNewDM(id);
         if (act === 'move')  openMoveModal(id);
         if (act === 'del')   doDeleteAcc(id);
+        if (act === 'proj')  openProjectModal(id);
       });
     });
 
@@ -997,7 +1395,7 @@ function openEditAcc(aid) {
 function saveAcc() {
   const username = normUser(document.getElementById('accUser').value);
   if (!username) { toast('アカウント名を入力してください'); return; }
-  const url      = document.getElementById('accUrl').value.trim();
+  const url      = sanitizeUrl(document.getElementById('accUrl').value);
   const memo     = document.getElementById('accMemo').value.trim();
   const newDM    = document.getElementById('accNewDm').checked;
   const folderId = document.getElementById('accFolder').value;
@@ -1080,7 +1478,7 @@ function showAccAS(aid) {
     { label:'✏️ 編集',           fn:() => openEditAcc(aid) },
     { label:'📁 フォルダーを移動', fn:() => openMoveModal(aid) },
   ];
-  if (a.url) items.push({ label:'🔗 Instagramを開く', fn:() => window.open(a.url, '_blank', 'noopener') });
+  if (a.url) items.push({ label:'🔗 URLを開く', fn:() => { const u = sanitizeUrl(a.url); if (u) window.open(u, '_blank', 'noopener'); } });
   items.push({ label:'🗑️ 削除', fn:() => doDeleteAcc(aid), danger:true });
   showAS(a.username, items);
 }
@@ -1112,7 +1510,7 @@ function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 
 function initModals() {
   // Close on backdrop tap
-  ['folderModal','accModal','moveModal'].forEach(id => {
+  ['folderModal','accModal','moveModal','projModal','tmplModal'].forEach(id => {
     document.getElementById(id).addEventListener('click', e => {
       if (e.target === document.getElementById(id)) hideModal(id);
     });
@@ -1133,8 +1531,43 @@ function initModals() {
   // Move modal
   document.getElementById('moveCancel').addEventListener('click', () => hideModal('moveModal'));
 
-  // Header add-folder button
-  document.getElementById('addFolderBtn').addEventListener('click', () => openAddFolder());
+  // Project modal
+  document.getElementById('projCancel').addEventListener('click', () => hideModal('projModal'));
+  document.getElementById('projSave').addEventListener('click', saveProject);
+  document.querySelectorAll('.st-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      projStatus = btn.dataset.st === projStatus ? null : btn.dataset.st;
+      renderProjStatus();
+    });
+  });
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.addEventListener('click', () => copyField(btn.dataset.copy));
+  });
+
+  document.getElementById('hashBtn').addEventListener('click', () => {
+    const el = document.getElementById('projTags');
+    const start = el.selectionStart;
+    const end   = el.selectionEnd;
+    const val   = el.value;
+    const ins   = (start > 0 && val[start - 1] !== ' ') ? ' #' : '#';
+    el.value = val.slice(0, start) + ins + val.slice(end);
+    const pos = start + ins.length;
+    el.setSelectionRange(pos, pos);
+    el.focus();
+  });
+
+  // Settings
+  document.getElementById('settingsBtn').addEventListener('click', openSettings);
+  document.getElementById('settingsClose').addEventListener('click', closeSettings);
+  document.getElementById('addTmplBtn').addEventListener('click', () => openTemplateModal());
+  document.getElementById('tmplCancel').addEventListener('click', () => hideModal('tmplModal'));
+  document.getElementById('tmplSave').addEventListener('click', saveTemplate);
+
+  // Schedule
+  document.getElementById('schedBtn').addEventListener('click', openSchedule);
+  document.getElementById('schedClose').addEventListener('click', closeSchedule);
+
+  // Folder buttons
   document.getElementById('sideAddFolder').addEventListener('click', () => openAddFolder());
 
   // FAB
@@ -1160,6 +1593,575 @@ function initModals() {
 }
 
 // =========================================================
+// SORTABLE (touch + mouse)
+// =========================================================
+const _ds = { el:null, ghost:null, timer:null, startY:0, getSibs:null, idKey:null, groupKey:null, cb:null };
+
+document.addEventListener('mousemove', e => {
+  if (!_ds.el) return;
+  _doMove(e.clientY);
+});
+document.addEventListener('mouseup', () => {
+  if (!_ds.el) return;
+  _doEnd();
+});
+
+function _doMove(y) {
+  const sibs = _ds.getSibs(_ds.el).filter(x => x !== _ds.el);
+  let before = null;
+  for (const s of sibs) {
+    const r = s.getBoundingClientRect();
+    if (y < r.top + r.height / 2) { before = s; break; }
+  }
+  if (before) before.before(_ds.ghost);
+  else {
+    const last = sibs[sibs.length - 1];
+    if (last) last.after(_ds.ghost); else _ds.ghost.parentNode?.appendChild(_ds.ghost);
+  }
+}
+
+function _doEnd() {
+  clearTimeout(_ds.timer);
+  if (!_ds.el) return;
+  _ds.ghost.replaceWith(_ds.el);
+  _ds.el.classList.remove('is-dragging');
+  const newIds = _ds.getSibs(_ds.el).map(x => x.dataset[_ds.idKey]);
+  const grp    = _ds.groupKey ? _ds.el.dataset[_ds.groupKey] : null;
+  const cb     = _ds.cb;
+  _ds.el = null; _ds.ghost = null;
+  cb(newIds, grp);
+}
+
+function _doCancel() {
+  clearTimeout(_ds.timer);
+  if (_ds.el) {
+    _ds.ghost?.remove();
+    _ds.el.classList.remove('is-dragging');
+    _ds.el = null; _ds.ghost = null;
+  }
+}
+
+function _activateDrag(el) {
+  _ds.el = el;
+  el.classList.add('is-dragging');
+  if (navigator.vibrate) navigator.vibrate(40);
+  _ds.ghost = document.createElement('div');
+  _ds.ghost.className = 'drag-ghost';
+  _ds.ghost.style.height = el.offsetHeight + 'px';
+  _ds.ghost.style.marginBottom = getComputedStyle(el).marginBottom || '0px';
+  el.after(_ds.ghost);
+}
+
+function makeSortable(container, selector, idKey, onReorder, groupKey) {
+  _ds.idKey    = idKey;
+  _ds.groupKey = groupKey || null;
+  _ds.cb       = onReorder;
+  _ds.getSibs  = el => {
+    const all = [...container.querySelectorAll(selector)];
+    if (!groupKey) return all;
+    const g = el.dataset[groupKey];
+    return all.filter(x => x.dataset[groupKey] === g);
+  };
+
+  container.querySelectorAll(selector).forEach(el => {
+    // Mouse
+    el.addEventListener('mousedown', e => {
+      _ds.startY = e.clientY;
+      _ds.timer = setTimeout(() => _activateDrag(el), 480);
+    });
+
+    // Touch
+    el.addEventListener('touchstart', e => {
+      _ds.startY = e.touches[0].clientY;
+      _ds.timer = setTimeout(() => _activateDrag(el), 480);
+    }, { passive: true });
+
+    el.addEventListener('touchmove', e => {
+      if (!_ds.el) {
+        if (Math.abs(e.touches[0].clientY - _ds.startY) > 10) clearTimeout(_ds.timer);
+        return;
+      }
+      e.preventDefault();
+      _doMove(e.touches[0].clientY);
+    }, { passive: false });
+
+    el.addEventListener('touchend',    _doEnd);
+    el.addEventListener('touchcancel', _doCancel);
+  });
+}
+
+function initFolderSortable() {
+  const container = document.getElementById('folderTree');
+  if (!container) return;
+  makeSortable(container, '.f-row', 'fid', (newIds, pid) => {
+    newIds.forEach((fid, i) => { const f = folder(fid); if (f) f.order = i; });
+    save();
+  }, 'pid');
+}
+
+function initTemplateSortable() {
+  const container = document.getElementById('templateList');
+  if (!container) return;
+  makeSortable(container, '.tmpl-card', 'tid', (newIds) => {
+    S.templates = newIds.map(id => (S.templates||[]).find(t => t.id === id)).filter(Boolean);
+    save();
+  });
+}
+
+// =========================================================
+// SETTINGS & TEMPLATES
+// =========================================================
+let editingTemplateId = null;
+
+function openSettings() {
+  renderTemplates();
+  document.getElementById('settingsOv').classList.add('show');
+}
+function closeSettings() {
+  document.getElementById('settingsOv').classList.remove('show');
+}
+
+function renderTemplates() {
+  const list = document.getElementById('templateList');
+  const tmpls = S.templates || [];
+  if (!tmpls.length) {
+    list.innerHTML = `<div style="text-align:center;padding:32px 0;color:var(--txt3);font-size:14px">テンプレートがありません</div>`;
+    return;
+  }
+  list.innerHTML = tmpls.map(t => `
+    <div class="tmpl-card" data-tid="${esc(t.id)}">
+      <div class="tmpl-row" data-ttoggle="${esc(t.id)}">
+        <span class="tmpl-title">${esc(t.title)}</span>
+        <span class="tmpl-chev" id="tchev-${esc(t.id)}">›</span>
+      </div>
+      <div class="tmpl-detail" id="tdet-${esc(t.id)}">
+        <div class="tmpl-body">${esc(t.body)}</div>
+        <div class="tmpl-btns">
+          <button class="tmpl-btn tmpl-copy" data-tcopy="${esc(t.id)}">⎘ コピー</button>
+          <button class="tmpl-btn tmpl-edit" data-tedit="${esc(t.id)}">✏️ 修正</button>
+          <button class="tmpl-btn tmpl-del"  data-tdel="${esc(t.id)}">🗑️ 削除</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  initTemplateSortable();
+
+  list.querySelectorAll('[data-ttoggle]').forEach(row => {
+    row.addEventListener('click', () => {
+      const tid  = row.dataset.ttoggle;
+      const det  = document.getElementById(`tdet-${tid}`);
+      const chev = document.getElementById(`tchev-${tid}`);
+      const open = det.classList.contains('open');
+      // 他を閉じる
+      list.querySelectorAll('.tmpl-detail.open').forEach(d => d.classList.remove('open'));
+      list.querySelectorAll('.tmpl-chev.open').forEach(c => c.classList.remove('open'));
+      if (!open) { det.classList.add('open'); chev.classList.add('open'); }
+    });
+  });
+
+  list.querySelectorAll('[data-tcopy]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = (S.templates||[]).find(x => x.id === btn.dataset.tcopy);
+      if (t) navigator.clipboard.writeText(t.body).then(() => toast('コピーしました'));
+    });
+  });
+  list.querySelectorAll('[data-tedit]').forEach(btn => {
+    btn.addEventListener('click', () => openTemplateModal(btn.dataset.tedit));
+  });
+  list.querySelectorAll('[data-tdel]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = (S.templates||[]).find(x => x.id === btn.dataset.tdel);
+      if (!t || !confirm(`「${t.title}」を削除しますか？`)) return;
+      S.templates = S.templates.filter(x => x.id !== t.id);
+      save(); renderTemplates();
+      toast('削除しました');
+    });
+  });
+}
+
+function openTemplateModal(tid = null) {
+  editingTemplateId = tid;
+  const t = tid ? (S.templates||[]).find(x => x.id === tid) : null;
+  document.getElementById('tmplModalTtl').textContent = t ? 'テンプレートを編集' : 'テンプレートを追加';
+  document.getElementById('tmplTitle').value = t ? t.title : '';
+  document.getElementById('tmplBody').value  = t ? t.body  : '';
+  showModal('tmplModal');
+  setTimeout(() => document.getElementById('tmplTitle').focus(), 350);
+}
+
+function saveTemplate() {
+  const title = document.getElementById('tmplTitle').value.trim();
+  const body  = document.getElementById('tmplBody').value.trim();
+  if (!title) { toast('タイトルを入力してください'); return; }
+  if (!body)  { toast('テンプレートを入力してください'); return; }
+  if (!S.templates) S.templates = [];
+  if (editingTemplateId) {
+    const t = S.templates.find(x => x.id === editingTemplateId);
+    if (t) { t.title = title; t.body = body; }
+    toast('更新しました');
+  } else {
+    S.templates.push({ id: uid(), title, body });
+    toast('追加しました');
+  }
+  save(); renderTemplates();
+  hideModal('tmplModal');
+}
+
+// =========================================================
+// SORT
+// =========================================================
+const SORT_TABS = [
+  { key:'priority', label:'優先度順'   },
+  { key:'status',   label:'ステータス' },
+  { key:'shoot',    label:'撮影日順'   },
+  { key:'deadline', label:'締め切り順' },
+  { key:'newest',   label:'新着順'     },
+];
+const STATUS_GRP_ORDER = ['相談中','保留中','決定済み','終了'];
+
+function applySortMode(accs) {
+  switch (S.sortMode) {
+    case 'newest':
+      return [...accs].sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+    case 'shoot':
+      return [...accs].sort((a,b) => {
+        const da = a.project?.shootDate ? new Date(a.project.shootDate) : null;
+        const db = b.project?.shootDate ? new Date(b.project.shootDate) : null;
+        if (!da && !db) return 0; if (!da) return 1; if (!db) return -1;
+        return da - db;
+      });
+    case 'deadline':
+      return [...accs].sort((a,b) => {
+        const da = a.project?.deadline ? new Date(a.project.deadline) : null;
+        const db = b.project?.deadline ? new Date(b.project.deadline) : null;
+        if (!da && !db) return 0; if (!da) return 1; if (!db) return -1;
+        return da - db;
+      });
+    case 'status':
+      return [...accs].sort((a,b) => {
+        const oa = STATUS_GRP_ORDER.indexOf(a.project?.status ?? '');
+        const ob = STATUS_GRP_ORDER.indexOf(b.project?.status ?? '');
+        const ra = oa === -1 ? STATUS_GRP_ORDER.length : oa;
+        const rb = ob === -1 ? STATUS_GRP_ORDER.length : ob;
+        if (ra !== rb) return ra - rb;
+        return (b.createdAt||0) - (a.createdAt||0);
+      });
+    default: // priority
+      return sortAccounts(accs);
+  }
+}
+
+function currentSortLabel() {
+  return SORT_TABS.find(t => t.key === S.sortMode)?.label || '表示順';
+}
+
+function showSortPicker() {
+  showAS('表示順を選択', SORT_TABS.map(t => ({
+    label: (S.sortMode === t.key ? '✓ ' : '　') + t.label,
+    fn: () => { S.sortMode = t.key; renderMain(); },
+  })));
+}
+
+function infoBarHTML(name, cnt) {
+  return `<div class="info-bar">
+    <span class="info-bar-name">${name}</span>
+    <span class="info-bar-cnt">${cnt}件</span>
+    <button class="sort-order-btn" id="sortOrderBtn">${currentSortLabel()} ↕</button>
+  </div>`;
+}
+
+function bindSortBtn(el) {
+  const btn = el.querySelector('#sortOrderBtn');
+  if (btn) btn.addEventListener('click', showSortPicker);
+}
+
+function accListHTML(accs) {
+  const sorted = applySortMode(accs);
+  if (!sorted.length) {
+    return '<div class="empty"><div class="empty-ico">👤</div><div class="empty-ttl">アカウントがありません</div><div class="empty-sub">右下の ＋ で追加できます</div></div>';
+  }
+  if (S.sortMode === 'status') {
+    let h = '';
+    const groups = {};
+    sorted.forEach(a => { const s = a.project?.status||'未設定'; (groups[s]=groups[s]||[]).push(a); });
+    [...STATUS_GRP_ORDER, '未設定'].forEach(s => {
+      if (groups[s]?.length) h += `<div class="sec-hdr">${s}</div>` + groups[s].map(cardHTML).join('');
+    });
+    return h;
+  }
+  return sorted.map(cardHTML).join('');
+}
+
+// =========================================================
+// URL AUTO-FILL & DM TEXT ANALYSIS
+// =========================================================
+function parseUsernameFromUrl(url) {
+  url = url.trim();
+  const ig = url.match(/instagram\.com\/([A-Za-z0-9_.]+)\/?(?:[?#]|$)/);
+  if (ig && !['p','reel','reels','stories','explore','accounts'].includes(ig[1]))
+    return '@' + ig[1];
+  const tt = url.match(/tiktok\.com\/@?([A-Za-z0-9_.]+)\/?(?:[?#]|$)/);
+  if (tt && !['video','trending','foryou'].includes(tt[1]))
+    return '@' + tt[1];
+  return null;
+}
+
+function analyzeDMText(text) {
+  const result = { username: null, url: null, memo: '' };
+
+  // @username
+  const um = text.match(/@([\w.]+)/);
+  if (um) result.username = '@' + um[1];
+
+  // URL
+  const urlm = text.match(/https?:\/\/(?:www\.)?(?:instagram\.com|tiktok\.com)\/[\w.@/%?=&#-]+/);
+  if (urlm) result.url = urlm[0];
+
+  // キーワードにマッチする行をメモへ
+  const KWS = [
+    '料理','食事','飲食','提供','ご飯','ランチ','ディナー',
+    '報酬','ギャラ','謝礼','円','万','お支払い',
+    '人数','名様','名募集','人募集','定員',
+    '投稿','インスタ','Instagram','TikTok','ティックトック','リール','ストーリー','YouTube','ブログ',
+    '撮影','取材','写真','動画','フォト',
+    '締め切り','期限','日まで','月','スケジュール',
+    '条件','詳細','ご連絡','よろしく','お願い',
+  ];
+  const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+  const matched = lines.filter(l => KWS.some(kw => l.includes(kw)));
+  result.memo = [...new Set(matched)].join('\n');
+  return result;
+}
+
+function initUrlAutoFill() {
+  document.getElementById('accUrl').addEventListener('input', function() {
+    const username = parseUsernameFromUrl(this.value);
+    if (username) {
+      const f = document.getElementById('accUser');
+      if (!f.value) { f.value = username; toast('アカウント名を自動入力しました'); }
+    }
+  });
+}
+
+function initDMAnalyze() {
+  const toggle = document.getElementById('dmToggle');
+  const area   = document.getElementById('dmArea');
+
+  toggle.addEventListener('click', () => {
+    area.classList.toggle('open');
+    toggle.textContent = area.classList.contains('open')
+      ? '📋 DMテキストから自動入力 ▲'
+      : '📋 DMテキストから自動入力';
+  });
+
+  document.getElementById('dmAnalyzeBtn').addEventListener('click', () => {
+    const text = document.getElementById('dmText').value;
+    if (!text.trim()) { toast('テキストを貼り付けてください'); return; }
+    const r = analyzeDMText(text);
+    const filled = [];
+
+    if (r.username) {
+      const f = document.getElementById('accUser');
+      if (!f.value) { f.value = r.username; filled.push('アカウント名'); }
+    }
+    if (r.url) {
+      const f = document.getElementById('accUrl');
+      if (!f.value) { f.value = r.url; filled.push('URL'); }
+    }
+    if (r.memo) {
+      const f = document.getElementById('accMemo');
+      f.value = f.value ? f.value + '\n\n' + r.memo : r.memo;
+      filled.push('メモ');
+    }
+
+    if (filled.length) {
+      toast(filled.join('・') + 'を自動入力しました');
+      area.classList.remove('open');
+      toggle.textContent = '📋 DMテキストから自動入力';
+      document.getElementById('dmText').value = '';
+    } else {
+      toast('抽出できる情報が見つかりませんでした');
+    }
+  });
+}
+
+// =========================================================
+// PIN & PRIORITY
+// =========================================================
+const PRI_CYCLE = [null, '高', '中', '低'];
+const PRI_ORDER = { '高':0, '中':1, '低':2 };
+
+function togglePin(aid) {
+  const a = account(aid);
+  if (!a) return;
+  a.pinned = !a.pinned;
+  save(); renderMain();
+  toast(a.pinned ? 'ピン留めしました' : 'ピン留めを解除しました');
+}
+
+function cyclePriority(aid) {
+  const a = account(aid);
+  if (!a) return;
+  const i = PRI_CYCLE.indexOf(a.priority ?? null);
+  a.priority = PRI_CYCLE[(i + 1) % PRI_CYCLE.length];
+  save(); renderMain();
+}
+
+function sortAccounts(accs) {
+  return [...accs].sort((a, b) => {
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+    const pa = PRI_ORDER[a.priority] ?? 3;
+    const pb = PRI_ORDER[b.priority] ?? 3;
+    if (pa !== pb) return pa - pb;
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+}
+
+// =========================================================
+// PROJECT MANAGEMENT
+// =========================================================
+const STATUS_CFG = {
+  '相談中':  { c:'#29B6F6', bg:'rgba(41,182,246,.15)'  },
+  '決定済み': { c:'#4CAF50', bg:'rgba(76,175,80,.15)'   },
+  '保留中':  { c:'#F77737', bg:'rgba(247,119,55,.15)'  },
+  '終了':    { c:'#78909C', bg:'rgba(120,144,156,.18)' },
+};
+let projAccountId = null;
+let projStatus    = null;
+
+function openProjectModal(aid) {
+  projAccountId = aid;
+  const a = account(aid);
+  const p = a.project || {};
+  document.getElementById('projModalTtl').textContent = a.username + ' — 案件管理';
+  document.getElementById('projName').value    = p.name         || '';
+  document.getElementById('projShoot').value   = p.shootDate    || '';
+  document.getElementById('projDeadline').value= p.deadline     || '';
+  document.getElementById('projInstr').value   = p.instructions || '';
+  document.getElementById('projTags').value    = p.tags         || '';
+  document.getElementById('projMapUrl').value  = p.mapUrl       || '';
+  projStatus = p.status || null;
+  renderProjStatus();
+  showModal('projModal');
+}
+
+function renderProjStatus() {
+  document.querySelectorAll('.st-btn').forEach(btn => {
+    const s   = btn.dataset.st;
+    const cfg = STATUS_CFG[s];
+    const on  = s === projStatus;
+    btn.classList.toggle('on', on);
+    btn.style.setProperty('--c',   on ? cfg.c  : '');
+    btn.style.setProperty('--bgc', on ? cfg.bg : '');
+    btn.style.borderColor = on ? cfg.c  : '';
+    btn.style.background  = on ? cfg.bg : '';
+    btn.style.color       = on ? cfg.c  : '';
+  });
+}
+
+function saveProject() {
+  const a = account(projAccountId);
+  if (!a) return;
+  a.project = {
+    status:       projStatus,
+    name:         document.getElementById('projName').value.trim(),
+    shootDate:    document.getElementById('projShoot').value,
+    deadline:     document.getElementById('projDeadline').value,
+    instructions: document.getElementById('projInstr').value.trim(),
+    tags:         document.getElementById('projTags').value.trim(),
+    mapUrl:       sanitizeUrl(document.getElementById('projMapUrl').value),
+  };
+  save(); renderTree(); renderMain();
+  hideModal('projModal');
+  toast('案件情報を保存しました');
+}
+
+function copyField(inputId) {
+  const el = document.getElementById(inputId);
+  let val = el.value;
+  if (!val) { toast('コピーする内容がありません'); return; }
+  if (el.type === 'datetime-local') {
+    const d = new Date(val);
+    if (!isNaN(d)) val = d.toLocaleString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+  }
+  navigator.clipboard.writeText(val).then(() => toast('コピーしました')).catch(() => toast('コピーに失敗しました'));
+}
+
+// =========================================================
+// SCHEDULE
+// =========================================================
+function openSchedule() {
+  renderSchedule();
+  document.getElementById('schedOv').classList.add('show');
+}
+function closeSchedule() {
+  document.getElementById('schedOv').classList.remove('show');
+}
+
+function renderSchedule() {
+  const list = document.getElementById('schedList');
+  const items = [];
+  S.accounts.forEach(a => {
+    if (!a.project || a.project.status === '終了') return;
+    if (a.project.shootDate) items.push({ d: new Date(a.project.shootDate), kind:'shoot', a });
+    if (a.project.deadline)  items.push({ d: new Date(a.project.deadline),  kind:'dl',    a });
+  });
+  items.sort((x, y) => x.d - y.d);
+
+  if (!items.length) {
+    list.innerHTML = `<div class="sched-empty">
+      <div style="font-size:48px">📅</div>
+      <div style="font-size:17px;font-weight:600;color:var(--txt2)">スケジュールなし</div>
+      <div style="font-size:14px">案件の撮影日時・締め切りを<br>登録するとここに表示されます</div>
+    </div>`;
+    return;
+  }
+
+  const DOW = ['日','月','火','水','木','金','土'];
+  let html = '';
+  let curMonth = '';
+  items.forEach(item => {
+    const d  = item.d;
+    const mo = `${d.getFullYear()}年${d.getMonth()+1}月`;
+    if (mo !== curMonth) { html += `<div class="sched-month">${mo}</div>`; curMonth = mo; }
+    const hm  = d.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' });
+    const p   = item.a.project;
+    const pn  = p.name || item.a.username;
+    const kl  = item.kind === 'shoot' ? '📷 撮影' : '⏰ 締め切り';
+    const kc  = item.kind === 'shoot' ? 'shoot' : 'dl';
+    html += `<div class="sched-card" data-aid="${esc(item.a.id)}">
+      <div class="sched-cal">
+        <div class="sched-cal-m">${d.getMonth()+1}月</div>
+        <div class="sched-cal-d">${d.getDate()}</div>
+        <div class="sched-cal-w">${DOW[d.getDay()]}</div>
+      </div>
+      <div class="sched-vl"></div>
+      <div class="sched-body">
+        <div class="sched-kind ${kc}">${kl}</div>
+        <div class="sched-pname">${esc(pn)}</div>
+        <div class="sched-user">${esc(item.a.username)}</div>
+      </div>
+      <div class="sched-hm">${hm}</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+
+  list.querySelectorAll('.sched-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const a = account(card.dataset.aid);
+      if (!a) return;
+      closeSchedule();
+      selectFolder(a.folderId);
+      setTimeout(() => {
+        const el = document.querySelector(`[data-aid="${a.id}"]`);
+        if (el) { el.scrollIntoView({ behavior:'smooth', block:'center' }); toggleDetail(a.id); }
+      }, 350);
+    });
+  });
+}
+
+// =========================================================
 // TOAST
 // =========================================================
 let toastTimer;
@@ -1178,6 +2180,8 @@ function init() {
   load();
   initModals();
   initSearch();
+  initUrlAutoFill();
+  initDMAnalyze();
   renderTree();
 
   if ('serviceWorker' in navigator) {
