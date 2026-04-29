@@ -55,7 +55,8 @@
       overflow-x: hidden;
       overscroll-behavior: none;
       background: var(--bg); color: var(--txt);
-      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      /* 日本語グリフが欠けて「?」になるのを防ぐ（iOSで入りやすいフォントを優先） */
+      font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo', sans-serif;
       -webkit-text-size-adjust: 100%;
       -webkit-tap-highlight-color: transparent;
       user-select: none; -webkit-user-select: none;
@@ -420,6 +421,8 @@
     .settings-body {
       flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
       padding:20px 14px 20px;
+      /* iOSでリスト開閉時に勝手にスクロール位置がズレるのを抑止 */
+      overflow-anchor: none;
     }
     .settings-pane { display:none; }
     .settings-pane.show { display:block; }
@@ -514,7 +517,15 @@
       display:flex; align-items:center; gap:10px;
       padding:14px 16px; cursor:pointer; min-height:48px;
     }
-    .tmpl-title { flex:1; font-size:15px; font-weight:600; }
+    .tmpl-title {
+      flex:1;
+      font-size:15px;
+      font-weight:600;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      min-width:0;
+    }
     .tmpl-chev { color:var(--txt3); font-size:18px; transition:transform .2s; }
     .tmpl-chev.open { transform:rotate(90deg); }
     .tmpl-detail {
@@ -544,12 +555,41 @@
 
     /* ===== DRAG & DROP ===== */
     .drag-ghost {
-      border-radius:14px; border:2px dashed var(--accent);
-      background:rgba(225,48,108,.06); pointer-events:none;
+      /* 仮置き枠は「枠なし」で高さだけ残す（他の項目が動く見え方） */
+      border:none;
+      /* 挿入位置が分かるように薄く表示（ピンク無し） */
+      background:rgba(0,0,0,.06);
+      outline:none;
+      pointer-events:none;
+      border-radius:14px;
+      display:flex;
+      align-items:center;
+      padding:0 14px;
+      overflow:hidden;
+    }
+    @media (prefers-color-scheme:dark) { .drag-ghost { background:rgba(255,255,255,.10); } }
+    .drag-ghost .ghost-txt{
+      font-size:15px;
+      font-weight:600;
+      color:var(--txt3);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      width:100%;
     }
     .is-dragging {
       opacity:.45; box-shadow:0 6px 24px rgba(0,0,0,.35);
       border-radius:14px; position:relative; z-index:50;
+    }
+    .drag-floating {
+      position:fixed !important;
+      left:0; top:0;
+      z-index:600;
+      pointer-events:none;
+      opacity:.98;
+      box-shadow:0 10px 28px rgba(0,0,0,.28);
+      transform:translate3d(0,0,0);
+      background:var(--card);
     }
 
     /* ===== SORT BUTTON ===== */
@@ -1822,7 +1862,11 @@ function buildFolderRow(container, f, depth) {
 
   // long press = action sheet
   let timer;
-  row.addEventListener('touchstart', () => { timer = setTimeout(() => showFolderAS(f.id), 600); }, { passive:true });
+  row.addEventListener('touchstart', () => {
+    // 並び替え中は、長押しメニューを出さない（ドラッグを優先）
+    if (S.reorderFolderId) return;
+    timer = setTimeout(() => showFolderAS(f.id), 600);
+  }, { passive:true });
   row.addEventListener('touchend',   () => clearTimeout(timer));
   row.addEventListener('touchmove',  () => clearTimeout(timer));
   row.addEventListener('contextmenu', e => { e.preventDefault(); showFolderAS(f.id); });
@@ -2312,6 +2356,12 @@ function showFolderAS(fid) {
 function startFolderReorder(fid) {
   const f = folder(fid);
   if (!f) return;
+  // 展開中だと並び替えのヒットが難しいため、並び替え中は一時的に全フォルダを畳む
+  if (!S._reorderPrevCollapsed) {
+    S._reorderPrevCollapsed = {};
+    (S.folders || []).forEach((x) => { S._reorderPrevCollapsed[x.id] = !!x.collapsed; x.collapsed = true; });
+    renderTree();
+  }
   S.reorderFolderId = fid;
   toast(tt('toast_folder_sort_pick', { name: f.name }));
 }
@@ -2351,7 +2401,25 @@ function hideAS() { document.getElementById('asOv').classList.remove('show'); }
 // MODALS
 // =========================================================
 function showModal(id) { document.getElementById(id).classList.add('show'); }
-function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+function hideModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('show');
+
+  // iOSで入力（tmplTitle/tmplBody）→閉じる を繰り返すと、settings内スクロール位置がズレて
+  // 戻る（←）ボタンの当たり判定が変になることがあるため、tmplModalだけ復元する。
+  if (id === 'tmplModal') {
+    try {
+      const sb = document.querySelector('#settingsOv .settings-body');
+      if (sb) sb.scrollTop = _tmplPrevSettingsScrollTop || 0;
+      const settingsOv = document.getElementById('settingsOv');
+      if (settingsOv) {
+        settingsOv.classList.add('show'); // 念のため
+        settingsOv.style.transform = 'translateY(0)';
+      }
+    } catch {}
+  }
+}
 
 function initModals() {
   // Undo
@@ -2576,7 +2644,27 @@ function initModals() {
 // =========================================================
 // SORTABLE (touch + mouse)
 // =========================================================
-const _ds = { el:null, ghost:null, timer:null, startY:0, getSibs:null, idKey:null, groupKey:null, cb:null, canDrag:null };
+const _ds = {
+  el: null,
+  floatEl: null,
+  ghost: null,
+  timer: null,
+  startY: 0,
+  startClientY: 0,
+  lastClientY: 0,
+  startClientX: 0,
+  lastClientX: 0,
+  startRect: null,
+  offsetX: 0,
+  offsetY: 0,
+  originParent: null,
+  originNext: null,
+  getSibs: null,
+  idKey: null,
+  groupKey: null,
+  cb: null,
+  canDrag: null,
+};
 
 document.addEventListener('mousemove', e => {
   if (!_ds.el) return;
@@ -2588,6 +2676,15 @@ document.addEventListener('mouseup', () => {
 });
 
 function _doMove(y) {
+  // move the floating element with the finger
+  if (_ds.floatEl && _ds.startRect) {
+    const x = _ds.lastClientX || _ds.startClientX || _ds.startRect.left;
+    const newLeft = x - (_ds.offsetX || 0);
+    const newTop  = y - (_ds.offsetY || 0);
+    const dx = newLeft - _ds.startRect.left;
+    const dy = newTop  - _ds.startRect.top;
+    _ds.floatEl.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+  }
   const sibs = _ds.getSibs(_ds.el).filter(x => x !== _ds.el);
   let before = null;
   for (const s of sibs) {
@@ -2604,12 +2701,19 @@ function _doMove(y) {
 function _doEnd() {
   clearTimeout(_ds.timer);
   if (!_ds.el) return;
-  _ds.ghost.replaceWith(_ds.el);
-  _ds.el.classList.remove('is-dragging');
+  // restore original element to normal flow at ghost position, remove floating clone
+  const el = _ds.el;
+  const ghost = _ds.ghost;
+  const floatEl = _ds.floatEl;
+  if (ghost) ghost.replaceWith(el);
+  el.style.display = '';
+  el.classList.remove('is-dragging');
+  if (floatEl) floatEl.remove();
   const newIds = _ds.getSibs(_ds.el).map(x => x.dataset[_ds.idKey]);
   const grp    = _ds.groupKey ? _ds.el.dataset[_ds.groupKey] : null;
   const cb     = _ds.cb;
-  _ds.el = null; _ds.ghost = null;
+  _ds.el = null; _ds.floatEl = null; _ds.ghost = null;
+  _ds.startRect = null; _ds.originParent = null; _ds.originNext = null;
   cb(newIds, grp);
 }
 
@@ -2618,7 +2722,17 @@ function _doCancel() {
   if (_ds.el) {
     _ds.ghost?.remove();
     _ds.el.classList.remove('is-dragging');
-    _ds.el = null; _ds.ghost = null;
+    // if it was portaled to body, put it back (best-effort)
+    try {
+      if (_ds.originParent) {
+        if (_ds.originNext && _ds.originNext.parentNode === _ds.originParent) _ds.originParent.insertBefore(_ds.el, _ds.originNext);
+        else _ds.originParent.appendChild(_ds.el);
+      }
+    } catch {}
+    _ds.el.style.display = '';
+    if (_ds.floatEl) _ds.floatEl.remove();
+    _ds.el = null; _ds.floatEl = null; _ds.ghost = null;
+    _ds.startRect = null; _ds.originParent = null; _ds.originNext = null;
   }
 }
 
@@ -2626,11 +2740,43 @@ function _activateDrag(el) {
   _ds.el = el;
   el.classList.add('is-dragging');
   if (navigator.vibrate) navigator.vibrate(40);
+  _ds.startRect = el.getBoundingClientRect();
+  // long-press中に指が少し動いてもズレないように、開始時点の指位置を採用
+  _ds.startClientY = _ds.lastClientY || _ds.startClientY || _ds.startRect.top;
+  _ds.startClientX = _ds.lastClientX || _ds.startClientX || _ds.startRect.left;
+  _ds.offsetY = _ds.startClientY - _ds.startRect.top;
+  _ds.offsetX = _ds.startClientX - _ds.startRect.left;
+
+  // Create ghost at original position before moving element
   _ds.ghost = document.createElement('div');
   _ds.ghost.className = 'drag-ghost';
   _ds.ghost.style.height = el.offsetHeight + 'px';
   _ds.ghost.style.marginBottom = getComputedStyle(el).marginBottom || '0px';
+  // 挿入位置にも項目名を表示（分かりやすさ優先）
+  try {
+    const nameEl = el.querySelector('.f-name') || el.querySelector('.tmpl-title') || el;
+    const txt = nameEl ? (nameEl.textContent || '').trim() : '';
+    const t = document.createElement('div');
+    t.className = 'ghost-txt';
+    t.textContent = txt || ' ';
+    _ds.ghost.appendChild(t);
+  } catch {}
   el.after(_ds.ghost);
+
+  // Hide the original element (keep it for data & final placement)
+  el.style.display = 'none';
+
+  // Create a floating clone (full-width frame) that follows the finger
+  const clone = el.cloneNode(true);
+  clone.classList.add('drag-floating');
+  clone.style.boxSizing = 'border-box';
+  clone.style.width = _ds.startRect.width + 'px';
+  clone.style.maxWidth = _ds.startRect.width + 'px';
+  clone.style.left = _ds.startRect.left + 'px';
+  clone.style.top = _ds.startRect.top + 'px';
+  clone.style.transform = 'translate3d(0,0,0)';
+  document.body.appendChild(clone);
+  _ds.floatEl = clone;
 }
 
 function makeSortable(container, selector, idKey, onReorder, groupKey, canDrag) {
@@ -2648,19 +2794,33 @@ function makeSortable(container, selector, idKey, onReorder, groupKey, canDrag) 
   container.querySelectorAll(selector).forEach(el => {
     // Mouse
     el.addEventListener('mousedown', e => {
-      if (!_ds.canDrag(el)) return;
+      const mode = _ds.canDrag(el, e);
+      if (!mode) return;
       _ds.startY = e.clientY;
+      _ds.startClientY = e.clientY;
+      _ds.lastClientY = e.clientY;
+      _ds.startClientX = e.clientX;
+      _ds.lastClientX = e.clientX;
+      if (mode === 'immediate') { _activateDrag(el); return; }
       _ds.timer = setTimeout(() => _activateDrag(el), 480);
     });
 
     // Touch
     el.addEventListener('touchstart', e => {
-      if (!_ds.canDrag(el)) return;
+      const mode = _ds.canDrag(el, e);
+      if (!mode) return;
       _ds.startY = e.touches[0].clientY;
+      _ds.startClientY = e.touches[0].clientY;
+      _ds.lastClientY = e.touches[0].clientY;
+      _ds.startClientX = e.touches[0].clientX;
+      _ds.lastClientX = e.touches[0].clientX;
+      if (mode === 'immediate') { _activateDrag(el); return; }
       _ds.timer = setTimeout(() => _activateDrag(el), 480);
     }, { passive: true });
 
     el.addEventListener('touchmove', e => {
+      _ds.lastClientY = e.touches[0].clientY;
+      _ds.lastClientX = e.touches[0].clientX;
       if (!_ds.el) {
         if (Math.abs(e.touches[0].clientY - _ds.startY) > 10) clearTimeout(_ds.timer);
         return;
@@ -2669,8 +2829,14 @@ function makeSortable(container, selector, idKey, onReorder, groupKey, canDrag) 
       _doMove(e.touches[0].clientY);
     }, { passive: false });
 
-    el.addEventListener('touchend',    _doEnd);
-    el.addEventListener('touchcancel', _doCancel);
+    el.addEventListener('touchend', (e) => {
+      if (_ds.el) { try { e.preventDefault(); e.stopPropagation(); } catch {} }
+      _doEnd();
+    });
+    el.addEventListener('touchcancel', (e) => {
+      if (_ds.el) { try { e.preventDefault(); e.stopPropagation(); } catch {} }
+      _doCancel();
+    });
   });
 }
 
@@ -2679,19 +2845,45 @@ function initFolderSortable() {
   if (!container) return;
   makeSortable(container, '.f-row', 'fid', (newIds, pid) => {
     newIds.forEach((fid, i) => { const f = folder(fid); if (f) f.order = i; });
-    const moved = folder(S.reorderFolderId);
-    S.reorderFolderId = null;
     save();
-    if (moved) toast(tt('toast_folder_sort_done', { name: moved.name }));
-  }, 'pid', el => !!S.reorderFolderId && el.dataset.fid === S.reorderFolderId);
+    toast(tt('toast_folder_sort_done'));
+    S.reorderFolderId = null;
+    // 畳み状態を復元
+    if (S._reorderPrevCollapsed) {
+      try {
+        (S.folders || []).forEach((x) => { if (x && x.id in S._reorderPrevCollapsed) x.collapsed = !!S._reorderPrevCollapsed[x.id]; });
+      } catch {}
+      S._reorderPrevCollapsed = null;
+      renderTree();
+    }
+  }, 'pid', (_el, ev) => {
+    // 「順番を整理する」を選んだ後だけドラッグできる（誤操作防止）
+    if (!S.reorderFolderId) return false;
+    if (_el.dataset.fid !== S.reorderFolderId) return false;
+    const t = ev && ev.target ? ev.target : null;
+    if (!t || !t.closest) return true;
+    // 編集ボタン等の操作中は並び替えを開始しない
+    if (t.closest('.f-edit')) return false;
+    if (t.closest('button')) return false;
+    return true;
+  });
 }
 
 function initTemplateSortable() {
   const container = document.getElementById('templateList');
   if (!container) return;
+  // テンプレ操作ボタン（コピー/修正/削除）の長押しで並び替えが誤発火しないように、
+  // 「タイトル行（tmpl-row）」を長押しした時だけドラッグ開始する。
   makeSortable(container, '.tmpl-card', 'tid', (newIds) => {
     S.templates = newIds.map(id => (S.templates||[]).find(t => t.id === id)).filter(Boolean);
     save();
+  }, null, (el, ev) => {
+    const target = ev && ev.target ? ev.target : null;
+    if (!target) return false;
+    if (target.closest && target.closest('.tmpl-btns')) return false;
+    if (target.closest && target.closest('button')) return false;
+    if (target.closest && target.closest('.tmpl-row')) return true;
+    return false;
   });
 }
 
@@ -2699,6 +2891,7 @@ function initTemplateSortable() {
 // SETTINGS & TEMPLATES
 // =========================================================
 let editingTemplateId = null;
+let _tmplPrevSettingsScrollTop = 0;
 
 function openSettings() {
   renderTemplates();
@@ -2769,6 +2962,9 @@ function renderTemplates() {
 
   list.querySelectorAll('[data-ttoggle]').forEach(row => {
     row.addEventListener('click', () => {
+      // iOSで開閉時にスクロール位置が勝手にズレることがあるため固定する
+      const sb = document.querySelector('#settingsOv .settings-body');
+      const prevTop = sb ? sb.scrollTop : 0;
       const tid  = row.dataset.ttoggle;
       const det  = document.getElementById(`tdet-${tid}`);
       const chev = document.getElementById(`tchev-${tid}`);
@@ -2777,6 +2973,8 @@ function renderTemplates() {
       list.querySelectorAll('.tmpl-detail.open').forEach(d => d.classList.remove('open'));
       list.querySelectorAll('.tmpl-chev.open').forEach(c => c.classList.remove('open'));
       if (!open) { det.classList.add('open'); chev.classList.add('open'); }
+      // restore scroll position after DOM height change
+      if (sb) requestAnimationFrame(() => { sb.scrollTop = prevTop; });
     });
   });
 
@@ -2806,6 +3004,13 @@ function openTemplateModal(tid = null) {
   document.getElementById('tmplModalTtl').textContent = t ? tt('tmpl_modal_edit') : tt('tmpl_modal_add');
   document.getElementById('tmplTitle').value = t ? t.title : '';
   document.getElementById('tmplBody').value  = t ? t.body  : '';
+
+  // 保存：tmplModalを閉じた後にsettingsのスクロールがズレないようにする。
+  try {
+    const sb = document.querySelector('#settingsOv .settings-body');
+    if (sb) _tmplPrevSettingsScrollTop = sb.scrollTop || 0;
+  } catch {}
+
   showModal('tmplModal');
   setTimeout(() => document.getElementById('tmplTitle').focus(), 350);
 }
