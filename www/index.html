@@ -140,12 +140,13 @@
       padding:1px 7px; border-radius:10px; min-width:20px; text-align:center;
     }
     .f-edit {
-      font-size:18px; color:var(--txt3);
+      font-size:15px; color:var(--txt4);
       flex-shrink:0; width:44px; height:44px;
       display:flex; align-items:center; justify-content:center;
       border-radius:10px; margin-right:-8px;
+      opacity:.75;
     }
-    .f-edit:active { background:var(--fill); }
+    .f-edit:active { background:var(--fill); opacity:1; }
     .f-row.d1 { padding-left:30px; }
     .f-row.d2 { padding-left:46px; }
     .f-row.d3 { padding-left:62px; }
@@ -1478,10 +1479,9 @@ const SK = 'ig_dm_mgr_v1';
 const COLORS = ['#E1306C','#F77737','#FCAF45','#4CAF50','#26C6DA','#29B6F6','#5C6BC0','#AB47BC','#78909C','#FF5722'];
 const AVATAR_COLORS = ['#E1306C','#F77737','#dc2743','#4CAF50','#29B6F6','#5C6BC0','#AB47BC','#26C6DA','#FF5722','#8D6E63'];
 const DEFAULT_FOLDERS = [
-  { id:'f1', name:'相互フォロー',     color:'#4CAF50', parentId:null, order:0, collapsed:true },
-  { id:'f2', name:'配信関連',         color:'#29B6F6', parentId:null, order:1, collapsed:true },
-  { id:'f3', name:'案件依頼（有）',   color:'#F77737', parentId:null, order:2, collapsed:true },
-  { id:'f4', name:'案件依頼（悩）',   color:'#AB47BC', parentId:null, order:3, collapsed:true },
+  { id:'f1', name:'ファイル1', color:'#4CAF50', parentId:null, order:0, collapsed:true },
+  { id:'f2', name:'ファイル2', color:'#29B6F6', parentId:null, order:1, collapsed:true },
+  { id:'f3', name:'ファイル3', color:'#F77737', parentId:null, order:2, collapsed:true },
 ];
 
 // =========================================================
@@ -1498,6 +1498,7 @@ let S = {
   movingAccountId: null,
   selectedColor: COLORS[0],
   sortMode: 'priority',
+  reorderFolderId: null,
 };
 
 // =========================================================
@@ -1800,7 +1801,7 @@ function buildFolderRow(container, f, depth) {
     <span class="f-dot" style="background:${esc(f.color)}"></span>
     <span class="f-name">${esc(f.name)}</span>
     <span class="f-cnt">${cnt}</span>
-    <span class="f-edit" data-edit="${f.id}" aria-label="${esc(tt('aria_edit_folder'))}">✏️</span>
+    <span class="f-edit" data-edit="${f.id}" aria-label="${esc(tt('aria_edit_folder'))}">✎</span>
   `;
 
   // tap edit = rename/color edit (default folders too)
@@ -2303,10 +2304,16 @@ function showFolderAS(fid) {
   const f = folder(fid);
   if (!f) return;
   showAS(f.name, [
-    { label: tt('folder_as_edit'),   fn:() => openEditFolder(fid) },
     { label: tt('folder_as_sub'), fn:() => openAddFolder(fid) },
-    { label: tt('folder_as_del'),               fn:() => doDeleteFolder(fid), danger:true },
+    { label: tt('folder_as_sort'), fn:() => startFolderReorder(fid) },
   ]);
+}
+
+function startFolderReorder(fid) {
+  const f = folder(fid);
+  if (!f) return;
+  S.reorderFolderId = fid;
+  toast(tt('toast_folder_sort_pick', { name: f.name }));
 }
 function showAccAS(aid) {
   const a = account(aid);
@@ -2569,7 +2576,7 @@ function initModals() {
 // =========================================================
 // SORTABLE (touch + mouse)
 // =========================================================
-const _ds = { el:null, ghost:null, timer:null, startY:0, getSibs:null, idKey:null, groupKey:null, cb:null };
+const _ds = { el:null, ghost:null, timer:null, startY:0, getSibs:null, idKey:null, groupKey:null, cb:null, canDrag:null };
 
 document.addEventListener('mousemove', e => {
   if (!_ds.el) return;
@@ -2626,10 +2633,11 @@ function _activateDrag(el) {
   el.after(_ds.ghost);
 }
 
-function makeSortable(container, selector, idKey, onReorder, groupKey) {
+function makeSortable(container, selector, idKey, onReorder, groupKey, canDrag) {
   _ds.idKey    = idKey;
   _ds.groupKey = groupKey || null;
   _ds.cb       = onReorder;
+  _ds.canDrag  = canDrag || (() => true);
   _ds.getSibs  = el => {
     const all = [...container.querySelectorAll(selector)];
     if (!groupKey) return all;
@@ -2640,12 +2648,14 @@ function makeSortable(container, selector, idKey, onReorder, groupKey) {
   container.querySelectorAll(selector).forEach(el => {
     // Mouse
     el.addEventListener('mousedown', e => {
+      if (!_ds.canDrag(el)) return;
       _ds.startY = e.clientY;
       _ds.timer = setTimeout(() => _activateDrag(el), 480);
     });
 
     // Touch
     el.addEventListener('touchstart', e => {
+      if (!_ds.canDrag(el)) return;
       _ds.startY = e.touches[0].clientY;
       _ds.timer = setTimeout(() => _activateDrag(el), 480);
     }, { passive: true });
@@ -2669,8 +2679,11 @@ function initFolderSortable() {
   if (!container) return;
   makeSortable(container, '.f-row', 'fid', (newIds, pid) => {
     newIds.forEach((fid, i) => { const f = folder(fid); if (f) f.order = i; });
+    const moved = folder(S.reorderFolderId);
+    S.reorderFolderId = null;
     save();
-  }, 'pid');
+    if (moved) toast(tt('toast_folder_sort_done', { name: moved.name }));
+  }, 'pid', el => !!S.reorderFolderId && el.dataset.fid === S.reorderFolderId);
 }
 
 function initTemplateSortable() {
