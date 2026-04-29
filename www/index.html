@@ -2,7 +2,7 @@
 <html lang="ja" id="rootHtml">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DM管理">
@@ -1231,6 +1231,16 @@
 <script src="i18n.js"></script>
 <script>
 'use strict';
+
+// iOS WebViewでの意図しないズーム（ピンチ/ダブルタップ）を抑止
+document.addEventListener('gesturestart', (e) => { try { e.preventDefault(); } catch {} }, { passive: false });
+document.addEventListener('gesturechange', (e) => { try { e.preventDefault(); } catch {} }, { passive: false });
+document.addEventListener('gestureend', (e) => { try { e.preventDefault(); } catch {} }, { passive: false });
+document.addEventListener('touchstart', (e) => {
+  if (e.touches && e.touches.length > 1) {
+    try { e.preventDefault(); } catch {}
+  }
+}, { passive: false });
 
 const LANG_STORAGE_KEY = 'dm_manager_ui_lang';
 function getAppLang() {
@@ -2962,6 +2972,11 @@ function renderTemplates() {
 
   list.querySelectorAll('[data-ttoggle]').forEach(row => {
     row.addEventListener('click', () => {
+      // タップで開く操作中に、並び替えの仮置き枠が残ってグレー表示になることがあるためリセット
+      try { clearTimeout(_ds.timer); } catch {}
+      try {
+        if (_ds.el || _ds.ghost || _ds.floatEl) _doCancel();
+      } catch {}
       // iOSで開閉時にスクロール位置が勝手にズレることがあるため固定する
       const sb = document.querySelector('#settingsOv .settings-body');
       const prevTop = sb ? sb.scrollTop : 0;
