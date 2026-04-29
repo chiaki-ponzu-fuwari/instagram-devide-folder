@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" id="rootHtml">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DM管理">
   <meta name="theme-color" content="#E1306C">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
   <title>Instagram DM管理</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.svg">
@@ -50,7 +50,10 @@
     }
 
     html, body {
-      height: 100%; overflow: hidden;
+      height: 100%;
+      overflow: hidden;
+      overflow-x: hidden;
+      overscroll-behavior: none;
       background: var(--bg); color: var(--txt);
       font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
       -webkit-text-size-adjust: 100%;
@@ -59,7 +62,15 @@
     }
 
     /* ===== APP SHELL ===== */
-    #app { display:flex; flex-direction:column; height:100%; padding-top:var(--st); }
+    #app {
+      position: fixed;
+      inset: 0;
+      display:flex; flex-direction:column;
+      height:100%;
+      width:100%;
+      padding-top:var(--st);
+      overflow: hidden;
+    }
 
     /* ===== HEADER ===== */
     .hdr {
@@ -112,7 +123,7 @@
       border-bottom:.5px solid var(--sep); flex-shrink:0;
     }
     .sidebar-label { font-size:12px; font-weight:700; color:var(--txt3); text-transform:uppercase; letter-spacing:.8px; }
-    .sidebar-scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:6px 0 40px; }
+    .sidebar-scroll { flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; padding:6px 0 40px; }
 
     /* Folder rows */
     .f-row {
@@ -128,15 +139,13 @@
       font-size:12px; color:var(--txt3); background:var(--bg3);
       padding:1px 7px; border-radius:10px; min-width:20px; text-align:center;
     }
-    .f-chev {
-      font-size:18px; color:var(--txt3); transition:transform .2s;
+    .f-edit {
+      font-size:18px; color:var(--txt3);
       flex-shrink:0; width:44px; height:44px;
       display:flex; align-items:center; justify-content:center;
       border-radius:10px; margin-right:-8px;
-      transform:rotate(90deg);
     }
-    .f-chev:active { background:var(--fill); }
-    .f-chev.coll { transform:rotate(0deg); }
+    .f-edit:active { background:var(--fill); }
     .f-row.d1 { padding-left:30px; }
     .f-row.d2 { padding-left:46px; }
     .f-row.d3 { padding-left:62px; }
@@ -180,7 +189,7 @@
     .info-bar-cnt  { font-size:13px; color:var(--txt3); }
 
     /* Account list */
-    .acc-list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:0 14px calc(90px + var(--sb)); }
+    .acc-list { flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; padding:0 14px calc(90px + var(--sb)); }
 
     .sec-hdr {
       font-size:11px; font-weight:700; color:var(--txt3);
@@ -408,9 +417,88 @@
     }
     @media (prefers-color-scheme:dark) { .settings-hdr { background:rgba(28,28,30,.88); } }
     .settings-body {
-      flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
-      padding:20px 14px calc(40px + var(--sb));
+      flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+      padding:20px 14px 20px;
     }
+    .settings-pane { display:none; }
+    .settings-pane.show { display:block; }
+
+    .settings-menu {
+      display:flex; flex-direction:column; gap:10px;
+      margin:0 0 10px;
+    }
+    .settings-item {
+      background:var(--card);
+      border-radius:14px;
+      overflow:hidden;
+      border:.5px solid var(--sep);
+    }
+    .settings-item-row {
+      display:flex; align-items:center; gap:10px;
+      padding:14px 16px;
+      cursor:pointer;
+      min-height:52px;
+    }
+    .settings-item-ttl { flex:1; font-size:15px; font-weight:700; }
+    .settings-item-sub { font-size:12px; color:var(--txt3); font-weight:700; }
+    .settings-item-chev { color:var(--txt3); font-size:18px; }
+    .settings-bottom-links {
+      flex-shrink:0;
+      display:flex; flex-direction:row;
+      align-items:stretch;
+      justify-content:space-between;
+      gap:2px;
+      padding:8px 6px calc(8px + var(--sb));
+      border-top:.5px solid var(--sep);
+      background:rgba(255,255,255,.92);
+      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    }
+    @media (prefers-color-scheme:dark) {
+      .settings-bottom-links { background:rgba(28,28,30,.94); }
+    }
+    .settings-bottom-links.hidden { display:none !important; }
+    .settings-bottom-link {
+      flex:1; min-width:0;
+      margin:0; padding:10px 2px;
+      border:none; border-radius:8px;
+      background:transparent;
+      font-size:11px; font-weight:600;
+      color:#0A84FF;
+      line-height:1.25;
+      text-align:center;
+      white-space:normal;
+      cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+    }
+    @media (prefers-color-scheme:dark) {
+      .settings-bottom-link { color:#64B5FF; }
+    }
+    .settings-bottom-link:active { opacity:.55; }
+    .settings-lang {
+      display:flex; border-radius:9px; overflow:hidden;
+      border:.5px solid var(--sep); flex-shrink:0;
+    }
+    .settings-lang-btn {
+      margin:0; padding:7px 11px; border:none; background:var(--fill);
+      font-size:12px; font-weight:800; color:var(--txt3);
+      cursor:pointer; min-width:40px; line-height:1;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .settings-lang-btn.on { background:var(--accent); color:#fff; }
+    .settings-lang-btn:active { opacity:.75; }
+    .settings-doc {
+      font-size:14px; color:var(--txt2); line-height:1.65;
+      padding:0 2px 24px;
+    }
+    .settings-doc h3 {
+      font-size:15px; font-weight:700; color:var(--txt);
+      margin:20px 0 8px;
+    }
+    .settings-doc h3:first-child { margin-top:0; }
+    .settings-doc p { margin:0 0 10px; }
+    .settings-doc ol, .settings-doc ul { margin:0 0 10px; padding-left:1.25em; }
+    .settings-doc li { margin-bottom:6px; }
+    .settings-doc .muted { color:var(--txt3); font-size:13px; }
     .settings-section-ttl {
       font-size:12px; font-weight:700; color:var(--txt3);
       text-transform:uppercase; letter-spacing:.8px;
@@ -656,6 +744,12 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<!-- Undo bar -->
+<div class="toast" id="undoBar" style="display:flex;gap:12px;align-items:center;justify-content:space-between;bottom:calc(140px + var(--sb));padding:10px 14px;border-radius:16px;min-width:min(92vw,520px);pointer-events:auto">
+  <span id="undoMsg" style="font-weight:700"></span>
+  <button id="undoBtn" style="border:none;background:rgba(255,255,255,.18);color:#fff;padding:8px 12px;border-radius:12px;font-weight:800;cursor:pointer;pointer-events:auto">取り消す</button>
+</div>
+
 <!-- Action Sheet -->
 <div class="as-ov" id="asOv">
   <div class="as-wrap">
@@ -681,11 +775,12 @@
       <div class="fg" id="parentGroup">
         <label>親フォルダー（サブフォルダーにする場合）</label>
         <select class="fi" id="parentSel">
-          <option value="">なし（ルート）</option>
+          <option value="">新規親フォルダ作成</option>
         </select>
       </div>
     </div>
     <div class="modal-actions">
+      <button class="btn-row" id="fldDelete" style="background:rgba(255,59,48,.12);color:#FF3B30;display:none">削除</button>
       <button class="btn-row btn-cancel"  id="fldCancel">キャンセル</button>
       <button class="btn-row btn-primary" id="fldSave">保存</button>
     </div>
@@ -813,13 +908,215 @@
     <button class="ico-btn" id="settingsClose" aria-label="閉じる">
       <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
     </button>
-    <span class="hdr-title">設定</span>
-    <span style="min-width:44px"></span>
+    <span class="hdr-title" id="settingsHdrTitle">設定</span>
+    <div class="settings-lang" id="settingsLangSwitch" role="group" aria-label="表示言語">
+      <button type="button" class="settings-lang-btn" data-set-lang="ja" id="langBtnJa">JA</button>
+      <button type="button" class="settings-lang-btn" data-set-lang="en" id="langBtnEn">EN</button>
+    </div>
   </div>
   <div class="settings-body">
-    <div class="settings-section-ttl">テンプレート</div>
-    <div id="templateList"></div>
-    <button class="add-tmpl-btn" id="addTmplBtn">＋ テンプレートを追加</button>
+    <div class="settings-pane show" id="paneSettingsHome">
+      <div class="settings-menu">
+        <div class="settings-item">
+          <div class="settings-item-row" id="settingsGoTemplates">
+            <span class="settings-item-ttl">テンプレート</span>
+            <span class="settings-item-sub">定型文</span>
+            <span class="settings-item-chev">›</span>
+          </div>
+        </div>
+        <div class="settings-item">
+          <div class="settings-item-row" id="settingsGoData">
+            <span class="settings-item-ttl">データ管理</span>
+            <span class="settings-item-sub">バックアップ</span>
+            <span class="settings-item-chev">›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-pane" id="paneTemplates">
+      <div class="settings-section-ttl">テンプレート</div>
+      <div id="templateList"></div>
+      <button class="add-tmpl-btn" id="addTmplBtn">＋ テンプレートを追加</button>
+    </div>
+
+    <div class="settings-pane" id="paneData">
+      <div class="settings-section-ttl">データ管理</div>
+
+      <div class="tmpl-card">
+        <div class="tmpl-row" style="cursor:default">
+          <span class="tmpl-title">バックアップ作成</span>
+          <span style="color:var(--txt3);font-size:12px;font-weight:700">JSON</span>
+        </div>
+        <div class="tmpl-detail open" style="display:block">
+          <div class="tmpl-body">全データをJSON形式で書き出します。iOSアプリではShareSheetで共有できます。</div>
+          <div class="tmpl-btns">
+            <button class="tmpl-btn tmpl-copy" id="backupExportBtn">⬇︎ データを書き出す</button>
+            <button class="tmpl-btn tmpl-edit" id="backupCopyBtn">⎘ JSONをコピー</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tmpl-card">
+        <div class="tmpl-row" style="cursor:default">
+          <span class="tmpl-title">バックアップ復元</span>
+          <span style="color:var(--txt3);font-size:12px;font-weight:700">JSON</span>
+        </div>
+        <div class="tmpl-detail open" style="display:block">
+          <div class="tmpl-body">JSONファイルを読み込んで復元します（上書き/マージを選択）。</div>
+          <div class="tmpl-btns">
+            <button class="tmpl-btn tmpl-edit" id="backupImportBtn">⬆︎ バックアップを読み込む</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tmpl-card">
+        <div class="tmpl-row" style="cursor:default">
+          <span class="tmpl-title">自動バックアップ</span>
+          <span style="color:var(--txt3);font-size:12px;font-weight:700">最大10件</span>
+        </div>
+        <div class="tmpl-detail open" style="display:block">
+          <div class="tmpl-body">変更のたびに自動でバックアップを保存します。履歴から復元できます。</div>
+          <div class="tmpl-btns">
+            <button class="tmpl-btn tmpl-copy" id="backupHistoryBtn">🕘 履歴から復元</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-pane" id="paneTerms">
+      <div class="settings-section-ttl" id="paneTermsSecTtl">利用規約</div>
+      <div class="settings-doc" id="paneTermsDoc">
+        <p class="muted">最終更新日：2026年4月29日</p>
+        <p>本規約は、<strong>HERAC LLC</strong>（以下「当社」）が提供するスマートフォンアプリ「<strong>DM管理</strong>」（以下「本アプリ」）の利用条件を定めるものです。本アプリを利用した時点で、本規約に同意したものとみなします。</p>
+
+        <h3>1. サービス</h3>
+        <p>本アプリは、InstagramのDMに関する情報の整理、フォルダ分類、メモ・テンプレート・スケジュール等の管理を、利用者自身の端末上で行うための補助ツールです。Instagramその他Meta社のサービスの公式機能の代替・保証をするものではなく、当社および本アプリはMeta社と提携していません。</p>
+
+        <h3>2. アカウント</h3>
+        <p>本アプリにログイン機能はありません。Apple ID、Google等による認証および当社によるアカウント管理は行いません。入力データは利用者の端末内（ブラウザ利用時は<code>localStorage</code>、iOSアプリ利用時はアプリの保存領域等）に保存されます。</p>
+
+        <h3>3. 将来の有料機能等</h3>
+        <p>本アプリは現時点で無料で提供されることを予定しています。当社は、事前の通知のうえ、広告の表示や有料機能の導入等を行う場合があります。</p>
+
+        <h3>4. 注意事項</h3>
+        <p>本アプリ上の表示・メモ・整理内容は参考情報であり、実際の取引・連絡内容・法的効力については利用者間または利用者と第三者との間でご確認ください。本アプリの利用に起因する金銭トラブル、契約上の紛争等について、当社は責任を負いません。入力内容の正確性・最新性は利用者の責任となります。</p>
+
+        <h3>5. データ</h3>
+        <p>当社はデータの永続的な保存を保証するものではありません。通信障害・端末故障・OSアップデート・アプリ削除・操作ミス等によるデータ消失について、当社は責任を負いません。重要なデータは、本アプリのバックアップ機能等を用いて、利用者の責任で定期的に保存してください。</p>
+
+        <h3>6. 書き出し・共有</h3>
+        <p>利用者がバックアップデータ（JSON等）を書き出し、共有・保存した場合、そのデータの管理および第三者への開示リスクは利用者が負うものとします。</p>
+
+        <h3>7. 禁止事項</h3>
+        <p>利用者は、以下を行ってはなりません。</p>
+        <ul>
+          <li>不正利用・詐欺的行為</li>
+          <li>違法行為または違法な目的での利用</li>
+          <li>本アプリまたは関連システムへの不正アクセス、妨害、改ざん等</li>
+        </ul>
+
+        <h3>8. 権利</h3>
+        <p>本アプリに関する著作権、商標権その他一切の知的財産権は、当社または正当な権利者に帰属します。</p>
+
+        <h3>9. 免責</h3>
+        <p>本アプリは現状有姿で提供されます。本アプリの利用により利用者に生じた損害（直接損害・間接損害を問いません）について、当社に故意または重過失がある場合を除き、当社は一切の責任を負いません。</p>
+
+        <h3>10. 変更・終了</h3>
+        <p>当社は、利用者への事前通知なく、本規約または本アプリの内容を変更・中断・終了できるものとします。</p>
+
+        <h3>11. 準拠法・管轄裁判所</h3>
+        <p>本規約は日本法に準拠します。本アプリまたは本規約に関する紛争については、大阪地方裁判所を第一審の専属的合意管轄裁判所とします。</p>
+
+        <h3>12. お問い合わせ</h3>
+        <p>本規約に関するお問い合わせは、次のメールアドレスまでご連絡ください。<br><strong>herac.7.app@gmail.com</strong></p>
+      </div>
+    </div>
+
+    <div class="settings-pane" id="panePrivacy">
+      <div class="settings-section-ttl" id="panePrivacySecTtl">プライバシーポリシー</div>
+      <div class="settings-doc" id="panePrivacyDoc">
+        <p class="muted">最終更新日：2026年4月29日</p>
+        <p><strong>HERAC LLC</strong>（以下「当社」）は、当社が提供するアプリ「<strong>DM管理</strong>」（以下「本アプリ」）における利用者情報の取扱いについて、本ポリシーのとおり定めます。本アプリを利用することで、本ポリシーに同意したものとみなします。</p>
+
+        <h3>1. 収集する情報</h3>
+        <p><strong>1.1 ログイン時に取得される情報</strong><br>本アプリにログイン機能はありません。Apple ID、Google等によるサインインや、それに伴う当社によるメールアドレス・ユーザー識別子の取得は行いません。</p>
+        <p><strong>1.2 利用者が入力する情報</strong><br>利用者が本アプリに入力・登録する情報として、例えば次のものが端末内に保存されます。</p>
+        <ul>
+          <li>フォルダ名、DM相手（アカウント）に関する情報</li>
+          <li>テンプレート（定型文のタイトル・本文）</li>
+          <li>案件メモ、URL、タグ、撮影指示、スケジュール関連のメモ等</li>
+        </ul>
+        <p class="muted">※実名などの個人情報の入力は必須ではありません。ニックネーム等での運用が可能です。</p>
+        <p><strong>1.3 自動的に当社サーバーへ送信される情報</strong><br>本アプリは、利用者が入力した内容を当社のサーバーへ送信したり、当社がクラウド上で同期・保管したりする機能はありません。端末内の保存領域への記録のみです。</p>
+        <p>ブラウザで利用する場合は主に<code>localStorage</code>、iOSアプリとして利用する場合はアプリのDocuments領域等に保存されます（自動バックアップ履歴を含む）。当社がクラッシュログ等を自動取得する仕組みは、本アプリには組み込んでいません。</p>
+
+        <h3>2. 利用目的</h3>
+        <p>上記の情報は、いずれも<strong>端末内で本アプリの機能（表示・編集・検索・バックアップ書き出し等）を提供するため</strong>にのみ利用されます。</p>
+
+        <h3>3. 第三者サービス</h3>
+        <p>当社は、本アプリを通じて収集した情報を第三者に販売しません。Instagram等のMeta社サービスは、Meta社の各利用規約・プライバシーポリシーが適用されます。本アプリは、Instagramの公式APIと連携してDMの内容を自動取得するものではなく、利用者が手入力・整理するためのツールです。</p>
+
+        <h3>4. データ保存</h3>
+        <p>データは利用者の端末内に保存されます。当社が運営するクラウドへの同期は行いません。iOSアプリでは、データ消失に備え、端末内に自動バックアップ履歴（最大10件程度）を保持する場合があります。機種変更・紛失・故障に備え、利用者ご自身でJSON等の書き出しを行い、別の場所に保管することを推奨します。</p>
+
+        <h3>5. データ共有</h3>
+        <p>利用者が「データを書き出す」等によりファイルを共有した場合、その共有先における取扱いは利用者の責任となります。当社は収集した情報を第三者に販売しません。</p>
+
+        <h3>6. セキュリティ</h3>
+        <p>当社は、本アプリの設計上、利用者情報を当社サーバーで保持しない方針です。端末内のデータについては、OS・端末のセキュリティに依存します。インターネット上において完全なセキュリティを保証するものではありません。</p>
+
+        <h3>7. アカウント削除とデータの消去</h3>
+        <p>本アプリに当社が管理する「アカウント」はありません。端末内のデータは、本アプリをアンインストールする、またはブラウザのサイトデータを削除する等により消去される場合があります。書き出したバックアップファイルは、利用者が自己管理してください。</p>
+
+        <h3>8. お子様の利用</h3>
+        <p>本アプリは、13歳未満の方を主な利用対象として設計していません。13歳未満の方の個人情報と知りながら当社が取得した場合は、速やかに削除するよう努めます（本アプリの仕様上、当社サーバーへの送信は行いません）。</p>
+
+        <h3>9. 変更</h3>
+        <p>本ポリシーは、必要に応じて変更される場合があります。変更後の内容は、本アプリ内の本ページに掲示します。</p>
+
+        <h3>10. お問い合わせ</h3>
+        <p>プライバシーに関するお問い合わせは、次のメールアドレスまでご連絡ください。<br><strong>herac.7.app@gmail.com</strong></p>
+      </div>
+    </div>
+
+    <div class="settings-pane" id="paneGuide">
+      <div class="settings-section-ttl" id="paneGuideSecTtl">使い方ガイド</div>
+      <div class="settings-doc" id="paneGuideDoc">
+        <p><strong>DM管理</strong>は、InstagramのDMまわりの情報を、フォルダ分けしながら端末上で整理するアプリです（Instagram公式アプリの代替ではありません）。</p>
+
+        <h3>1. フォルダを作って整理する</h3>
+        <p>サイドバーからフォルダを追加できます。フォルダはドラッグで並べ替え可能です。親フォルダ・子フォルダを作り、案件や相手の種類別に分けて使えます。</p>
+
+        <h3>2. DM相手（アカウント）を登録する</h3>
+        <p>各フォルダにアカウント（DMの相手）を追加します。一覧の行をタップして詳細を開き、プロフィールURLやメモ、案件ステータス、タグ、マップURLなどを入力できます。</p>
+
+        <h3>3. テンプレートで返信を速くする</h3>
+        <p>設定の「テンプレート」から、よく使う返信文を登録します。一覧で展開し、「コピー」でクリップボードに入れ、InstagramのDM等に貼り付けて使います。</p>
+
+        <h3>4. スケジュールを見る</h3>
+        <p>スケジュール画面から、登録した予定を一覧で確認できます（画面構成はアプリのバージョンにより異なる場合があります）。</p>
+
+        <h3>5. バックアップを取る（重要）</h3>
+        <p>設定の「データ管理」から、次の操作ができます。</p>
+        <ul>
+          <li><strong>データを書き出す</strong>：全データをJSONにし、ファイル保存や共有（iOSでは共有シート）ができます。機種変更・紛失に備えて定期的に実施することをおすすめします。</li>
+          <li><strong>JSONをコピー</strong>：クリップボードに全文コピーします。長いデータはファイル書き出しの方が向いています。</li>
+          <li><strong>バックアップを読み込む</strong>：保存したJSONから復元します。<strong>上書き</strong>か<strong>マージ</strong>を選べます。iOSアプリではファイルを選択、ブラウザでは画面の指示に従いJSONを貼り付けます。</li>
+        </ul>
+
+        <h3>6. 自動バックアップ（iOSアプリ）</h3>
+        <p>保存操作のたびに、端末内に履歴バックアップ（最大10件）が自動で残ります。「履歴から復元」で直近の状態に戻せることがあります。端末ごと失うリスクには、手動の書き出しでもう一段備えてください。</p>
+
+        <h3>7. 利用規約・プライバシー</h3>
+        <p>設定トップの<strong>画面最下部</strong>のリンクから、利用規約・プライバシーポリシー・本ページをいつでも開けます。</p>
+      </div>
+    </div>
+  </div>
+  <div class="settings-bottom-links" id="settingsBottomLinks" role="navigation" aria-label="法務・ヘルプ" data-i18n-aria="nav_bottom_aria">
+    <button type="button" class="settings-bottom-link" id="settingsGoTerms">利用規約</button>
+    <button type="button" class="settings-bottom-link" id="settingsGoPrivacy">プライバシーポリシー</button>
+    <button type="button" class="settings-bottom-link" id="settingsGoGuide">使い方</button>
   </div>
 </div>
 
@@ -841,6 +1138,27 @@
     <div class="modal-actions">
       <button class="btn-row btn-cancel" id="tmplCancel">キャンセル</button>
       <button class="btn-row btn-primary" id="tmplSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Backup Restore -->
+<div class="modal-ov" id="backupModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl" id="backupModalTtl">バックアップを復元（貼り付け）</div>
+    <div class="modal-body">
+      <div class="fg">
+        <label id="backupJsonLbl">バックアップJSON</label>
+        <textarea class="fi fi-ta" id="backupJson" placeholder="{ ... }" style="min-height:180px"></textarea>
+      </div>
+      <div id="backupNoteDiv" style="color:var(--txt3);font-size:12px;line-height:1.6">
+        ※ 復元方法（上書き/マージ）は次で選択できます。必要なら先にバックアップを作成してください。
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-row btn-cancel" id="backupCancel">キャンセル</button>
+      <button class="btn-row btn-primary" id="backupApply">復元する</button>
     </div>
   </div>
 </div>
@@ -869,8 +1187,289 @@
   </div>
 </div>
 
+<script src="i18n.js"></script>
 <script>
 'use strict';
+
+const LANG_STORAGE_KEY = 'dm_manager_ui_lang';
+function getAppLang() {
+  const x = localStorage.getItem(LANG_STORAGE_KEY);
+  return x === 'en' || x === 'ja' ? x : 'ja';
+}
+function setAppLang(code) {
+  if (code !== 'en' && code !== 'ja') return;
+  localStorage.setItem(LANG_STORAGE_KEY, code);
+  document.documentElement.lang = code === 'en' ? 'en' : 'ja';
+  applyAllLocalizations();
+}
+function tt(key, rep) {
+  const T = window.DM_I18N_STRINGS[getAppLang()] || window.DM_I18N_STRINGS.ja;
+  const J = window.DM_I18N_STRINGS.ja;
+  let s = T[key];
+  if (s === undefined) s = J[key];
+  if (s === undefined) s = key;
+  if (rep && typeof s === 'string') {
+    Object.keys(rep).forEach((k) => { s = s.split('{' + k + '}').join(String(rep[k])); });
+  }
+  return s;
+}
+
+let legalJaSnapshot = null;
+function snapshotLegalJaOnce() {
+  if (legalJaSnapshot) return;
+  legalJaSnapshot = {
+    terms: document.getElementById('paneTermsDoc').innerHTML,
+    privacy: document.getElementById('panePrivacyDoc').innerHTML,
+    guide: document.getElementById('paneGuideDoc').innerHTML,
+  };
+}
+
+/** English legal/help HTML (structure mirrors Japanese). */
+const LEGAL_EN = {
+  terms: `<p class="muted">Last updated: April 29, 2026</p>
+<p>These Terms of Use (“Terms”) govern your use of the mobile app <strong>DM管理 / DM Organizer</strong> (“App”) provided by <strong>HERAC LLC</strong> (“we”, “us”). By using the App you agree to these Terms.</p>
+<h3>1. Service</h3>
+<p>The App helps you organize information related to Instagram DMs—folders, notes, templates, and schedules—<strong>on your device</strong>. It is not an official Instagram or Meta product, does not replace Instagram, and we are not affiliated with Meta.</p>
+<h3>2. Accounts</h3>
+<p>The App has <strong>no sign-in</strong>. We do not issue or manage user accounts. Data you enter is stored locally (e.g. browser <code>localStorage</code> or the app sandbox on iOS).</p>
+<h3>3. Future paid features / ads</h3>
+<p>The App is free for now. We may introduce ads or paid features with reasonable notice.</p>
+<h3>4. Important notices</h3>
+<p>Content in the App is for your reference only. Confirm real transactions and communications separately. We are not responsible for payment or contract disputes between you and others. You are responsible for accuracy of what you enter.</p>
+<h3>5. Data</h3>
+<p>We do not guarantee that data will always be preserved. We are not liable for loss due to device failure, OS updates, uninstalling the app, mistakes, etc. Back up important data using export features.</p>
+<h3>6. Export &amp; sharing</h3>
+<p>If you export or share backup files (e.g. JSON), you are responsible for where they go and who can access them.</p>
+<h3>7. Prohibited conduct</h3>
+<ul>
+<li>Fraud or abuse</li>
+<li>Illegal use</li>
+<li>Unauthorized access, interference, or tampering with the App</li>
+</ul>
+<h3>8. Rights</h3>
+<p>All intellectual property rights in the App belong to us or our licensors.</p>
+<h3>9. Disclaimer</h3>
+<p>The App is provided “as is” to the extent permitted by law. We are not liable for damages arising from use except where required otherwise by law.</p>
+<h3>10. Changes / termination</h3>
+<p>We may change or discontinue the App or these Terms with or without prior notice.</p>
+<h3>11. Governing law &amp; court</h3>
+<p>These Terms are governed by the laws of Japan. The Osaka District Court shall have exclusive jurisdiction as the court of first instance.</p>
+<h3>12. Contact</h3>
+<p><strong>herac.7.app@gmail.com</strong></p>`,
+
+  privacy: `<p class="muted">Last updated: April 29, 2026</p>
+<p><strong>HERAC LLC</strong> (“we”) describes how information is handled in <strong>DM管理 / DM Organizer</strong> (“App”). By using the App you agree to this policy.</p>
+<h3>1. Information</h3>
+<p><strong>1.1 Sign-in</strong><br>There is no login. We do not collect email or user IDs from Apple, Google, or similar for authentication.</p>
+<p><strong>1.2 What you enter</strong><br>Folder names, account labels, templates, project notes, URLs, tags, schedule-related fields, etc. are stored <strong>on your device</strong>.</p>
+<p class="muted">Real names are not required.</p>
+<p><strong>1.3 Transmission to our servers</strong><br>We do <strong>not</strong> send your content to our servers or sync it to our cloud. There is no crash-reporting pipeline to us in this App.</p>
+<p>Browser: mainly <code>localStorage</code>. iOS app: Documents and similar, including optional on-device backup history.</p>
+<h3>2. Purposes</h3>
+<p>On-device storage is used only to provide App features (display, edit, search, export).</p>
+<h3>3. Third parties</h3>
+<p>We do not sell your information. Instagram/Meta services are governed by Meta’s policies. This App does not use the Instagram API to read DMs automatically; you organize what you enter manually.</p>
+<h3>4. Retention</h3>
+<p>Data stays on your device until you remove it or uninstall. iOS may keep up to ~10 local backup snapshots. For new phones or loss, export JSON elsewhere.</p>
+<h3>5. Sharing</h3>
+<p>If you share an exported file, sharing is your responsibility.</p>
+<h3>6. Security</h3>
+<p>We do not host your content. Device security depends on your OS and settings. No method is 100% secure.</p>
+<h3>7. Deletion</h3>
+<p>We do not host accounts. Uninstalling the app or clearing site data may erase local data. Keep separate copies of exports you need.</p>
+<h3>8. Children</h3>
+<p>The App is not directed to children under 13.</p>
+<h3>9. Changes</h3>
+<p>We may update this policy and will post the new text in the App.</p>
+<h3>10. Contact</h3>
+<p><strong>herac.7.app@gmail.com</strong></p>`,
+
+  guide: `<p><strong>DM Organizer</strong> helps you sort Instagram DM-related work on your device (not a replacement for the official Instagram app).</p>
+<h3>1. Folders</h3>
+<p>Add folders from the sidebar; drag to reorder. Create parent/child folders to group clients or job types.</p>
+<h3>2. Accounts</h3>
+<p>Add an “account” (DM contact) per folder. Tap a row for details: profile URL, memo, project status, tags, map link, etc.</p>
+<h3>3. Templates</h3>
+<p>In Settings → Templates, save snippets and copy them into Instagram DMs or elsewhere.</p>
+<h3>4. Schedule</h3>
+<p>Open the calendar icon in the header to see upcoming shoot times and deadlines from projects.</p>
+<h3>5. Backup</h3>
+<ul>
+<li><strong>Export data</strong>: JSON file; on iOS use the share sheet to save or send.</li>
+<li><strong>Copy JSON</strong>: Clipboard (handy for quick tests).</li>
+<li><strong>Import backup</strong>: Pick a file (iOS) or paste JSON (web). Choose overwrite or merge.</li>
+</ul>
+<h3>6. Auto-backup (iOS)</h3>
+<p>Each save keeps up to ~10 snapshots on device. For theft/loss, also keep exports off-device.</p>
+<h3>7. Legal</h3>
+<p>Use the links at the bottom of Settings for Terms, Privacy, and this guide.</p>`,
+};
+
+function applyLegalPanels() {
+  snapshotLegalJaOnce();
+  const en = getAppLang() === 'en';
+  document.getElementById('paneTermsDoc').innerHTML = en ? LEGAL_EN.terms : legalJaSnapshot.terms;
+  document.getElementById('panePrivacyDoc').innerHTML = en ? LEGAL_EN.privacy : legalJaSnapshot.privacy;
+  document.getElementById('paneGuideDoc').innerHTML = en ? LEGAL_EN.guide : legalJaSnapshot.guide;
+  document.getElementById('paneTermsSecTtl').textContent = tt('nav_terms');
+  document.getElementById('panePrivacySecTtl').textContent = tt('nav_privacy');
+  document.getElementById('paneGuideSecTtl').textContent = tt('guide_title');
+}
+
+let settingsPanelKey = 'home';
+
+function updateLangSwitcher() {
+  const ja = document.getElementById('langBtnJa');
+  const en = document.getElementById('langBtnEn');
+  const L = getAppLang();
+  if (ja) { ja.classList.toggle('on', L === 'ja'); ja.textContent = tt('lang_ja'); }
+  if (en) { en.classList.toggle('on', L === 'en'); en.textContent = tt('lang_en'); }
+}
+
+function applyChromeStatic() {
+  document.title = tt('doc_title');
+  const metaTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if (metaTitle) metaTitle.setAttribute('content', tt('meta_app_title'));
+  document.getElementById('hamBtn').setAttribute('aria-label', tt('aria_menu'));
+  document.getElementById('schedBtn').setAttribute('aria-label', tt('aria_schedule'));
+  document.getElementById('settingsBtn').setAttribute('aria-label', tt('aria_settings'));
+  document.getElementById('fab').setAttribute('aria-label', tt('fab_add'));
+  document.querySelector('.sidebar-label').textContent = tt('sidebar_folders');
+  document.getElementById('sideAddFolder').setAttribute('aria-label', tt('aria_add_folder'));
+  document.getElementById('srchInput').placeholder = tt('srch_placeholder');
+  document.getElementById('settingsLangSwitch').setAttribute('aria-label', tt('aria_lang'));
+  document.getElementById('settingsBottomLinks').setAttribute('aria-label', tt('nav_bottom_aria'));
+  document.getElementById('settingsGoTerms').textContent = tt('nav_terms');
+  document.getElementById('settingsGoPrivacy').textContent = tt('nav_privacy');
+  document.getElementById('settingsGoGuide').textContent = tt('nav_guide');
+  document.getElementById('settingsGoTemplates').querySelector('.settings-item-ttl').textContent = tt('settings_templates');
+  document.getElementById('settingsGoTemplates').querySelector('.settings-item-sub').textContent = tt('settings_templates_sub');
+  document.getElementById('settingsGoData').querySelector('.settings-item-ttl').textContent = tt('settings_data');
+  document.getElementById('settingsGoData').querySelector('.settings-item-sub').textContent = tt('settings_data_sub');
+  const b1 = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-title');
+  const b1b = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-body');
+  if (b1) b1.textContent = tt('backup_create');
+  if (b1b) b1b.textContent = tt('backup_create_body');
+  document.getElementById('backupExportBtn').textContent = tt('backup_export');
+  document.getElementById('backupCopyBtn').textContent = tt('backup_copyjson');
+  const b2 = document.querySelector('#paneData .tmpl-card:nth-of-type(2) .tmpl-title');
+  const b2b = document.querySelector('#paneData .tmpl-card:nth-of-type(2) .tmpl-body');
+  if (b2) b2.textContent = tt('backup_restore');
+  if (b2b) b2b.textContent = tt('backup_restore_body');
+  document.getElementById('backupImportBtn').textContent = tt('backup_import');
+  const b3 = document.querySelector('#paneData .tmpl-card:nth-of-type(3) .tmpl-title');
+  const b3tag = document.querySelector('#paneData .tmpl-card:nth-of-type(3) .tmpl-row span:nth-of-type(2)');
+  const b3b = document.querySelector('#paneData .tmpl-card:nth-of-type(3) .tmpl-body');
+  if (b3) b3.textContent = tt('backup_auto');
+  if (b3tag) b3tag.textContent = tt('backup_auto_badge');
+  if (b3b) b3b.textContent = tt('backup_auto_body');
+  document.getElementById('backupHistoryBtn').textContent = tt('backup_history');
+  document.querySelector('#paneTemplates .settings-section-ttl').textContent = tt('settings_templates_sec');
+  document.querySelector('#paneData .settings-section-ttl').textContent = tt('settings_data_sec');
+  document.getElementById('addTmplBtn').textContent = tt('tmpl_add_btn');
+
+  document.querySelector('#folderModal .fg:nth-of-type(1) label').textContent = tt('folder_name');
+  document.getElementById('fldName').placeholder = tt('folder_ph');
+  document.querySelector('#folderModal .fg:nth-of-type(2) label').textContent = tt('folder_color');
+  document.querySelector('#parentGroup label').textContent = tt('folder_parent');
+  document.getElementById('fldDelete').textContent = tt('folder_del');
+  document.getElementById('fldCancel').textContent = tt('cancel');
+  document.getElementById('fldSave').textContent = tt('save');
+
+  document.querySelector('#accModal .fg:nth-of-type(2) label').textContent = tt('acc_user');
+  document.querySelector('#accModal .fg:nth-of-type(3) label').textContent = tt('acc_url');
+  document.querySelector('#accModal .fg:nth-of-type(4) label').textContent = tt('acc_memo');
+  document.getElementById('accMemo').placeholder = tt('acc_memo_ph');
+  document.querySelector('#accModal .fg:nth-of-type(5) label').textContent = tt('acc_folder');
+  document.querySelector('#accModal .fg:nth-of-type(6) label span:last-child').textContent = tt('acc_newdm');
+  document.getElementById('dmText').placeholder = tt('acc_dm_ph');
+  document.getElementById('dmAnalyzeBtn').textContent = tt('acc_dm_analyze');
+  document.getElementById('accCancel').textContent = tt('cancel');
+  document.getElementById('accSave').textContent = tt('save');
+
+  document.querySelector('#projModal .fg:nth-of-type(1) label').textContent = tt('proj_status');
+  document.querySelectorAll('.st-btn').forEach((btn) => {
+    const st = btn.dataset.st;
+    const map = { 相談中: 'st_consult', 決定済み: 'st_confirmed', 保留中: 'st_pending', 終了: 'st_done' };
+    btn.textContent = tt(map[st] || st);
+  });
+  document.querySelector('#projModal .fg:nth-of-type(2) label').textContent = tt('proj_name');
+  document.getElementById('projName').placeholder = tt('proj_name_ph');
+  document.querySelector('#projModal .fg:nth-of-type(3) label').textContent = tt('proj_shoot');
+  document.querySelector('#projModal .fg:nth-of-type(4) label').textContent = tt('proj_deadline');
+  document.querySelector('#projModal .fg:nth-of-type(5) label').textContent = tt('proj_instr');
+  document.getElementById('projInstr').placeholder = tt('proj_instr_ph');
+  document.querySelector('#projModal .fg:nth-of-type(6) label').textContent = tt('proj_tags');
+  document.getElementById('projTags').placeholder = tt('proj_tags_ph');
+  document.querySelector('#projModal .fg:nth-of-type(7) label').textContent = tt('proj_map');
+  document.getElementById('projCancel').textContent = tt('cancel');
+  document.getElementById('projSave').textContent = tt('save');
+
+  document.querySelectorAll('#tmplModal .fg label')[0].textContent = tt('tmpl_title');
+  document.querySelectorAll('#tmplModal .fg label')[1].textContent = tt('tmpl_body');
+  document.getElementById('tmplTitle').placeholder = tt('tmpl_title_ph');
+  document.getElementById('tmplBody').placeholder = tt('tmpl_body_ph');
+  document.getElementById('tmplCancel').textContent = tt('cancel');
+  document.getElementById('tmplSave').textContent = tt('save');
+
+  document.getElementById('backupModalTtl').textContent = tt('backup_modal_ttl');
+  document.getElementById('backupJsonLbl').textContent = tt('backup_json_lbl');
+  document.getElementById('backupNoteDiv').textContent = tt('backup_note');
+  document.getElementById('backupCancel').textContent = tt('cancel');
+  document.getElementById('backupApply').textContent = tt('backup_apply');
+
+  document.querySelector('#schedOv .hdr-title').textContent = tt('sched_title');
+  document.getElementById('schedClose').setAttribute('aria-label', tt('aria_close'));
+  document.querySelector('#moveModal .modal-ttl').textContent = tt('move_title');
+  document.getElementById('moveCancel').textContent = tt('cancel');
+  document.getElementById('asCancel').textContent = tt('as_cancel');
+  document.getElementById('undoBtn').textContent = tt('undo_btn');
+
+  const dmT = document.getElementById('dmToggle');
+  if (dmT && !document.getElementById('dmArea').classList.contains('open')) dmT.textContent = tt('acc_dm_toggle');
+  else if (dmT) dmT.textContent = tt('acc_dm_toggle_open');
+
+  updateLangSwitcher();
+  applyLegalPanels();
+}
+
+function applyAllLocalizations() {
+  applyChromeStatic();
+  const sq = S.searchQuery;
+  if (!sq) {
+    const f = folder(S.currentFolderId);
+    document.getElementById('hdrTitle').textContent = f ? f.name : tt('hdr_app_default');
+  } else {
+    document.getElementById('hdrTitle').textContent = tt('hdr_search');
+  }
+  setSettingsTab(settingsPanelKey);
+  renderTree();
+  renderMain();
+  renderTemplates();
+  if (document.getElementById('schedOv').classList.contains('show')) renderSchedule();
+  if (document.getElementById('projModal').classList.contains('show')) {
+    const a = account(projAccountId);
+    if (a) document.getElementById('projModalTtl').textContent = tt('proj_ttl_user', { user: a.username });
+    document.querySelectorAll('.st-btn').forEach((btn) => {
+      const st = btn.dataset.st;
+      const map = { 相談中: 'st_consult', 決定済み: 'st_confirmed', 保留中: 'st_pending', 終了: 'st_done' };
+      btn.textContent = tt(map[st] || st);
+    });
+  }
+  const ft = document.getElementById('folderModal').classList.contains('show');
+  if (ft) {
+    document.getElementById('folderModalTtl').textContent = S.editingFolderId ? tt('folder_edit') : tt('folder_add');
+    setupParentSel(document.getElementById('parentSel').value || null, S.editingFolderId);
+  }
+  const at = document.getElementById('accModal').classList.contains('show');
+  if (at) {
+    document.getElementById('accModalTtl').textContent = S.editingAccountId ? tt('acc_edit') : tt('acc_add');
+  }
+  const ttOpen = document.getElementById('tmplModal').classList.contains('show');
+  if (ttOpen) {
+    document.getElementById('tmplModalTtl').textContent = editingTemplateId ? tt('tmpl_modal_edit') : tt('tmpl_modal_add');
+  }
+}
 
 // =========================================================
 // CONSTANTS
@@ -910,13 +1509,134 @@ function load() {
     S.folders   = d.folders   || JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
     S.accounts  = d.accounts  || [];
     S.templates = d.templates || [];
+    S.meta      = d.meta      || {};
   } catch {
     S.folders  = JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
     S.accounts = [];
+    S.templates = [];
+    S.meta = {};
   }
 }
+
+// iOSアプリではlocalStorageだけだと状況によって消える可能性があるため、
+// Filesystem(Documents)にも同内容を保存して二重化する
+const DATA_FILE = 'dm-manager-data.json';
+const BACKUP_DIR = 'backups';
+const MAX_BACKUPS = 10;
+let _nativeWriteQ = Promise.resolve();
+function _enqueueNativeWrite(fn) {
+  _nativeWriteQ = _nativeWriteQ.then(fn).catch(() => {});
+}
+
+function getPlugins() {
+  const c = window.Capacitor;
+  const p = c && c.Plugins ? c.Plugins : {};
+  return {
+    Filesystem: p.Filesystem,
+    Share: p.Share,
+    FilePicker: p.FilePicker,
+  };
+}
+
+async function writeNativeDataFile(json) {
+  const { Filesystem } = getPlugins();
+  if (!Filesystem) throw new Error('Filesystem not available');
+  // Best-effort: keep previous file as a dated backup before overwrite
+  try {
+    const now = new Date();
+    const ts = now.toISOString().replace(/[:.]/g,'-');
+    await Filesystem.writeFile({
+      path: `${BACKUP_DIR}/${ts}.json`,
+      data: json,
+      directory: 'DOCUMENTS',
+      encoding: 'utf8',
+      recursive: true,
+    });
+    _enqueueNativeWrite(() => pruneNativeBackups());
+  } catch {}
+
+  await Filesystem.writeFile({ path: DATA_FILE, data: json, directory: 'DOCUMENTS', encoding: 'utf8', recursive: true });
+}
+
+async function readNativeDataFile() {
+  const { Filesystem } = getPlugins();
+  if (!Filesystem) throw new Error('Filesystem not available');
+  const r = await Filesystem.readFile({
+    path: DATA_FILE,
+    directory: 'DOCUMENTS',
+    encoding: 'utf8',
+  });
+  return r && r.data ? String(r.data) : '';
+}
+
+async function getNativeDataFileUri() {
+  const { Filesystem } = getPlugins();
+  if (!Filesystem) throw new Error('Filesystem not available');
+  const r = await Filesystem.getUri({
+    path: DATA_FILE,
+    directory: 'DOCUMENTS',
+  });
+  return r && r.uri ? r.uri : '';
+}
+
+async function loadNativeOrLocal() {
+  if (!isNativeApp()) { load(); return; }
+  try {
+    const txt = await readNativeDataFile();
+    const d = JSON.parse(txt || '{}');
+    if (validateBackupObject(d)) {
+      S.folders   = d.folders   || JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
+      S.accounts  = d.accounts  || [];
+      S.templates = d.templates || [];
+      try { localStorage.setItem(SK, JSON.stringify({ folders:S.folders, accounts:S.accounts, templates:S.templates })); } catch {}
+      return;
+    }
+    load();
+    await writeNativeDataFile(getBackupJSON());
+  } catch {
+    load();
+    try { await writeNativeDataFile(getBackupJSON()); } catch {}
+  }
+}
+
+async function listNativeBackups() {
+  const { Filesystem } = getPlugins();
+  if (!Filesystem) throw new Error('Filesystem not available');
+  try {
+    const r = await Filesystem.readdir({ path: BACKUP_DIR, directory: 'DOCUMENTS' });
+    const files = (r && r.files ? r.files : []).map(f => (typeof f === 'string' ? f : (f.name || f.path || ''))).filter(Boolean);
+    return files
+      .filter(n => n.toLowerCase().endsWith('.json'))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
+async function pruneNativeBackups() {
+  const { Filesystem } = getPlugins();
+  if (!Filesystem) return;
+  try {
+    const files = await listNativeBackups();
+    const extra = files.slice(MAX_BACKUPS);
+    await Promise.all(extra.map(name => Filesystem.deleteFile({ path: `${BACKUP_DIR}/${name}`, directory: 'DOCUMENTS' }).catch(() => {})));
+  } catch {}
+}
+
+async function readNativeBackupFile(name) {
+  const { Filesystem } = getPlugins();
+  if (!Filesystem) throw new Error('Filesystem not available');
+  const r = await Filesystem.readFile({ path: `${BACKUP_DIR}/${name}`, directory: 'DOCUMENTS', encoding: 'utf8' });
+  return r && r.data ? String(r.data) : '';
+}
+
 function save() {
-  localStorage.setItem(SK, JSON.stringify({ folders: S.folders, accounts: S.accounts, templates: S.templates }));
+  // local mirror（Webでも使う）
+  localStorage.setItem(SK, JSON.stringify({ folders: S.folders, accounts: S.accounts, templates: S.templates, meta: S.meta || {} }));
+  if (!isNativeApp()) return;
+  const json = getBackupJSON();
+  _enqueueNativeWrite(() => writeNativeDataFile(json));
 }
 
 // =========================================================
@@ -925,14 +1645,89 @@ function save() {
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 function sanitizeUrl(url) {
   if (!url) return '';
-  const u = url.trim();
-  if (/^https?:\/\//i.test(u)) return u;
-  if (/^[a-zA-Z0-9]/.test(u)) return 'https://' + u;
-  return '';
+  const raw = String(url).trim();
+  const normalized = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw) ? raw : `https://${raw}`;
+  try {
+    const u = new URL(normalized);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    // credentials in URL are almost never intended and are risky to store/share
+    if (u.username || u.password) return '';
+    return u.toString();
+  } catch {
+    return '';
+  }
 }
 function esc(s) {
   if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+function isNativeApp() {
+  try {
+    return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  } catch {
+    return false;
+  }
+}
+
+function getBackupJSON() {
+  return JSON.stringify({ folders: S.folders, accounts: S.accounts, templates: S.templates });
+}
+
+function applyBackupJSON(jsonText) {
+  const d = JSON.parse(jsonText);
+  if (!d || typeof d !== 'object') throw new Error('invalid');
+  const folders = Array.isArray(d.folders) ? d.folders : null;
+  const accounts = Array.isArray(d.accounts) ? d.accounts : null;
+  const templates = Array.isArray(d.templates) ? d.templates : [];
+  if (!folders || !accounts) throw new Error('invalid');
+  S.folders = folders;
+  S.accounts = accounts;
+  S.templates = templates;
+  save();
+  renderTree();
+  renderMain();
+}
+
+function validateBackupObject(d) {
+  if (!d || typeof d !== 'object') return false;
+  if (!Array.isArray(d.folders)) return false;
+  if (!Array.isArray(d.accounts)) return false;
+  if (!Array.isArray(d.templates ?? [])) return false;
+  return true;
+}
+
+function mergeById(existingArr, incomingArr) {
+  const out = new Map();
+  (existingArr || []).forEach(x => { if (x && x.id != null) out.set(String(x.id), x); });
+  (incomingArr || []).forEach(x => { if (x && x.id != null) out.set(String(x.id), x); });
+  return [...out.values()];
+}
+
+function mergeBackupObject(d) {
+  S.folders = mergeById(S.folders, d.folders);
+  S.accounts = mergeById(S.accounts, d.accounts);
+  S.templates = mergeById(S.templates || [], d.templates || []);
+  save();
+  renderTree();
+  renderMain();
+}
+
+function parseBackupTextMaybeBase64(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  try { return JSON.parse(t); } catch {}
+  // base64 fallback（FilePickerのdataがbase64のことがある）
+  try {
+    const decoded = decodeURIComponent(escape(atob(t)));
+    return JSON.parse(decoded);
+  } catch {}
+  return null;
 }
 function folder(id)  { return S.folders.find(f => f.id === id); }
 function account(id) { return S.accounts.find(a => a.id === id); }
@@ -1005,16 +1800,13 @@ function buildFolderRow(container, f, depth) {
     <span class="f-dot" style="background:${esc(f.color)}"></span>
     <span class="f-name">${esc(f.name)}</span>
     <span class="f-cnt">${cnt}</span>
-    <span class="f-chev${f.collapsed ? ' coll' : ''}" data-chev="${f.id}">${children.length ? '›' : ''}</span>
+    <span class="f-edit" data-edit="${f.id}" aria-label="${esc(tt('aria_edit_folder'))}">✏️</span>
   `;
 
-  // tap chevron = collapse/expand
-  row.querySelector('[data-chev]').addEventListener('click', e => {
-    if (!children.length) return;
+  // tap edit = rename/color edit (default folders too)
+  row.querySelector('[data-edit]').addEventListener('click', e => {
     e.stopPropagation();
-    f.collapsed = !f.collapsed;
-    save();
-    renderTree();
+    openEditFolder(f.id);
   });
 
   // tap row = 子あり→展開/折りたたみ切替 & 選択、子なし→選択のみ
@@ -1042,7 +1834,7 @@ function selectFolder(fid) {
   S.currentFolderId = fid;
   if (window.innerWidth <= 768) closeSidebar();
   const f = folder(fid);
-  document.getElementById('hdrTitle').textContent = f ? f.name : '📱 DM管理';
+  document.getElementById('hdrTitle').textContent = f ? f.name : tt('hdr_app_default');
   document.getElementById('fab').style.display = 'flex';
   renderTree();
   renderMain();
@@ -1056,7 +1848,7 @@ function renderMain() {
   const q  = S.searchQuery;
 
   if (!S.currentFolderId && !q) {
-    let html = infoBarHTML('すべてのアカウント', S.accounts.length);
+    let html = infoBarHTML(tt('all_accounts'), S.accounts.length);
     html += `<div class="acc-list" id="accList">` + accListHTML(S.accounts) + '</div>';
     el.innerHTML = html;
     bindCards(); bindSortBtn(el);
@@ -1076,11 +1868,11 @@ function renderMain() {
       return keywords.every(kw => haystack.includes(kw));
     }));
     let html = `<div class="info-bar">
-      <span class="info-bar-name">検索結果</span>
-      <span class="info-bar-cnt">${accs.length}件</span>
+      <span class="info-bar-name">${esc(tt('search_results'))}</span>
+      <span class="info-bar-cnt">${esc(tt('count_items', { n: accs.length }))}</span>
     </div><div class="acc-list" id="accList">`;
     if (!accs.length) {
-      html += `<div class="empty"><div class="empty-ico">🔍</div><div class="empty-ttl">見つかりません</div><div class="empty-sub">別のキーワードで試してください</div></div>`;
+      html += `<div class="empty"><div class="empty-ico">🔍</div><div class="empty-ttl">${esc(tt('empty_nores_ttl'))}</div><div class="empty-sub">${esc(tt('empty_nores_sub')).replace(/\n/g, '<br>')}</div></div>`;
     } else {
       html += accs.map(cardHTML).join('');
     }
@@ -1096,12 +1888,12 @@ function renderMain() {
     const f = folder(S.currentFolderId);
     let html = `<div class="info-bar">
       <span class="info-bar-name">${esc(f ? f.name : '')}</span>
-      <span class="info-bar-cnt">${children.length}フォルダー</span>
+      <span class="info-bar-cnt">${esc(tt('count_folder_hdr', { n: children.length }))}</span>
     </div><div class="folder-cards">`;
     children.forEach(c => {
       const subCount  = S.folders.filter(x => x.parentId === c.id).length;
       const accCount  = folderCount(c.id);
-      const meta = subCount ? `${subCount}フォルダー` : `${accCount}件`;
+      const meta = subCount ? tt('meta_subfolders', { n: subCount }) : tt('meta_items', { n: accCount });
       html += `<div class="fcard" data-fid="${esc(c.id)}">
         <span class="fcard-dot" style="background:${esc(c.color)}"></span>
         <span class="fcard-name">${esc(c.name)}</span>
@@ -1127,18 +1919,30 @@ function renderMain() {
   bindCards(); bindSortBtn(el);
 }
 
+function statusLabelDisplay(st) {
+  const m = { 相談中: 'st_consult', 決定済み: 'st_confirmed', 保留中: 'st_pending', 終了: 'st_done', 未設定: 'st_unset' };
+  return tt(m[st] || 'st_unset');
+}
+function priLabelDisplay(p) {
+  if (!p) return tt('pri_dash');
+  const m = { 高: 'pri_high', 中: 'pri_mid', 低: 'pri_low' };
+  return tt(m[p] || 'pri_dash');
+}
+
 function cardHTML(a) {
   const memo     = a.memo ? a.memo.trim() : '';
   const projName = a.project && a.project.name ? a.project.name : '';
   const sub      = S.searchQuery
     ? esc(folderPath(a.folderId))
     : esc(projName);
-  const statusBadge = (a.project && a.project.status)
-    ? `<span class="status-badge s-${esc(a.project.status)}">${esc(a.project.status)}</span>` : '';
+  const safeUrl = sanitizeUrl(a.url);
+  const stRaw = a.project && a.project.status;
+  const statusBadge = stRaw
+    ? `<span class="status-badge s-${esc(stRaw)}">${esc(statusLabelDisplay(stRaw))}</span>` : '';
   return `
   <div class="acc-card" data-aid="${esc(a.id)}">
     <div class="acc-main">
-      <button class="pin-btn${a.pinned?' on':''}" data-aid-pin="${esc(a.id)}" aria-label="ピン留め">📌</button>
+      <button class="pin-btn${a.pinned?' on':''}" data-aid-pin="${esc(a.id)}" aria-label="${esc(tt('pin_aria'))}">📌</button>
       <div class="acc-avatar" style="background:${avatarColor(a.username)}">${esc(initial(a.username))}</div>
       <div class="acc-info">
         <div class="acc-user">
@@ -1148,19 +1952,19 @@ function cardHTML(a) {
         </div>
         ${sub ? `<div class="acc-sub">${sub}</div>` : ''}
       </div>
-      <button class="pri-btn${a.priority?' pri-'+esc(a.priority):''}" data-aid-pri="${esc(a.id)}">${a.priority||'—'}</button>
-      <button class="acc-more" data-aid-more="${esc(a.id)}" aria-label="案件管理">管理</button>
+      <button class="pri-btn${a.priority?' pri-'+esc(a.priority):''}" data-aid-pri="${esc(a.id)}">${esc(priLabelDisplay(a.priority))}</button>
+      <button class="acc-more" data-aid-more="${esc(a.id)}" aria-label="${esc(tt('proj_ttl'))}">${esc(tt('card_manage'))}</button>
     </div>
     <div class="acc-detail" id="det-${esc(a.id)}">
-      ${a.url ? `<div class="d-row"><span class="d-lbl">URL</span><a class="d-val d-link" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a></div>` : ''}
-      ${memo    ? `<div class="d-row"><span class="d-lbl">メモ</span><span class="d-val">${esc(memo).replace(/\n/g,'<br>')}</span></div>` : ''}
-      ${S.searchQuery ? `<div class="d-row"><span class="d-lbl">フォルダー</span><span class="d-val">${esc(folderPath(a.folderId))}</span></div>` : ''}
+      ${safeUrl ? `<div class="d-row"><span class="d-lbl">${esc(tt('lbl_url'))}</span><a class="d-val d-link" href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer">${esc(safeUrl)}</a></div>` : ''}
+      ${memo    ? `<div class="d-row"><span class="d-lbl">${esc(tt('lbl_memo'))}</span><span class="d-val">${esc(memo).replace(/\n/g,'<br>')}</span></div>` : ''}
+      ${S.searchQuery ? `<div class="d-row"><span class="d-lbl">${esc(tt('lbl_folder'))}</span><span class="d-val">${esc(folderPath(a.folderId))}</span></div>` : ''}
       <div class="d-btns">
-        <button class="d-btn btn-proj" style="grid-column:1/-1" data-act="proj" data-aid="${esc(a.id)}">📋 案件管理を開く</button>
-        <button class="d-btn btn-edit"  data-act="edit"   data-aid="${esc(a.id)}">✏️ 編集</button>
-        <button class="d-btn btn-new${a.newDM?' on':''}"  data-act="newdm"  data-aid="${esc(a.id)}">${a.newDM ? '✓ NEW ON' : '🔔 NEW DM'}</button>
-        <button class="d-btn btn-move"  data-act="move"   data-aid="${esc(a.id)}">📁 移動</button>
-        <button class="d-btn btn-del"   data-act="del"    data-aid="${esc(a.id)}">🗑️ 削除</button>
+        <button class="d-btn btn-proj" style="grid-column:1/-1" data-act="proj" data-aid="${esc(a.id)}">${esc(tt('card_proj'))}</button>
+        <button class="d-btn btn-edit"  data-act="edit"   data-aid="${esc(a.id)}">${esc(tt('card_edit'))}</button>
+        <button class="d-btn btn-new${a.newDM?' on':''}"  data-act="newdm"  data-aid="${esc(a.id)}">${esc(a.newDM ? tt('card_new_on') : tt('card_new_dm'))}</button>
+        <button class="d-btn btn-move"  data-act="move"   data-aid="${esc(a.id)}">${esc(tt('card_move'))}</button>
+        <button class="d-btn btn-del"   data-act="del"    data-aid="${esc(a.id)}">${esc(tt('card_del'))}</button>
       </div>
     </div>
   </div>`;
@@ -1233,11 +2037,11 @@ function initSearch() {
     S.searchQuery = inp.value.trim();
     clr.classList.toggle('vis', S.searchQuery.length > 0);
     if (S.searchQuery) {
-      document.getElementById('hdrTitle').textContent = '検索';
+      document.getElementById('hdrTitle').textContent = tt('hdr_search');
       document.getElementById('fab').style.display = 'none';
     } else {
       const f = folder(S.currentFolderId);
-      document.getElementById('hdrTitle').textContent = f ? f.name : '📱 DM管理';
+      document.getElementById('hdrTitle').textContent = f ? f.name : tt('hdr_app_default');
       if (S.currentFolderId) document.getElementById('fab').style.display = 'flex';
     }
     renderMain();
@@ -1255,7 +2059,8 @@ function initSearch() {
 // =========================================================
 function openAddFolder(preParentId = null) {
   S.editingFolderId = null;
-  document.getElementById('folderModalTtl').textContent = 'フォルダーを追加';
+  document.getElementById('folderModalTtl').textContent = tt('folder_add');
+  document.getElementById('fldDelete').style.display = 'none';
   document.getElementById('fldName').value = '';
   setupCpick(COLORS[Math.floor(Math.random() * COLORS.length)]);
   setupParentSel(preParentId, null);
@@ -1266,7 +2071,8 @@ function openEditFolder(fid) {
   const f = folder(fid);
   if (!f) return;
   S.editingFolderId = fid;
-  document.getElementById('folderModalTtl').textContent = 'フォルダーを編集';
+  document.getElementById('folderModalTtl').textContent = tt('folder_edit');
+  document.getElementById('fldDelete').style.display = 'block';
   document.getElementById('fldName').value = f.name;
   setupCpick(f.color);
   setupParentSel(f.parentId, fid);
@@ -1290,7 +2096,7 @@ function setupCpick(sel) {
 }
 function setupParentSel(selectedPid, excludeFid) {
   const sel = document.getElementById('parentSel');
-  sel.innerHTML = '<option value="">なし（ルート）</option>';
+  sel.innerHTML = '<option value="">' + tt('folder_parent_new') + '</option>';
   function addOpts(pid, depth) {
     S.folders
       .filter(f => f.parentId === pid && f.id !== excludeFid)
@@ -1308,7 +2114,7 @@ function setupParentSel(selectedPid, excludeFid) {
 }
 function saveFolder() {
   const name = document.getElementById('fldName').value.trim();
-  if (!name) { toast('フォルダー名を入力してください'); return; }
+  if (!name) { toast(tt('toast_folder_name')); return; }
   const color    = S.selectedColor;
   const parentId = document.getElementById('parentSel').value || null;
 
@@ -1316,13 +2122,13 @@ function saveFolder() {
     const f = folder(S.editingFolderId);
     if (f) { f.name = name; f.color = color; f.parentId = parentId; }
     save(); renderTree(); renderMain();
-    toast('フォルダーを更新しました');
+    toast(tt('toast_folder_upd'));
   } else {
     const maxOrd = S.folders.reduce((m,f) => Math.max(m, f.order||0), -1);
     S.folders.push({ id:uid(), name, color, parentId, order:maxOrd+1, collapsed:true });
     if (parentId) { const p = folder(parentId); if (p) p.collapsed = false; }
     save(); renderTree();
-    toast('フォルダーを追加しました');
+    toast(tt('toast_folder_add'));
   }
   hideModal('folderModal');
 }
@@ -1332,19 +2138,32 @@ function doDeleteFolder(fid) {
   const ids = descendants(fid);
   const cnt = S.accounts.filter(a => ids.includes(a.folderId)).length;
   const msg = cnt > 0
-    ? `「${f.name}」を削除しますか？\n含まれる${cnt}件のアカウントも削除されます。`
-    : `「${f.name}」を削除しますか？`;
+    ? tt('del_folder_confirm_accounts', { name: f.name, cnt })
+    : tt('del_folder_confirm', { name: f.name });
   if (!confirm(msg)) return;
 
+  const removedAccounts = S.accounts.filter(a => ids.includes(a.folderId));
+  const removedFolders  = S.folders.filter(x => ids.includes(x.id));
+  const prevCurrent = S.currentFolderId;
+
   S.accounts = S.accounts.filter(a => !ids.includes(a.folderId));
-  S.folders  = S.folders.filter(f => !ids.includes(f.id));
+  S.folders  = S.folders.filter(x => !ids.includes(x.id));
   if (S.currentFolderId && ids.includes(S.currentFolderId)) {
     S.currentFolderId = null;
-    document.getElementById('hdrTitle').textContent = '📱 DM管理';
+    document.getElementById('hdrTitle').textContent = tt('hdr_app_default');
     document.getElementById('fab').style.display = 'none';
   }
   save(); renderTree(); renderMain();
-  toast('フォルダーを削除しました');
+  toast(tt('toast_folder_del'));
+
+  showUndo(tt('undo_del_folder', { name: f.name }), () => {
+    // restore
+    S.folders = [...S.folders, ...removedFolders];
+    S.accounts = [...S.accounts, ...removedAccounts];
+    // restore selection if still exists
+    if (prevCurrent && S.folders.some(x => x.id === prevCurrent)) S.currentFolderId = prevCurrent;
+    save(); renderTree(); renderMain();
+  });
 }
 
 // =========================================================
@@ -1369,9 +2188,9 @@ function setupAccFolderSel(selectedFid) {
   addOpts(null, 0);
 }
 function openAddAcc() {
-  if (!S.currentFolderId) { toast('フォルダーを選択してください'); return; }
+  if (!S.currentFolderId) { toast(tt('toast_select_folder')); return; }
   S.editingAccountId = null;
-  document.getElementById('accModalTtl').textContent = 'アカウントを追加';
+  document.getElementById('accModalTtl').textContent = tt('acc_add');
   document.getElementById('accUser').value  = '';
   document.getElementById('accUrl').value   = '';
   document.getElementById('accMemo').value  = '';
@@ -1384,7 +2203,7 @@ function openEditAcc(aid) {
   const a = account(aid);
   if (!a) return;
   S.editingAccountId = aid;
-  document.getElementById('accModalTtl').textContent = 'アカウントを編集';
+  document.getElementById('accModalTtl').textContent = tt('acc_edit');
   document.getElementById('accUser').value  = a.username;
   document.getElementById('accUrl').value   = a.url  || '';
   document.getElementById('accMemo').value  = a.memo || '';
@@ -1394,20 +2213,20 @@ function openEditAcc(aid) {
 }
 function saveAcc() {
   const username = normUser(document.getElementById('accUser').value);
-  if (!username) { toast('アカウント名を入力してください'); return; }
+  if (!username) { toast(tt('toast_acc_name')); return; }
   const url      = sanitizeUrl(document.getElementById('accUrl').value);
   const memo     = document.getElementById('accMemo').value.trim();
   const newDM    = document.getElementById('accNewDm').checked;
   const folderId = document.getElementById('accFolder').value;
-  if (!folderId) { toast('フォルダーを選択してください'); return; }
+  if (!folderId) { toast(tt('toast_select_folder')); return; }
 
   if (S.editingAccountId) {
     const a = account(S.editingAccountId);
     if (a) Object.assign(a, { username, url, memo, newDM, folderId });
-    toast('アカウントを更新しました');
+    toast(tt('toast_acc_upd'));
   } else {
     S.accounts.push({ id:uid(), username, url, memo, newDM, folderId, createdAt:Date.now() });
-    toast('アカウントを追加しました');
+    toast(tt('toast_acc_add'));
   }
   save(); renderTree(); renderMain();
   hideModal('accModal');
@@ -1415,17 +2234,27 @@ function saveAcc() {
 function doDeleteAcc(aid) {
   const a = account(aid);
   if (!a) return;
-  if (!confirm(`「${a.username}」を削除しますか？`)) return;
+  if (!confirm(tt('del_acc_confirm', { name: a.username }))) return;
+  const idx = S.accounts.findIndex(x => x.id === aid);
+  const removed = idx >= 0 ? S.accounts[idx] : null;
   S.accounts = S.accounts.filter(x => x.id !== aid);
   save(); renderTree(); renderMain();
-  toast('削除しました');
+  toast(tt('toast_deleted'));
+
+  if (removed) {
+    showUndo(tt('undo_del_acc', { name: removed.username }), () => {
+      // restore at end (order not critical)
+      S.accounts = [...S.accounts, removed];
+      save(); renderTree(); renderMain();
+    });
+  }
 }
 function doToggleNewDM(aid) {
   const a = account(aid);
   if (!a) return;
   a.newDM = !a.newDM;
   save(); renderTree(); renderMain();
-  toast(a.newDM ? 'NEW DM フラグをONにしました' : 'NEW DM フラグをOFFにしました');
+  toast(a.newDM ? tt('toast_newdm_on') : tt('toast_newdm_off'));
 }
 function openMoveModal(aid) {
   S.movingAccountId = aid;
@@ -1447,7 +2276,16 @@ function openMoveModal(aid) {
           ${f.id === (a && a.folderId) ? '<span class="fp-check">✓</span>' : ''}
         `;
         item.addEventListener('click', () => {
-          if (a) { a.folderId = f.id; save(); renderTree(); renderMain(); toast(`「${f.name}」に移動しました`); }
+          if (a) {
+            const prev = a.folderId;
+            a.folderId = f.id;
+            save(); renderTree(); renderMain();
+            toast(tt('toast_moved_to', { name: f.name }));
+            showUndo(tt('toast_move_undo'), () => {
+              a.folderId = prev;
+              save(); renderTree(); renderMain();
+            });
+          }
           hideModal('moveModal');
         });
         list.appendChild(item);
@@ -1465,21 +2303,21 @@ function showFolderAS(fid) {
   const f = folder(fid);
   if (!f) return;
   showAS(f.name, [
-    { label:'✏️ 名前・カラーを編集',   fn:() => openEditFolder(fid) },
-    { label:'📁 サブフォルダーを追加', fn:() => openAddFolder(fid) },
-    { label:'🗑️ 削除',               fn:() => doDeleteFolder(fid), danger:true },
+    { label: tt('folder_as_edit'),   fn:() => openEditFolder(fid) },
+    { label: tt('folder_as_sub'), fn:() => openAddFolder(fid) },
+    { label: tt('folder_as_del'),               fn:() => doDeleteFolder(fid), danger:true },
   ]);
 }
 function showAccAS(aid) {
   const a = account(aid);
   if (!a) return;
   const items = [
-    { label: a.newDM ? '🔕 NEW DM をOFFにする' : '🔔 NEW DM をONにする', fn:() => doToggleNewDM(aid) },
-    { label:'✏️ 編集',           fn:() => openEditAcc(aid) },
-    { label:'📁 フォルダーを移動', fn:() => openMoveModal(aid) },
+    { label: a.newDM ? tt('acc_as_newdm_on') : tt('acc_as_newdm_off'), fn:() => doToggleNewDM(aid) },
+    { label: tt('acc_as_edit'),           fn:() => openEditAcc(aid) },
+    { label: tt('acc_as_move'), fn:() => openMoveModal(aid) },
   ];
-  if (a.url) items.push({ label:'🔗 URLを開く', fn:() => { const u = sanitizeUrl(a.url); if (u) window.open(u, '_blank', 'noopener'); } });
-  items.push({ label:'🗑️ 削除', fn:() => doDeleteAcc(aid), danger:true });
+  if (a.url) items.push({ label: tt('acc_as_openurl'), fn:() => { const u = sanitizeUrl(a.url); if (u) window.open(u, '_blank', 'noopener'); } });
+  items.push({ label: tt('acc_as_del'), fn:() => doDeleteAcc(aid), danger:true });
   showAS(a.username, items);
 }
 function showAS(title, items) {
@@ -1509,8 +2347,18 @@ function showModal(id) { document.getElementById(id).classList.add('show'); }
 function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 
 function initModals() {
+  // Undo
+  const ub = document.getElementById('undoBtn');
+  if (ub) ub.addEventListener('click', () => {
+    if (typeof undoFn === 'function') {
+      try { undoFn(); } catch {}
+    }
+    hideUndo();
+    toast(tt('toast_undo'));
+  });
+
   // Close on backdrop tap
-  ['folderModal','accModal','moveModal','projModal','tmplModal'].forEach(id => {
+  ['folderModal','accModal','moveModal','projModal','tmplModal','backupModal'].forEach(id => {
     document.getElementById(id).addEventListener('click', e => {
       if (e.target === document.getElementById(id)) hideModal(id);
     });
@@ -1523,6 +2371,12 @@ function initModals() {
   // Folder modal buttons
   document.getElementById('fldCancel').addEventListener('click', () => hideModal('folderModal'));
   document.getElementById('fldSave').addEventListener('click', saveFolder);
+  document.getElementById('fldDelete').addEventListener('click', () => {
+    if (!S.editingFolderId) return;
+    const fid = S.editingFolderId;
+    hideModal('folderModal');
+    doDeleteFolder(fid);
+  });
 
   // Account modal buttons
   document.getElementById('accCancel').addEventListener('click', () => hideModal('accModal'));
@@ -1558,10 +2412,130 @@ function initModals() {
 
   // Settings
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
-  document.getElementById('settingsClose').addEventListener('click', closeSettings);
+  document.getElementById('settingsClose').addEventListener('click', () => {
+    const homeShown = document.getElementById('paneSettingsHome')?.classList.contains('show');
+    if (homeShown) closeSettings();
+    else setSettingsTab('home');
+  });
   document.getElementById('addTmplBtn').addEventListener('click', () => openTemplateModal());
   document.getElementById('tmplCancel').addEventListener('click', () => hideModal('tmplModal'));
   document.getElementById('tmplSave').addEventListener('click', saveTemplate);
+  document.getElementById('settingsGoTemplates').addEventListener('click', () => setSettingsTab('templates'));
+  document.getElementById('settingsGoData').addEventListener('click', () => setSettingsTab('data'));
+  document.getElementById('settingsGoTerms').addEventListener('click', () => setSettingsTab('terms'));
+  document.getElementById('settingsGoPrivacy').addEventListener('click', () => setSettingsTab('privacy'));
+  document.getElementById('settingsGoGuide').addEventListener('click', () => setSettingsTab('guide'));
+  document.getElementById('langBtnJa').addEventListener('click', () => setAppLang('ja'));
+  document.getElementById('langBtnEn').addEventListener('click', () => setAppLang('en'));
+
+  // Data management / backup
+  document.getElementById('backupCopyBtn').addEventListener('click', () => {
+    const json = getBackupJSON();
+    navigator.clipboard.writeText(json).then(() => toast(tt('toast_json_copied'))).catch(() => toast(tt('toast_copy_fail')));
+  });
+
+  document.getElementById('backupExportBtn').addEventListener('click', async () => {
+    const json = getBackupJSON();
+    try {
+      if (isNativeApp()) {
+        await writeNativeDataFile(json);
+        const uri = await getNativeDataFileUri();
+        const { Share } = getPlugins();
+        if (!Share || !uri) throw new Error('Share not available');
+        await Share.share({
+          title: tt('share_title'),
+          text: tt('share_text'),
+          url: uri,
+          dialogTitle: tt('share_dialog'),
+        });
+        toast(tt('toast_export_ok'));
+      } else {
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = DATA_FILE;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 500);
+        toast(tt('toast_export_ok'));
+      }
+    } catch {
+      toast(tt('toast_export_fail'));
+    }
+  });
+
+  document.getElementById('backupImportBtn').addEventListener('click', async () => {
+    try {
+      if (isNativeApp()) {
+        const { FilePicker } = getPlugins();
+        if (!FilePicker) throw new Error('FilePicker not available');
+        const res = await FilePicker.pickFiles({
+          types: ['application/json', 'public.json', 'text/plain'],
+          multiple: false,
+          readData: true,
+        });
+        const file = res && res.files && res.files[0];
+        const d = parseBackupTextMaybeBase64(file && file.data ? file.data : '');
+        if (!validateBackupObject(d)) { toast(tt('toast_json_bad')); return; }
+        showAS(tt('restore_pick'), [
+          { label: tt('restore_overwrite'), fn:() => { S.folders=d.folders; S.accounts=d.accounts; S.templates=d.templates||[]; save(); toast(tt('toast_restored')); } },
+          { label: tt('restore_merge'), fn:() => { mergeBackupObject(d); toast(tt('toast_merged')); } },
+          { label: tt('cancel'), fn:() => {} },
+        ]);
+      } else {
+        // Web: paste restore modal
+        document.getElementById('backupJson').value = '';
+        showModal('backupModal');
+        setTimeout(() => document.getElementById('backupJson').focus(), 350);
+      }
+    } catch {
+      toast(tt('toast_import_fail'));
+    }
+  });
+
+  // History restore (native only)
+  document.getElementById('backupHistoryBtn').addEventListener('click', async () => {
+    if (!isNativeApp()) { toast(tt('toast_ios_only')); return; }
+    try {
+      const files = await listNativeBackups();
+      if (!files.length) { toast(tt('toast_no_history')); return; }
+      const items = files.slice(0, MAX_BACKUPS).map(name => ({
+        label: name.replace(/\.json$/,'').replace(/T/,' ').replace(/-/g,':').replace(/:/, '-'),
+        fn: async () => {
+          try {
+            const txt = await readNativeBackupFile(name);
+            const d = parseBackupTextMaybeBase64(txt);
+            if (!validateBackupObject(d)) { toast(tt('toast_backup_bad')); return; }
+            showAS(tt('restore_pick'), [
+              { label: tt('restore_overwrite'), fn:() => { S.folders=d.folders; S.accounts=d.accounts; S.templates=d.templates||[]; save(); toast(tt('toast_restored')); } },
+              { label: tt('restore_merge'), fn:() => { mergeBackupObject(d); toast(tt('toast_merged')); } },
+              { label: tt('cancel'), fn:() => {} },
+            ]);
+          } catch {
+            toast(tt('toast_restore_fail'));
+          }
+        },
+      }));
+      items.push({ label: tt('cancel'), fn:() => {} });
+      showAS(tt('history_pick'), items);
+    } catch {
+      toast(tt('toast_history_open_fail'));
+    }
+  });
+
+  document.getElementById('backupCancel').addEventListener('click', () => hideModal('backupModal'));
+  document.getElementById('backupApply').addEventListener('click', () => {
+    const txt = document.getElementById('backupJson').value.trim();
+    if (!txt) { toast(tt('toast_paste_json')); return; }
+    const d = parseBackupTextMaybeBase64(txt);
+    if (!validateBackupObject(d)) { toast(tt('toast_json_bad')); return; }
+    showAS(tt('restore_pick'), [
+      { label: tt('restore_overwrite'), fn:() => { S.folders=d.folders; S.accounts=d.accounts; S.templates=d.templates||[]; save(); hideModal('backupModal'); toast(tt('toast_restored')); } },
+      { label: tt('restore_merge'), fn:() => { mergeBackupObject(d); hideModal('backupModal'); toast(tt('toast_merged')); } },
+      { label: tt('cancel'), fn:() => {} },
+    ]);
+  });
 
   // Schedule
   document.getElementById('schedBtn').addEventListener('click', openSchedule);
@@ -1715,17 +2689,50 @@ let editingTemplateId = null;
 
 function openSettings() {
   renderTemplates();
+  setSettingsTab('home');
+  updateLangSwitcher();
   document.getElementById('settingsOv').classList.add('show');
 }
 function closeSettings() {
   document.getElementById('settingsOv').classList.remove('show');
 }
 
+const SETTINGS_TAB_KEYS = {
+  home: 'settings_title',
+  templates: 'settings_templates_sec',
+  data: 'settings_data_sec',
+  terms: 'nav_terms',
+  privacy: 'nav_privacy',
+  guide: 'guide_title',
+};
+
+function setSettingsTab(key) {
+  settingsPanelKey = key;
+  const home = key === 'home';
+  const isT = key === 'templates';
+  const isD = key === 'data';
+  const isTerms = key === 'terms';
+  const isPrivacy = key === 'privacy';
+  const isGuide = key === 'guide';
+  document.getElementById('paneSettingsHome')?.classList.toggle('show', home);
+  document.getElementById('paneTemplates')?.classList.toggle('show', isT);
+  document.getElementById('paneData')?.classList.toggle('show', isD);
+  document.getElementById('paneTerms')?.classList.toggle('show', isTerms);
+  document.getElementById('panePrivacy')?.classList.toggle('show', isPrivacy);
+  document.getElementById('paneGuide')?.classList.toggle('show', isGuide);
+
+  const hdr = document.getElementById('settingsHdrTitle');
+  if (hdr) hdr.textContent = tt(SETTINGS_TAB_KEYS[key] || 'settings_title');
+  const btn = document.getElementById('settingsClose');
+  if (btn) btn.setAttribute('aria-label', home ? tt('aria_close') : tt('aria_back'));
+  document.getElementById('settingsBottomLinks')?.classList.toggle('hidden', !home);
+}
+
 function renderTemplates() {
   const list = document.getElementById('templateList');
   const tmpls = S.templates || [];
   if (!tmpls.length) {
-    list.innerHTML = `<div style="text-align:center;padding:32px 0;color:var(--txt3);font-size:14px">テンプレートがありません</div>`;
+    list.innerHTML = `<div style="text-align:center;padding:32px 0;color:var(--txt3);font-size:14px">${esc(tt('tmpl_empty'))}</div>`;
     return;
   }
   list.innerHTML = tmpls.map(t => `
@@ -1737,9 +2744,9 @@ function renderTemplates() {
       <div class="tmpl-detail" id="tdet-${esc(t.id)}">
         <div class="tmpl-body">${esc(t.body)}</div>
         <div class="tmpl-btns">
-          <button class="tmpl-btn tmpl-copy" data-tcopy="${esc(t.id)}">⎘ コピー</button>
-          <button class="tmpl-btn tmpl-edit" data-tedit="${esc(t.id)}">✏️ 修正</button>
-          <button class="tmpl-btn tmpl-del"  data-tdel="${esc(t.id)}">🗑️ 削除</button>
+          <button class="tmpl-btn tmpl-copy" data-tcopy="${esc(t.id)}">${esc(tt('tmpl_copy'))}</button>
+          <button class="tmpl-btn tmpl-edit" data-tedit="${esc(t.id)}">${esc(tt('tmpl_edit'))}</button>
+          <button class="tmpl-btn tmpl-del"  data-tdel="${esc(t.id)}">${esc(tt('tmpl_del'))}</button>
         </div>
       </div>
     </div>
@@ -1763,7 +2770,7 @@ function renderTemplates() {
   list.querySelectorAll('[data-tcopy]').forEach(btn => {
     btn.addEventListener('click', () => {
       const t = (S.templates||[]).find(x => x.id === btn.dataset.tcopy);
-      if (t) navigator.clipboard.writeText(t.body).then(() => toast('コピーしました'));
+      if (t) navigator.clipboard.writeText(t.body).then(() => toast(tt('toast_copy_ok')));
     });
   });
   list.querySelectorAll('[data-tedit]').forEach(btn => {
@@ -1772,10 +2779,10 @@ function renderTemplates() {
   list.querySelectorAll('[data-tdel]').forEach(btn => {
     btn.addEventListener('click', () => {
       const t = (S.templates||[]).find(x => x.id === btn.dataset.tdel);
-      if (!t || !confirm(`「${t.title}」を削除しますか？`)) return;
+      if (!t || !confirm(tt('del_tmpl_confirm', { title: t.title }))) return;
       S.templates = S.templates.filter(x => x.id !== t.id);
       save(); renderTemplates();
-      toast('削除しました');
+      toast(tt('toast_deleted'));
     });
   });
 }
@@ -1783,7 +2790,7 @@ function renderTemplates() {
 function openTemplateModal(tid = null) {
   editingTemplateId = tid;
   const t = tid ? (S.templates||[]).find(x => x.id === tid) : null;
-  document.getElementById('tmplModalTtl').textContent = t ? 'テンプレートを編集' : 'テンプレートを追加';
+  document.getElementById('tmplModalTtl').textContent = t ? tt('tmpl_modal_edit') : tt('tmpl_modal_add');
   document.getElementById('tmplTitle').value = t ? t.title : '';
   document.getElementById('tmplBody').value  = t ? t.body  : '';
   showModal('tmplModal');
@@ -1793,16 +2800,16 @@ function openTemplateModal(tid = null) {
 function saveTemplate() {
   const title = document.getElementById('tmplTitle').value.trim();
   const body  = document.getElementById('tmplBody').value.trim();
-  if (!title) { toast('タイトルを入力してください'); return; }
-  if (!body)  { toast('テンプレートを入力してください'); return; }
+  if (!title) { toast(tt('toast_tmpl_title')); return; }
+  if (!body)  { toast(tt('toast_tmpl_body')); return; }
   if (!S.templates) S.templates = [];
   if (editingTemplateId) {
     const t = S.templates.find(x => x.id === editingTemplateId);
     if (t) { t.title = title; t.body = body; }
-    toast('更新しました');
+    toast(tt('toast_tmpl_upd'));
   } else {
     S.templates.push({ id: uid(), title, body });
-    toast('追加しました');
+    toast(tt('toast_tmpl_add'));
   }
   save(); renderTemplates();
   hideModal('tmplModal');
@@ -1811,13 +2818,7 @@ function saveTemplate() {
 // =========================================================
 // SORT
 // =========================================================
-const SORT_TABS = [
-  { key:'priority', label:'優先度順'   },
-  { key:'status',   label:'ステータス' },
-  { key:'shoot',    label:'撮影日順'   },
-  { key:'deadline', label:'締め切り順' },
-  { key:'newest',   label:'新着順'     },
-];
+const SORT_MODE_KEYS = ['priority', 'status', 'shoot', 'deadline', 'newest'];
 const STATUS_GRP_ORDER = ['相談中','保留中','決定済み','終了'];
 
 function applySortMode(accs) {
@@ -1853,21 +2854,21 @@ function applySortMode(accs) {
 }
 
 function currentSortLabel() {
-  return SORT_TABS.find(t => t.key === S.sortMode)?.label || '表示順';
+  return tt('sort_' + (S.sortMode || 'priority'));
 }
 
 function showSortPicker() {
-  showAS('表示順を選択', SORT_TABS.map(t => ({
-    label: (S.sortMode === t.key ? '✓ ' : '　') + t.label,
-    fn: () => { S.sortMode = t.key; renderMain(); },
+  showAS(tt('sort_pick'), SORT_MODE_KEYS.map((k) => ({
+    label: (S.sortMode === k ? '✓ ' : '　') + tt('sort_' + k),
+    fn: () => { S.sortMode = k; renderMain(); },
   })));
 }
 
 function infoBarHTML(name, cnt) {
   return `<div class="info-bar">
     <span class="info-bar-name">${name}</span>
-    <span class="info-bar-cnt">${cnt}件</span>
-    <button class="sort-order-btn" id="sortOrderBtn">${currentSortLabel()} ↕</button>
+    <span class="info-bar-cnt">${esc(tt('count_items', { n: cnt }))}</span>
+    <button class="sort-order-btn" id="sortOrderBtn">${esc(currentSortLabel())} ↕</button>
   </div>`;
 }
 
@@ -1879,14 +2880,14 @@ function bindSortBtn(el) {
 function accListHTML(accs) {
   const sorted = applySortMode(accs);
   if (!sorted.length) {
-    return '<div class="empty"><div class="empty-ico">👤</div><div class="empty-ttl">アカウントがありません</div><div class="empty-sub">右下の ＋ で追加できます</div></div>';
+    return `<div class="empty"><div class="empty-ico">👤</div><div class="empty-ttl">${esc(tt('empty_noacc_ttl'))}</div><div class="empty-sub">${esc(tt('empty_noacc_sub'))}</div></div>`;
   }
   if (S.sortMode === 'status') {
     let h = '';
     const groups = {};
     sorted.forEach(a => { const s = a.project?.status||'未設定'; (groups[s]=groups[s]||[]).push(a); });
     [...STATUS_GRP_ORDER, '未設定'].forEach(s => {
-      if (groups[s]?.length) h += `<div class="sec-hdr">${s}</div>` + groups[s].map(cardHTML).join('');
+      if (groups[s]?.length) h += `<div class="sec-hdr">${esc(statusLabelDisplay(s))}</div>` + groups[s].map(cardHTML).join('');
     });
     return h;
   }
@@ -1939,7 +2940,7 @@ function initUrlAutoFill() {
     const username = parseUsernameFromUrl(this.value);
     if (username) {
       const f = document.getElementById('accUser');
-      if (!f.value) { f.value = username; toast('アカウント名を自動入力しました'); }
+      if (!f.value) { f.value = username; toast(tt('toast_autofill_user')); }
     }
   });
 }
@@ -1951,37 +2952,38 @@ function initDMAnalyze() {
   toggle.addEventListener('click', () => {
     area.classList.toggle('open');
     toggle.textContent = area.classList.contains('open')
-      ? '📋 DMテキストから自動入力 ▲'
-      : '📋 DMテキストから自動入力';
+      ? tt('acc_dm_toggle_open')
+      : tt('acc_dm_toggle');
   });
 
   document.getElementById('dmAnalyzeBtn').addEventListener('click', () => {
     const text = document.getElementById('dmText').value;
-    if (!text.trim()) { toast('テキストを貼り付けてください'); return; }
+    if (!text.trim()) { toast(tt('toast_paste_dm')); return; }
     const r = analyzeDMText(text);
     const filled = [];
 
     if (r.username) {
       const f = document.getElementById('accUser');
-      if (!f.value) { f.value = r.username; filled.push('アカウント名'); }
+      if (!f.value) { f.value = r.username; filled.push('username'); }
     }
     if (r.url) {
       const f = document.getElementById('accUrl');
-      if (!f.value) { f.value = r.url; filled.push('URL'); }
+      if (!f.value) { f.value = r.url; filled.push('url'); }
     }
     if (r.memo) {
       const f = document.getElementById('accMemo');
       f.value = f.value ? f.value + '\n\n' + r.memo : r.memo;
-      filled.push('メモ');
+      filled.push('memo');
     }
 
     if (filled.length) {
-      toast(filled.join('・') + 'を自動入力しました');
+      const sep = getAppLang() === 'en' ? ', ' : '・';
+      toast(tt('toast_autofill_done', { fields: filled.map((k) => tt('field_' + k)).join(sep) }));
       area.classList.remove('open');
-      toggle.textContent = '📋 DMテキストから自動入力';
+      toggle.textContent = tt('acc_dm_toggle');
       document.getElementById('dmText').value = '';
     } else {
-      toast('抽出できる情報が見つかりませんでした');
+      toast(tt('toast_autofill_none'));
     }
   });
 }
@@ -1997,7 +2999,7 @@ function togglePin(aid) {
   if (!a) return;
   a.pinned = !a.pinned;
   save(); renderMain();
-  toast(a.pinned ? 'ピン留めしました' : 'ピン留めを解除しました');
+  toast(a.pinned ? tt('toast_pin_on') : tt('toast_pin_off'));
 }
 
 function cyclePriority(aid) {
@@ -2034,7 +3036,7 @@ function openProjectModal(aid) {
   projAccountId = aid;
   const a = account(aid);
   const p = a.project || {};
-  document.getElementById('projModalTtl').textContent = a.username + ' — 案件管理';
+  document.getElementById('projModalTtl').textContent = tt('proj_ttl_user', { user: a.username });
   document.getElementById('projName').value    = p.name         || '';
   document.getElementById('projShoot').value   = p.shootDate    || '';
   document.getElementById('projDeadline').value= p.deadline     || '';
@@ -2047,8 +3049,10 @@ function openProjectModal(aid) {
 }
 
 function renderProjStatus() {
+  const stMap = { 相談中: 'st_consult', 決定済み: 'st_confirmed', 保留中: 'st_pending', 終了: 'st_done' };
   document.querySelectorAll('.st-btn').forEach(btn => {
     const s   = btn.dataset.st;
+    btn.textContent = tt(stMap[s] || s);
     const cfg = STATUS_CFG[s];
     const on  = s === projStatus;
     btn.classList.toggle('on', on);
@@ -2074,18 +3078,19 @@ function saveProject() {
   };
   save(); renderTree(); renderMain();
   hideModal('projModal');
-  toast('案件情報を保存しました');
+  toast(tt('toast_proj_saved'));
 }
 
 function copyField(inputId) {
   const el = document.getElementById(inputId);
   let val = el.value;
-  if (!val) { toast('コピーする内容がありません'); return; }
+  if (!val) { toast(tt('toast_nocopy')); return; }
   if (el.type === 'datetime-local') {
     const d = new Date(val);
-    if (!isNaN(d)) val = d.toLocaleString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    const loc = getAppLang() === 'en' ? 'en-US' : 'ja-JP';
+    if (!isNaN(d)) val = d.toLocaleString(loc, { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
   }
-  navigator.clipboard.writeText(val).then(() => toast('コピーしました')).catch(() => toast('コピーに失敗しました'));
+  navigator.clipboard.writeText(val).then(() => toast(tt('toast_copy_ok'))).catch(() => toast(tt('toast_copy_fail')));
 }
 
 // =========================================================
@@ -2112,33 +3117,39 @@ function renderSchedule() {
   if (!items.length) {
     list.innerHTML = `<div class="sched-empty">
       <div style="font-size:48px">📅</div>
-      <div style="font-size:17px;font-weight:600;color:var(--txt2)">スケジュールなし</div>
-      <div style="font-size:14px">案件の撮影日時・締め切りを<br>登録するとここに表示されます</div>
+      <div style="font-size:17px;font-weight:600;color:var(--txt2)">${esc(tt('sched_empty_ttl'))}</div>
+      <div style="font-size:14px">${esc(tt('sched_empty_sub')).replace(/\n/g, '<br>')}</div>
     </div>`;
     return;
   }
 
-  const DOW = ['日','月','火','水','木','金','土'];
+  const ja = getAppLang() === 'ja';
+  const DOW = ja
+    ? ['日','月','火','水','木','金','土']
+    : ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   let html = '';
   let curMonth = '';
   items.forEach(item => {
     const d  = item.d;
-    const mo = `${d.getFullYear()}年${d.getMonth()+1}月`;
-    if (mo !== curMonth) { html += `<div class="sched-month">${mo}</div>`; curMonth = mo; }
-    const hm  = d.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' });
+    const mo = ja
+      ? `${d.getFullYear()}年${d.getMonth()+1}月`
+      : d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    if (mo !== curMonth) { html += `<div class="sched-month">${esc(mo)}</div>`; curMonth = mo; }
+    const hm  = d.toLocaleTimeString(ja ? 'ja-JP' : 'en-US', { hour:'2-digit', minute:'2-digit' });
     const p   = item.a.project;
     const pn  = p.name || item.a.username;
-    const kl  = item.kind === 'shoot' ? '📷 撮影' : '⏰ 締め切り';
+    const kl  = item.kind === 'shoot' ? tt('sched_kind_shoot') : tt('sched_kind_dl');
     const kc  = item.kind === 'shoot' ? 'shoot' : 'dl';
+    const calM = ja ? `${d.getMonth()+1}月` : d.toLocaleString('en-US', { month: 'short' });
     html += `<div class="sched-card" data-aid="${esc(item.a.id)}">
       <div class="sched-cal">
-        <div class="sched-cal-m">${d.getMonth()+1}月</div>
+        <div class="sched-cal-m">${esc(calM)}</div>
         <div class="sched-cal-d">${d.getDate()}</div>
-        <div class="sched-cal-w">${DOW[d.getDay()]}</div>
+        <div class="sched-cal-w">${esc(DOW[d.getDay()])}</div>
       </div>
       <div class="sched-vl"></div>
       <div class="sched-body">
-        <div class="sched-kind ${kc}">${kl}</div>
+        <div class="sched-kind ${kc}">${esc(kl)}</div>
         <div class="sched-pname">${esc(pn)}</div>
         <div class="sched-user">${esc(item.a.username)}</div>
       </div>
@@ -2173,19 +3184,49 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
 }
 
+let undoTimer;
+let undoFn = null;
+function hideUndo() {
+  const bar = document.getElementById('undoBar');
+  if (!bar) return;
+  bar.classList.remove('show');
+  bar.style.opacity = '0';
+  undoFn = null;
+}
+function showUndo(message, fn) {
+  const bar = document.getElementById('undoBar');
+  const msg = document.getElementById('undoMsg');
+  if (!bar || !msg) return;
+  undoFn = fn;
+  msg.textContent = message;
+  bar.style.display = 'flex';
+  bar.style.opacity = '1';
+  bar.classList.add('show');
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { hideUndo(); }, 6000);
+}
+
 // =========================================================
 // INIT
 // =========================================================
-function init() {
-  load();
+async function init() {
+  await loadNativeOrLocal();
   initModals();
   initSearch();
   initUrlAutoFill();
   initDMAnalyze();
   renderTree();
+  renderMain();
+  document.documentElement.lang = getAppLang() === 'en' ? 'en' : 'ja';
+  applyAllLocalizations();
 
+  // iOSアプリ（Capacitor）ではService Workerキャッシュが更新不具合の原因になりやすいので無効化
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    if (isNativeApp()) {
+      navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => {});
+    } else {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
   }
 }
 

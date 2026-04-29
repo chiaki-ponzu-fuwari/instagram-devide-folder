@@ -1,5 +1,5 @@
-const CACHE_NAME = 'dm-manager-v1';
-const ASSETS = ['./index.html', './icon.svg', './manifest.json'];
+const CACHE_NAME = 'dm-manager-v2';
+const ASSETS = ['./index.html', './i18n.js', './icon.svg', './manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(

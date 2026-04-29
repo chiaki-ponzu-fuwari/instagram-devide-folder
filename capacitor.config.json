@@ -1,0 +1,8 @@
+{
+  "appId": "com.chiaki.dmmanager",
+  "appName": "DM管理",
+  "webDir": "www",
+  "ios": {
+    "scrollEnabled": false
+  }
+}
