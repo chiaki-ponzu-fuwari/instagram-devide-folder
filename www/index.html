@@ -1651,6 +1651,8 @@
           <div class="tmpl-btns">
             <button class="tmpl-btn tmpl-copy" id="backupExportBtn">⬇︎ データを書き出す</button>
             <button class="tmpl-btn tmpl-edit" id="backupCopyBtn">⎘ JSONをコピー</button>
+            <button class="tmpl-btn tmpl-copy" id="backupCloudSaveBtn">クラウドへ保存</button>
+            <button class="tmpl-btn tmpl-edit" id="backupCloudLoadBtn">クラウドから復元</button>
           </div>
         </div>
       </div>
@@ -1692,7 +1694,8 @@
         <p>本アプリは、InstagramのDMに関する情報の整理、フォルダ分類、メモ・テンプレート・スケジュール等の管理を、利用者自身の端末上で行うための補助ツールです。Instagramその他Meta社のサービスの公式機能の代替・保証をするものではなく、当社および本アプリはMeta社と提携していません。</p>
 
         <h3>2. アカウント</h3>
-        <p>本アプリにログイン機能はありません。Apple ID、Google等による認証および当社によるアカウント管理は行いません。入力データは利用者の端末内（ブラウザ利用時は<code>localStorage</code>、iOSアプリ利用時はアプリの保存領域等）に保存されます。</p>
+        <p>本アプリは、個人利用ではログインなしでも利用できます。チーム機能やクラウドバックアップを利用する場合、Googleログインを使用します。</p>
+        <p>ログイン時には、Firebase Authenticationを通じてユーザー識別子、メールアドレス、表示名等を取得する場合があります。これらは本人確認、クラウドバックアップ、チーム機能の提供に利用します。</p>
 
         <h3>3. 将来の有料機能等</h3>
         <p>本アプリは現時点で無料で提供されることを予定しています。当社は、事前の通知のうえ、広告の表示や有料機能の導入等を行う場合があります。</p>
@@ -1738,7 +1741,7 @@
         <p><strong>HERAC LLC</strong>（以下「当社」）は、当社が提供するアプリ「<strong>DM管理</strong>」（以下「本アプリ」）における利用者情報の取扱いについて、本ポリシーのとおり定めます。本アプリを利用することで、本ポリシーに同意したものとみなします。</p>
 
         <h3>1. 収集する情報</h3>
-        <p><strong>1.1 ログイン時に取得される情報</strong><br>本アプリにログイン機能はありません。Apple ID、Google等によるサインインや、それに伴う当社によるメールアドレス・ユーザー識別子の取得は行いません。</p>
+        <p><strong>1.1 ログイン時に取得される情報</strong><br>本アプリは、個人利用ではログインなしでも利用できます。チーム機能やクラウドバックアップを利用する場合、Googleログインを使用します。ログイン時には、Firebase Authenticationを通じてユーザー識別子、メールアドレス、表示名等を取得する場合があります。</p>
         <p><strong>1.2 利用者が入力する情報</strong><br>利用者が本アプリに入力・登録する情報として、例えば次のものが端末内に保存されます。</p>
         <ul>
           <li>フォルダ名、DM相手（アカウント）に関する情報</li>
@@ -1746,7 +1749,7 @@
           <li>案件メモ、URL、タグ、撮影指示、スケジュール関連のメモ等</li>
         </ul>
         <p class="muted">※実名などの個人情報の入力は必須ではありません。ニックネーム等での運用が可能です。</p>
-        <p><strong>1.3 自動的に当社サーバーへ送信される情報</strong><br>本アプリは、利用者が入力した内容を当社のサーバーへ送信したり、当社がクラウド上で同期・保管したりする機能はありません。端末内の保存領域への記録のみです。</p>
+        <p><strong>1.3 クラウド機能で送信される情報</strong><br>チーム機能やクラウドバックアップを利用する場合、入力データの一部または全部がFirebaseに送信・保存されます。チーム機能で入力した情報は、承認済みのチームメンバーに共有されます。個人データのクラウドバックアップは、本人のアカウントからのみアクセスできる設計にします。</p>
         <p>ブラウザで利用する場合は主に<code>localStorage</code>、iOSアプリとして利用する場合はアプリのDocuments領域等に保存されます（自動バックアップ履歴を含む）。当社がクラッシュログ等を自動取得する仕組みは、本アプリには組み込んでいません。</p>
 
         <h3>2. 利用目的</h3>
@@ -1756,13 +1759,13 @@
         <p>当社は、本アプリを通じて収集した情報を第三者に販売しません。Instagram等のMeta社サービスは、Meta社の各利用規約・プライバシーポリシーが適用されます。本アプリは、Instagramの公式APIと連携してDMの内容を自動取得するものではなく、利用者が手入力・整理するためのツールです。</p>
 
         <h3>4. データ保存</h3>
-        <p>データは利用者の端末内に保存されます。当社が運営するクラウドへの同期は行いません。iOSアプリでは、データ消失に備え、端末内に自動バックアップ履歴（最大10件程度）を保持する場合があります。機種変更・紛失・故障に備え、利用者ご自身でJSON等の書き出しを行い、別の場所に保管することを推奨します。</p>
+        <p>個人利用のデータは利用者の端末内保存を基本とします。ログイン後にクラウドバックアップを利用した場合、本人用のバックアップとしてFirebaseに保存されます。チーム機能のデータは、承認済みチームメンバー間で共有されます。iOSアプリでは、データ消失に備え、端末内に自動バックアップ履歴（最大10件程度）を保持する場合があります。</p>
 
         <h3>5. データ共有</h3>
         <p>利用者が「データを書き出す」等によりファイルを共有した場合、その共有先における取扱いは利用者の責任となります。当社は収集した情報を第三者に販売しません。</p>
 
         <h3>6. セキュリティ</h3>
-        <p>当社は、本アプリの設計上、利用者情報を当社サーバーで保持しない方針です。端末内のデータについては、OS・端末のセキュリティに依存します。インターネット上において完全なセキュリティを保証するものではありません。</p>
+        <p>クラウド機能ではFirebaseの認証とセキュリティルールを用いて、本人または承認済みチームメンバーのみが必要なデータへアクセスできるようにします。端末内のデータについては、OS・端末のセキュリティに依存します。インターネット上において完全なセキュリティを保証するものではありません。</p>
 
         <h3>7. アカウント削除とデータの消去</h3>
         <p>本アプリに当社が管理する「アカウント」はありません。端末内のデータは、本アプリをアンインストールする、またはブラウザのサイトデータを削除する等により消去される場合があります。書き出したバックアップファイルは、利用者が自己管理してください。</p>
@@ -3947,6 +3950,45 @@ function initModals() {
     navigator.clipboard.writeText(json).then(() => toast(tt('toast_json_copied'))).catch(() => toast(tt('toast_copy_fail')));
   });
 
+  const cloudSaveBtn = document.getElementById('backupCloudSaveBtn');
+  if (cloudSaveBtn) cloudSaveBtn.addEventListener('click', async () => {
+    try {
+      const auth = await import('./js/firebase-auth.mjs');
+      const backup = await import('./js/personal-cloud-backup.mjs');
+      await auth.initFirebase();
+      await auth.waitForInitialAuth();
+      const user = auth.getCurrentUser();
+      if (!user) { toast(tt('login_req_title')); return; }
+      await backup.savePersonalBackup({ user, data: JSON.parse(getBackupJSON()) });
+      toast(tt('toast_cloud_backup_ok'));
+    } catch (e) {
+      console.error(e);
+      toast(tt('toast_cloud_backup_fail'));
+    }
+  });
+
+  const cloudLoadBtn = document.getElementById('backupCloudLoadBtn');
+  if (cloudLoadBtn) cloudLoadBtn.addEventListener('click', async () => {
+    try {
+      const auth = await import('./js/firebase-auth.mjs');
+      const backup = await import('./js/personal-cloud-backup.mjs');
+      await auth.initFirebase();
+      await auth.waitForInitialAuth();
+      const user = auth.getCurrentUser();
+      if (!user) { toast(tt('login_req_title')); return; }
+      const data = await backup.loadPersonalBackup({ user });
+      if (!data) { toast(tt('toast_cloud_restore_empty')); return; }
+      if (!validateBackupObject(data)) { toast(tt('toast_backup_bad')); return; }
+      showAS(tt('restore_pick'), [
+        { label: tt('restore_overwrite'), fn:() => { S.folders=data.folders; S.accounts=data.accounts; S.templates=data.templates||[]; S.meta=data.meta||{}; save(); toast(tt('toast_cloud_restore_ok')); } },
+        { label: tt('restore_merge'), fn:() => { mergeBackupObject(data); toast(tt('toast_merged')); } },
+      ]);
+    } catch (e) {
+      console.error(e);
+      toast(tt('toast_cloud_restore_fail'));
+    }
+  });
+
   // Project platforms (multi-select)
   document.querySelectorAll('#projModal [data-pl]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -4094,15 +4136,22 @@ function initModals() {
   const teamListClose = document.getElementById('teamListClose');
   if (teamListClose) teamListClose.addEventListener('click', closeTeamList);
   const teamListAdd = document.getElementById('teamListAdd');
-  if (teamListAdd) teamListAdd.addEventListener('click', () => {
-    const name = prompt('チーム名を入力', '新しいチーム');
-    if (!name) return;
-    const t = _teamsState();
-    const id = uid();
-    t.teams.push({ id, name: String(name).trim(), createdBy: CURRENT_HANDLE, members: [{ id: uid(), handle:CURRENT_HANDLE, role:'admin', color:'#E04B7B' }] });
-    t.selectedTeamId = id;
-    save();
-    renderTeamList();
+  if (teamListAdd) teamListAdd.addEventListener('click', async () => {
+    const user = await getLoggedInUserOrPrompt();
+    if (!user) return;
+    const name = prompt('チーム名を入力してください', '新しいチーム');
+    if (!name || !name.trim()) return;
+    try {
+      const api = await getCloudTeamApi();
+      const team = await api.createTeam({ user, name: name.trim() });
+      cloudTeams = await api.listMyTeams({ user });
+      cloudSelectedTeam = team;
+      renderTeamList();
+      toast('チームを作成しました');
+    } catch (e) {
+      console.error(e);
+      toast('チームを作成できませんでした');
+    }
   });
   const teamEditClose = document.getElementById('teamEditClose');
   if (teamEditClose) teamEditClose.addEventListener('click', closeTeamEdit);
@@ -5067,14 +5116,45 @@ function _teamState() {
 let teamTab = 'members';
 let teamRevMonthKey = null;
 let teamRevTab = 'month';
+let cloudTeamApi = null;
+let cloudTeamUnsubscribe = null;
+let cloudTeams = [];
+let cloudSelectedTeam = null;
+let cloudTeamMembers = [];
+let cloudTeamActivity = [];
+let cloudTeamJoinRequests = [];
 // 仮：ログイン概念がまだ無いので、デモの管理者ハンドルを「自分」として扱う
 const CURRENT_HANDLE = '@vivian';
 function isTeamAdmin(team) {
   if (!team) return false;
+  if (team.myRole) return team.myRole === 'admin';
   if (team.createdBy && String(team.createdBy).trim() === CURRENT_HANDLE) return true;
   const ms = Array.isArray(team.members) ? team.members : [];
   const me = ms.find(m => String(m.handle || '').trim() === CURRENT_HANDLE);
   return !!(me && me.role === 'admin');
+}
+
+async function getCloudTeamApi() {
+  if (cloudTeamApi) return cloudTeamApi;
+  cloudTeamApi = await import('./js/team-cloud.mjs');
+  return cloudTeamApi;
+}
+
+async function getLoggedInUserOrPrompt() {
+  const auth = await import('./js/firebase-auth.mjs');
+  await auth.initFirebase();
+  await auth.waitForInitialAuth();
+  const user = auth.getCurrentUser();
+  if (user) return user;
+  document.getElementById('loginRequiredModal').classList.add('show');
+  return null;
+}
+
+function stopCloudTeamListener() {
+  if (cloudTeamUnsubscribe) {
+    cloudTeamUnsubscribe();
+    cloudTeamUnsubscribe = null;
+  }
 }
 
 function _ensureTeamSettings(team) {
@@ -5155,19 +5235,27 @@ function renderTeamEditControls() {
   }
 }
 
-function issueInviteLink() {
+async function issueInviteLink() {
   const team = _selectedTeam();
   if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
-  const token = Math.random().toString(36).slice(2, 10) + '-' + Math.random().toString(36).slice(2, 10);
-  if (!team.settings) team.settings = {};
-  team.settings.inviteToken = token;
-  save();
-  const url = buildTeamInviteUrl(team.id, token);
-  const box = document.getElementById('teamInviteLinkBox');
-  const txt = document.getElementById('teamInviteLinkText');
-  if (box) box.style.display = '';
-  if (txt) txt.textContent = url;
-  shareInviteLink(url);
+  try {
+    const user = await getLoggedInUserOrPrompt();
+    if (!user) return;
+    const api = await getCloudTeamApi();
+    const invite = await api.createInvite({ user, teamId: team.id });
+    if (!team.settings) team.settings = {};
+    team.settings.inviteToken = invite.id;
+    team.settings.inviteCode = invite.code;
+    const url = buildTeamInviteUrl(team.id, invite.id);
+    const box = document.getElementById('teamInviteLinkBox');
+    const txt = document.getElementById('teamInviteLinkText');
+    if (box) box.style.display = '';
+    if (txt) txt.textContent = `${invite.code} / ${url}`;
+    shareInviteLink(url);
+  } catch (e) {
+    console.error(e);
+    toast('招待を作成できませんでした');
+  }
 }
 
 function copyInviteLink() {
@@ -5218,42 +5306,33 @@ function initTeamJoinFromUrl() {
     const teamId = params.get('team_join');
     const token = params.get('token');
     if (!teamId || !token) return;
-    const team = findTeamByInvite(teamId, token);
-    if (!team) return;
 
     // show join modal
     const nm = document.getElementById('teamJoinTeamName');
-    if (nm) nm.textContent = `${team.name || 'チーム'} に参加`;
+    if (nm) nm.textContent = 'チームに参加';
     showModal('teamJoinModal');
 
     const cancel = document.getElementById('teamJoinCancel');
     const req = document.getElementById('teamJoinRequestBtn');
     if (cancel) cancel.onclick = () => hideModal('teamJoinModal');
-    if (req) req.onclick = () => {
-      // 仮：Googleログイン必須（ログイン機構は未実装なので、ここでは同意確認）
-      const ok = confirm('Googleログイン済みですか？（仮）');
-      if (!ok) { toast('Googleログインが必要です'); return; }
-      requestJoinTeam(teamId, token);
+    if (req) req.onclick = async () => {
+      await requestJoinTeam(teamId, token);
       hideModal('teamJoinModal');
     };
   } catch {}
 }
 
-function requestJoinTeam(teamId, token) {
-  const team = findTeamByInvite(teamId, token);
-  if (!team) { toast('招待リンクが無効です'); return; }
-  const s = _ensureTeamSettings(team);
-  if (!Array.isArray(s.joinRequests)) s.joinRequests = [];
-  const handle = CURRENT_HANDLE;
-  const alreadyMember = (team.members || []).some(m => String(m.handle||'').trim() === handle);
-  if (alreadyMember) { toast('すでに参加しています'); return; }
-  const exists = s.joinRequests.some(r => String(r.handle||'').trim() === handle);
-  if (exists) { toast('すでにリクエスト済みです'); return; }
-  // 仮：Googleアカウント名（ログイン未実装なので暫定）
-  const googleName = String(handle || '').replace(/^@/,'');
-  s.joinRequests.push({ id: uid(), handle, googleName, at: Date.now() });
-  save();
-  toast('参加リクエストを送信しました');
+async function requestJoinTeam(teamId, token) {
+  try {
+    const user = await getLoggedInUserOrPrompt();
+    if (!user) return;
+    const api = await getCloudTeamApi();
+    await api.requestJoinTeam({ user, teamId, inviteId: token });
+    toast('参加リクエストを送信しました');
+  } catch (e) {
+    console.error(e);
+    toast('招待リンクが無効です');
+  }
 }
 
 function openTeamEdit() {
@@ -5327,15 +5406,15 @@ function renderTeamReqList() {
   const wrap = document.getElementById('teamReqList');
   if (!wrap || !team) return;
   const s = _ensureTeamSettings(team);
-  const reqs = Array.isArray(s.joinRequests) ? s.joinRequests : [];
+  const reqs = cloudTeamJoinRequests.length ? cloudTeamJoinRequests.filter(r => r.status === 'pending') : (Array.isArray(s.joinRequests) ? s.joinRequests : []);
   if (!reqs.length) {
     wrap.innerHTML = `<div style="text-align:center;color:var(--txt3);font-weight:900;font-size:12px;padding:6px 0">${esc(tt('ana_none'))}</div>`;
     return;
   }
   const can = isTeamAdmin(team);
   wrap.innerHTML = reqs.map(r => {
-    const h = String(r.handle || '').trim() || '(unknown)';
-    const gname = String(r.googleName || '').trim() || h;
+    const h = String(r.handle || r.email || r.uid || '').trim() || '(unknown)';
+    const gname = String(r.googleName || r.displayName || '').trim() || h;
     return `<div class="team-mem-item">
       <div class="team-mem-l">
         <div class="team-mem-h">${esc(gname)}</div>
@@ -5362,9 +5441,24 @@ function renderTeamReqList() {
   }
 }
 
-function approveJoinRequest(reqId) {
+async function approveJoinRequest(reqId) {
   const team = _selectedTeam();
   if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
+  if (cloudSelectedTeam) {
+    try {
+      const user = await getLoggedInUserOrPrompt();
+      if (!user) return;
+      const api = await getCloudTeamApi();
+      const req = cloudTeamJoinRequests.find(x => String(x.id) === String(reqId));
+      await api.approveJoinRequest({ user, teamId: cloudSelectedTeam.id, requestUid: req?.uid || reqId });
+      toast('承認しました');
+      return;
+    } catch (e) {
+      console.error(e);
+      toast('承認できませんでした');
+      return;
+    }
+  }
   const s = _ensureTeamSettings(team);
   const reqs = s.joinRequests || [];
   const r = reqs.find(x => String(x.id) === String(reqId));
@@ -5399,12 +5493,27 @@ function denyJoinRequest(reqId) {
   toast('却下しました');
 }
 
-function saveTeamEdits() {
+async function saveTeamEdits() {
   const team = _selectedTeam();
   if (!team || !isTeamAdmin(team)) { toast('管理者のみ編集できます'); return; }
   const nameEl = document.getElementById('teamEditName');
   const newName = String(nameEl ? nameEl.value : '').trim();
   if (!newName) { toast('チーム名を入力してください'); return; }
+  if (cloudSelectedTeam) {
+    try {
+      const user = await getLoggedInUserOrPrompt();
+      if (!user) return;
+      const api = await getCloudTeamApi();
+      await api.updateTeamName({ user, teamId: cloudSelectedTeam.id, name: newName });
+      toast('保存しました');
+      closeTeamEdit();
+      return;
+    } catch (e) {
+      console.error(e);
+      toast('保存できませんでした');
+      return;
+    }
+  }
   team.name = newName;
   // mirror to legacy state used by existing UI
   const legacy = _teamState();
@@ -5500,6 +5609,7 @@ function _teamsState() {
   return ts;
 }
 function _selectedTeam() {
+  if (cloudSelectedTeam) return cloudSelectedTeam;
   const ts = _teamsState();
   const id = ts.selectedTeamId;
   return ts.teams.find(x => x.id === id) || ts.teams[0] || null;
@@ -5507,16 +5617,16 @@ function _selectedTeam() {
 function renderTeamList() {
   const list = document.getElementById('teamList');
   if (!list) return;
-  const ts = _teamsState();
-  list.innerHTML = ts.teams.map(t => {
+  const sourceTeams = cloudTeams.length ? cloudTeams : _teamsState().teams;
+  list.innerHTML = sourceTeams.map(t => {
     const members = Array.isArray(t.members) ? t.members : [];
-    const isAdmin = isTeamAdmin(t);
+    const isAdmin = t.myRole ? t.myRole === 'admin' : isTeamAdmin(t);
     return `<button type="button" class="team-row" data-tid="${esc(t.id)}">
       <div class="left">
         <div class="name">${esc(t.name || 'チーム')}${isAdmin ? `<span class="team-admin-badge" title="管理者">★</span>` : ''}</div>
       </div>
       <div class="right">
-        <div class="cnt">${members.length}人</div>
+        <div class="cnt">${members.length ? `${members.length}人` : ''}</div>
         <div style="color:var(--txt3);font-size:20px;line-height:1">›</div>
       </div>
     </button>`;
@@ -5524,9 +5634,12 @@ function renderTeamList() {
   list.querySelectorAll('.team-row').forEach(btn => {
     btn.addEventListener('click', () => {
       const tid = btn.dataset.tid;
-      const ts2 = _teamsState();
-      ts2.selectedTeamId = tid;
-      save();
+      cloudSelectedTeam = sourceTeams.find(t => String(t.id) === String(tid)) || null;
+      if (!cloudSelectedTeam) {
+        const ts2 = _teamsState();
+        ts2.selectedTeamId = tid;
+        save();
+      }
       closeTeamList();
       openTeamDetail();
     });
@@ -5556,27 +5669,59 @@ async function openTeam() {
   }
   openTeamList();
 }
-function openTeamList() {
-  _teamsState();
-  renderTeamList();
-  document.getElementById('teamListOv').classList.add('show');
+async function openTeamList() {
+  const user = await getLoggedInUserOrPrompt();
+  if (!user) return;
+  try {
+    const api = await getCloudTeamApi();
+    cloudTeams = await api.listMyTeams({ user });
+    renderTeamList();
+    document.getElementById('teamListOv').classList.add('show');
+  } catch (e) {
+    console.error(e);
+    toast('チーム一覧を読み込めませんでした');
+  }
 }
 function closeTeamList() {
   const el = document.getElementById('teamListOv');
   if (el) el.classList.remove('show');
 }
-function openTeamDetail() {
-  const st = _selectedTeam();
-  if (st) {
-    const legacy = _teamState();
-    legacy.name = st.name;
-    legacy.members = Array.isArray(st.members) ? st.members : [];
-    save();
+async function openTeamDetail() {
+  const user = await getLoggedInUserOrPrompt();
+  if (!user) return;
+  if (!cloudSelectedTeam) {
+    const st = _selectedTeam();
+    if (st) {
+      const legacy = _teamState();
+      legacy.name = st.name;
+      legacy.members = Array.isArray(st.members) ? st.members : [];
+      save();
+    }
+    renderTeam();
+    document.getElementById('teamOv').classList.add('show');
+    return;
   }
+  stopCloudTeamListener();
+  const api = await getCloudTeamApi();
+  cloudTeamUnsubscribe = api.subscribeTeam({
+    teamId: cloudSelectedTeam.id,
+    onChange: (event) => {
+      if (event.type === 'team') cloudSelectedTeam = event.data;
+      if (event.type === 'members') cloudTeamMembers = event.data;
+      if (event.type === 'activity') cloudTeamActivity = event.data;
+      if (event.type === 'joinRequests') cloudTeamJoinRequests = event.data;
+      renderTeam();
+    },
+    onError: (err) => {
+      console.error(err);
+      toast('チーム同期が切断されました');
+    },
+  });
   renderTeam();
   document.getElementById('teamOv').classList.add('show');
 }
 function closeTeam() {
+  stopCloudTeamListener();
   document.getElementById('teamOv').classList.remove('show');
 }
 function setTeamTab(key) {
@@ -5778,7 +5923,19 @@ function _teamAggMonth(mk) {
   return { sales, projects, done, newDm };
 }
 function renderTeam() {
-  const T = _teamState();
+  const T = cloudSelectedTeam || _teamState();
+  if (cloudTeamMembers.length) T.members = cloudTeamMembers.map((m) => ({
+    id: m.uid || m.id,
+    handle: m.displayName || m.email || 'メンバー',
+    role: m.role || 'member',
+    color: '#2F86D9',
+  }));
+  if (cloudTeamActivity.length) T.activities = cloudTeamActivity.map((a) => ({
+    handle: a.actorName || 'メンバー',
+    color: '#2F86D9',
+    text: a.text || '',
+    time: '',
+  }));
   const k = revMonthKey || monthKeyFromDate(new Date());
   const prevK = shiftMonthKey(k, -1);
   const cur = _teamAggMonth(k);
@@ -5799,7 +5956,10 @@ function renderTeam() {
   const dot = document.getElementById('teamReqDot');
   if (dot && st) {
     const s2 = _ensureTeamSettings(st);
-    dot.style.display = (s2.joinRequests && s2.joinRequests.length) ? '' : 'none';
+    const pendingReqs = cloudTeamJoinRequests.length
+      ? cloudTeamJoinRequests.filter(r => r.status === 'pending').length
+      : ((s2.joinRequests && s2.joinRequests.length) || 0);
+    dot.style.display = pendingReqs ? '' : 'none';
   }
 
   // edit button visibility (admin only)
