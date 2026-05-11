@@ -3807,9 +3807,8 @@ function updateGoogleAuthUi(mod) {
   if (!ttl || !sub) return;
   const u = mod && typeof mod.getCurrentUser === 'function' ? mod.getCurrentUser() : null;
   if (u) {
-    const label = (u.email || u.displayName || '').trim();
-    ttl.textContent = label || tt('settings_google_login');
-    sub.textContent = tt('settings_google_tap_logout');
+    ttl.textContent = tt('settings_google_login');
+    sub.textContent = tt('google_login_ok');
   } else {
     ttl.textContent = tt('settings_google_login');
     sub.textContent = tt('settings_google_out');
