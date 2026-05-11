@@ -7,8 +7,22 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DM管理">
   <meta name="theme-color" content="#E1306C">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'unsafe-inline'; img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://www.googleapis.com https://*.googleapis.com https://www.gstatic.com https://accounts.google.com https://oauth2.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://firebaseinstallations.googleapis.com; frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://splitmate-6a06d.firebaseapp.com">
   <title>Instagram DM管理</title>
+  <script>
+    window.DM_FIREBASE_CONFIG = {
+      apiKey: 'AIzaSyCe_-ALpevlU5dcfoW4cUEeHDnifytcNFg',
+      authDomain: 'splitmate-6a06d.firebaseapp.com',
+      projectId: 'splitmate-6a06d',
+      storageBucket: 'splitmate-6a06d.firebasestorage.app',
+      messagingSenderId: '1020392751551',
+      appId: '1:1020392751551:web:REPLACE_WITH_WEB_APP_ID_FROM_FIREBASE_CONSOLE'
+    };
+    (function () {
+      var c = window.DM_FIREBASE_CONFIG;
+      if (c && typeof c.appId === 'string' && /REPLACE|placeholder/i.test(c.appId)) delete c.appId;
+    })();
+  </script>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.svg">
   <style>
@@ -26,6 +40,17 @@
       --sep:       rgba(60,60,67,.22);
       --fill:      rgba(116,116,128,.10);
       --accent:    #E1306C;
+      /* revenue / charts (softer tones) */
+      --rev-confirmed: #E04B7B; /* bright calm rose */
+      --rev-goal:      #2F86D9; /* bright calm blue */
+      --rev-profit:    rgba(76,175,80,.72);
+      --rev-exp-line:  rgba(60,60,67,.50);
+      --rev-trend-line:#26C6DA;
+      /* platform colors (bright but calm) */
+      --pl-instagram:  #E04B7B;
+      --pl-tiktok:     #22B8C7;
+      --pl-youtube:    #FF4D4D;
+      --pl-other:      #2F86D9;
       --ig-grad:   linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);
       --sidebar-w: 270px;
       --hdr-h:     56px;
@@ -46,6 +71,15 @@
         --txt3: rgba(235,235,245,.50);
         --sep:  rgba(84,84,88,.55);
         --fill: rgba(116,116,128,.18);
+        --rev-confirmed: #FF5A8A;
+        --rev-goal:      #4AA3FF;
+        --rev-profit:    rgba(76,175,80,.68);
+        --rev-exp-line:  rgba(235,235,245,.42);
+        --rev-trend-line:#26C6DA;
+        --pl-instagram:  #FF5A8A;
+        --pl-tiktok:     #34D0DF;
+        --pl-youtube:    #FF6A6A;
+        --pl-other:      #4AA3FF;
       }
     }
 
@@ -86,7 +120,7 @@
       .hdr { background:rgba(28,28,30,.88); }
     }
     .hdr-title {
-      flex:1; font-size:17px; font-weight:600; text-align:center;
+      flex:1; font-size:20px; font-weight:700; text-align:center;
       overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
     }
     .ico-btn {
@@ -125,6 +159,48 @@
     }
     .sidebar-label { font-size:12px; font-weight:700; color:var(--txt3); text-transform:uppercase; letter-spacing:.8px; }
     .sidebar-scroll { flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; padding:6px 0 40px; }
+    .sidebar-bottom{
+      padding:10px 12px calc(10px + var(--sb));
+      background:linear-gradient(to top, rgba(242,242,247,1) 0%, rgba(242,242,247,0) 100%);
+    }
+    @media (prefers-color-scheme:dark) {
+      .sidebar-bottom{
+        background:linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+      }
+    }
+    .team-btn{
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:12px 12px;
+      border-radius:12px;
+      border:.5px solid var(--sep);
+      background:var(--card);
+      cursor:pointer;
+      color:var(--txt);
+    }
+    .team-btn:active{ background:var(--fill); }
+    .team-btn .l{
+      display:flex; align-items:center; gap:10px; min-width:0;
+      font-weight:700;
+    }
+    .team-btn .ic{
+      width:22px; height:22px; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
+      color:var(--accent);
+    }
+    .team-btn .ttl{
+      font-size:14px; font-weight:700; color:var(--txt);
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .team-btn .chev{
+      flex-shrink:0;
+      color:var(--txt3);
+      font-size:18px;
+      line-height:1;
+    }
 
     /* Folder rows */
     .f-row {
@@ -482,6 +558,8 @@
       display:flex; border-radius:9px; overflow:hidden;
       border:.5px solid var(--sep); flex-shrink:0;
     }
+    .settings-lang.wrap { flex-wrap:wrap; overflow:visible; }
+    .settings-lang.wrap .settings-lang-btn { border-radius:8px; margin:4px; }
     .settings-lang-btn {
       margin:0; padding:7px 11px; border:none; background:var(--fill);
       font-size:12px; font-weight:800; color:var(--txt3);
@@ -517,6 +595,9 @@
       display:flex; align-items:center; gap:10px;
       padding:14px 16px; cursor:pointer; min-height:48px;
     }
+    .rev-basis-row { justify-content:space-between; gap:12px; }
+    .rev-basis-ctl { flex-shrink:0; }
+    .rev-basis-ctl .settings-lang-btn { padding:7px 10px; min-width:0; }
     .tmpl-title {
       flex:1;
       font-size:15px;
@@ -727,6 +808,507 @@
     .sched-user  { font-size:13px; color:var(--txt3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .sched-hm { font-size:12px; color:var(--txt3); flex-shrink:0; }
     .sched-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 20px; color:var(--txt3); text-align:center; gap:8px; }
+
+    /* ===== REVENUE OVERLAY ===== */
+    .rev-ov{
+      position:fixed; inset:0; z-index:210;
+      background:var(--bg); display:flex; flex-direction:column;
+      padding-top:var(--st);
+      transform:translateY(100%);
+      transition:transform .3s cubic-bezier(.25,.46,.45,.94);
+    }
+    .rev-ov.show{ transform:translateY(0); }
+    .rev-hdr{
+      display:flex; align-items:center; gap:4px;
+      height:var(--hdr-h); padding:0 8px;
+      background:rgba(255,255,255,.85);
+      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-bottom:.5px solid var(--sep); flex-shrink:0;
+    }
+    @media (prefers-color-scheme:dark) { .rev-hdr { background:rgba(28,28,30,.88); } }
+    .rev-body{
+      flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+      padding:14px 14px calc(20px + var(--sb));
+    }
+    .rev-row{ display:flex; align-items:center; gap:10px; }
+    .rev-month{
+      flex:1; text-align:center; font-weight:800; font-size:15px; color:var(--txt);
+    }
+    .rev-nav{
+      width:40px; height:40px; border:none; border-radius:10px;
+      background:var(--fill); color:var(--txt); cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      font-size:18px; font-weight:900;
+    }
+    .rev-nav:active{ background:var(--sep); }
+    .rev-card{
+      margin-top:12px;
+      background:var(--card);
+      border-radius:16px;
+      padding:14px 14px;
+      border:.5px solid var(--sep);
+    }
+    .rev-kpi{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+    .rev-kpi-item{
+      background:var(--bg3);
+      border:.5px solid var(--sep);
+      border-radius:14px;
+      padding:10px 10px;
+      min-width:0;
+    }
+    .rev-kpi-l{ font-size:11px; font-weight:800; color:var(--txt3); letter-spacing:.4px; }
+    .rev-kpi-v{ margin-top:4px; font-size:16px; font-weight:900; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rev-kpi-s{ margin-top:2px; font-size:11px; font-weight:700; color:var(--txt3); }
+    .rev-chart{
+      width:100%;
+      height:210px;
+      margin-top:10px;
+      display:block;
+      background:transparent;
+    }
+    /* Analysis (スクショ準拠: グレー地に白カードを複数) */
+    .ana-root{ margin-top:6px; }
+    .ana-panel{
+      background:var(--card);
+      border-radius:16px;
+      border:.5px solid var(--sep);
+      padding:12px 12px 10px;
+      margin-bottom:10px;
+      box-shadow:0 1px 0 rgba(0,0,0,.04);
+    }
+    .ana-nav{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .ana-nav .rev-nav{
+      width:36px; height:36px;
+      border-radius:999px;
+      font-size:16px;
+    }
+    .ana-sec-hdr{
+      font-size:13px;
+      font-weight:900;
+      color:var(--txt2);
+      margin:0 0 8px;
+      letter-spacing:.02em;
+    }
+    .ana-platform-list{ padding:2px 0 4px; }
+    .ana-kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:6px;
+    }
+    .ana-kpi-cell{
+      background:rgba(60,60,67,.05);
+      border-radius:14px;
+      border:.5px solid var(--sep);
+      padding:10px 8px 9px;
+      text-align:center;
+      min-width:0;
+    }
+    .ana-kpi-lbl{
+      font-size:12px;
+      font-weight:900;
+      color:var(--txt3);
+    }
+    .ana-kpi-mid{
+      margin-top:8px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:8px;
+      row-gap:6px;
+    }
+    .ana-kpi-val{
+      font-size:26px;
+      font-weight:1000;
+      color:var(--txt2);
+      line-height:1.05;
+    }
+    .ana-kpi-cell--avg .ana-kpi-val{ font-size:22px; }
+    .ana-kpi-unit{
+      font-size:14px;
+      font-weight:900;
+      color:var(--txt3);
+    }
+    .ana-kpi-badge{
+      font-size:11px;
+      font-weight:900;
+      padding:3px 9px;
+      border-radius:999px;
+      white-space:nowrap;
+    }
+    .ana-kpi-mom{
+      margin-top:6px;
+      font-size:11px;
+      font-weight:900;
+      color:var(--txt3);
+    }
+    .ana-exp-row{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin:5px 0;
+    }
+    .ana-exp-pct{
+      flex-shrink:0;
+      font-weight:1000;
+      font-size:12px;
+      min-width:34px;
+      text-align:right;
+    }
+    .ana-trend-canvas{
+      margin-top:4px;
+      height:232px;
+    }
+
+    /* ===== TEAM OVERLAY ===== */
+    .team-ov{
+      position:fixed; inset:0; z-index:215;
+      background:var(--bg); display:flex; flex-direction:column;
+      padding-top:var(--st);
+      transform:translateY(100%);
+      transition:transform .3s cubic-bezier(.25,.46,.45,.94);
+    }
+    .team-ov.show{ transform:translateY(0); }
+    /* チーム編集は詳細画面の上に必ず出す */
+    #teamEditOv{ z-index:240; }
+    #teamReqOv{ z-index:240; }
+    .team-req-dot{
+      position:absolute;
+      right:12px;
+      top:12px;
+      width:9px;
+      height:9px;
+      border-radius:999px;
+      background:#FF3B30;
+      box-shadow:0 0 0 0 rgba(255,59,48,.55);
+      animation:teamReqPulse 1.2s infinite;
+    }
+    @keyframes teamReqPulse{
+      0%{ transform:scale(.9); box-shadow:0 0 0 0 rgba(255,59,48,.55); opacity:1; }
+      70%{ transform:scale(1); box-shadow:0 0 0 8px rgba(255,59,48,0); opacity:1; }
+      100%{ transform:scale(.9); box-shadow:0 0 0 0 rgba(255,59,48,0); opacity:.9; }
+    }
+    .team-hdr{
+      display:flex; align-items:center; gap:4px;
+      height:var(--hdr-h); padding:0 8px;
+      background:rgba(255,255,255,.85);
+      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-bottom:.5px solid var(--sep); flex-shrink:0;
+    }
+    @media (prefers-color-scheme:dark) { .team-hdr { background:rgba(28,28,30,.88); } }
+    .team-body{
+      flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+      padding:10px 12px calc(72px + var(--sb));
+    }
+    .team-card{
+      background:var(--card);
+      border-radius:14px;
+      border:.5px solid rgba(60,60,67,.14);
+      padding:12px 12px 10px;
+    }
+    .team-edit{
+      border:none;
+      background:rgba(60,60,67,.10);
+      color:var(--txt2);
+      font-weight:900;
+      font-size:12px;
+      padding:8px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      flex-shrink:0;
+    }
+    .team-edit:active{ opacity:.75; }
+    .team-edit[disabled]{ opacity:.45; cursor:default; }
+    .team-edit-pane{ display:none; }
+    .team-edit-pane.show{ display:block; }
+    .team-edit-title{ font-size:12px; font-weight:900; color:var(--txt3); margin:10px 2px 8px; }
+    .team-danger{ width:100%; border:none; border-radius:14px; padding:14px 12px; font-weight:1000; cursor:pointer; }
+    .team-danger.leave{ background:rgba(255,149,0,.10); color:#C05300; }
+    .team-danger.dissolve{ background:rgba(255,59,48,.10); color:#B42318; }
+    .team-save{ width:100%; border:none; border-radius:14px; padding:14px 12px; font-weight:1000; cursor:pointer; background:rgba(225,48,108,.12); color:var(--accent); }
+    .team-mem-item{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 2px; border-top:.5px solid var(--sep); }
+    .team-mem-item:first-child{ border-top:none; }
+    .team-mem-l{ min-width:0; }
+    .team-mem-h{ font-size:13px; font-weight:1000; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .team-mem-r{ font-size:11px; font-weight:900; color:var(--txt3); margin-top:2px; }
+    .team-kick{ border:none; background:rgba(60,60,67,.10); color:var(--txt2); font-weight:1000; font-size:12px; padding:8px 10px; border-radius:12px; cursor:pointer; flex-shrink:0; }
+    .team-kick:active{ opacity:.75; }
+    .team-top{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .team-top .l{ display:flex; align-items:center; gap:10px; min-width:0; }
+    .team-ic{
+      width:44px; height:44px; border-radius:14px;
+      background:linear-gradient(135deg,#ff8c42,#e1306c);
+      display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; font-size:22px; font-weight:900; color:#fff;
+    }
+    .team-name{
+      font-size:15px; font-weight:900; color:var(--txt);
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      display:flex; align-items:center; gap:8px;
+    }
+    .team-sub{ margin-top:2px; font-size:12px; font-weight:700; color:var(--txt3); }
+    .team-badge{
+      font-size:10px; font-weight:900; letter-spacing:.2px;
+      padding:2px 8px; border-radius:999px;
+      background:rgba(225,48,108,.12); color:var(--accent);
+      flex-shrink:0;
+    }
+    .team-kpis{
+      margin-top:10px;
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      gap:8px;
+      background:transparent;
+      border-top:.5px solid rgba(60,60,67,.12);
+      padding:10px 2px 2px;
+    }
+    .team-kpi{ min-width:0; text-align:center; }
+    .team-kpi .v{ font-size:16px; font-weight:1000; color:var(--txt); }
+    .team-kpi .l{ margin-top:2px; font-size:10px; font-weight:800; color:var(--txt3); }
+    .team-kpi .s{ margin-top:2px; font-size:10px; font-weight:800; color:var(--txt3); }
+    .team-kpi .up{ color:rgba(52,160,72,.95); }
+    .team-kpi .down{ color:rgba(255,59,48,.95); }
+    .team-sec{ margin-top:10px; }
+    .team-sec-ttl{ font-size:12px; font-weight:900; color:var(--txt2); margin:0 2px 8px; }
+    .team-mode{
+      background:var(--card);
+      border-radius:14px;
+      border:.5px solid rgba(60,60,67,.14);
+      padding:12px 12px;
+    }
+    .team-mode-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .team-mode-opt{
+      border-radius:14px; border:.5px solid rgba(60,60,67,.14);
+      background:rgba(60,60,67,.03);
+      padding:12px 10px;
+      display:flex; gap:10px; align-items:flex-start;
+      cursor:pointer;
+    }
+    .team-radio{
+      width:18px; height:18px;
+      border-radius:999px;
+      border:2px solid rgba(60,60,67,.22);
+      background:#fff;
+      box-shadow:inset 0 0 0 3px rgba(255,255,255,1);
+      flex-shrink:0;
+      margin-top:2px;
+    }
+    @media (prefers-color-scheme:dark) {
+      .team-radio{ background:rgba(28,28,30,.95); }
+    }
+    .team-mode-opt.on .team-radio{
+      border-color:rgba(225,48,108,.75);
+      box-shadow:inset 0 0 0 4px rgba(225,48,108,.75);
+    }
+    .team-mode-opt.on{ border-color:rgba(225,48,108,.35); background:rgba(225,48,108,.06); }
+    .team-mode-opt:active{ opacity:.8; }
+    .team-mode-ic{ width:28px; height:28px; border-radius:10px; background:var(--fill); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--accent); }
+    .team-mode-t{ font-size:12px; font-weight:900; color:var(--txt); }
+    .team-mode-d{ margin-top:2px; font-size:11px; font-weight:700; color:var(--txt3); line-height:1.35; }
+    .team-tabs{
+      margin-top:10px;
+      display:flex; align-items:center;
+      border-bottom:.5px solid var(--sep);
+      padding:0 2px;
+      gap:0;
+    }
+    .team-tab{
+      flex:1;
+      min-width:0;
+      padding:10px 0;
+      font-size:12px; font-weight:900; color:var(--txt3);
+      border:none; background:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      border-bottom:2px solid transparent;
+      white-space:nowrap;
+    }
+    .team-tab .ic{ width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; }
+    .team-tab .ic svg{ width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .team-tab.on{ color:var(--accent); border-bottom-color:var(--accent); }
+    .team-pane{ display:none; }
+    .team-pane.show{ display:block; }
+    .team-list-card{
+      background:var(--card); border-radius:16px; border:.5px solid var(--sep);
+      margin-top:10px; padding:12px 12px;
+    }
+    .team-row{
+      width:100%;
+      border:none;
+      background:none;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:14px 2px;
+      border-top:.5px solid var(--sep);
+      text-align:left;
+    }
+    .team-row:first-child{ border-top:none; }
+    .team-row .left{ min-width:0; }
+    .team-row .name{ font-size:16px; font-weight:1000; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .team-row .right{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+    .team-row .cnt{ font-size:12px; font-weight:1000; color:var(--txt3); white-space:nowrap; }
+    .team-admin-badge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:20px;
+      height:20px;
+      border-radius:999px;
+      background:rgba(225,48,108,.12);
+      color:var(--accent);
+      font-weight:1000;
+      font-size:12px;
+      margin-left:6px;
+      flex-shrink:0;
+    }
+    .team-list-hdr{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+    .team-list-ttl{ font-size:12px; font-weight:900; color:var(--txt2); }
+    .team-add{ border:none; background:none; color:var(--accent); font-weight:900; font-size:12px; cursor:pointer; }
+    .team-invite{
+      margin-top:10px;
+      width:100%;
+      border:none;
+      background:rgba(225,48,108,.10);
+      color:var(--accent);
+      font-weight:900;
+      font-size:13px;
+      padding:12px 12px;
+      border-radius:12px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      cursor:pointer;
+    }
+    .team-invite:active{ opacity:.8; }
+    .m-row{
+      display:grid;
+      grid-template-columns:1fr 80px 44px 54px 24px;
+      gap:8px;
+      align-items:center;
+      padding:10px 2px;
+      border-top:.5px solid var(--sep);
+    }
+    .m-row:first-of-type{ border-top:none; }
+    .m-row2{
+      display:grid;
+      grid-template-columns:1fr 88px 62px 62px 26px;
+      gap:8px;
+      align-items:center;
+      padding:10px 2px;
+      border-top:.5px solid var(--sep);
+    }
+    .m-row2:first-of-type{ border-top:none; }
+    .m-left{ display:flex; align-items:center; gap:10px; min-width:0; }
+    .m-av2{ width:36px; height:36px; border-radius:999px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:1000; font-size:16px; flex-shrink:0; position:relative; }
+    .m-crown{ position:absolute; left:-6px; top:-10px; font-size:18px; transform:rotate(-8deg); }
+    .m-name2{ font-size:14px; font-weight:1000; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .m-badges{ margin-top:4px; display:flex; gap:6px; flex-wrap:nowrap; }
+    .m-badge{ font-size:10px; font-weight:1000; padding:5px 8px; border-radius:999px; line-height:1; white-space:nowrap; }
+    .m-badge.admin{ background:rgba(225,48,108,.12); color:var(--accent); }
+    .m-badge.member{ background:rgba(60,60,67,.10); color:var(--txt3); }
+    .m-badge.assign{ background:rgba(47,134,217,.14); color:#2F86D9; }
+    .m-num{ text-align:right; font-weight:1000; font-size:14px; color:var(--txt2); white-space:nowrap; }
+    .m-pen{
+      border:none; background:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:flex-end;
+      color:var(--txt3);
+      padding:6px 0;
+    }
+    .m-pen svg{ width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .m-av{
+      width:36px; height:36px; border-radius:18px;
+      display:flex; align-items:center; justify-content:center;
+      color:#fff; font-weight:900;
+    }
+    .m-name{ font-size:13px; font-weight:900; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .m-role{
+      display:inline-flex; align-items:center;
+      font-size:10px; font-weight:900;
+      padding:2px 8px; border-radius:999px;
+      background:rgba(60,60,67,.10); color:var(--txt3);
+      width:max-content;
+    }
+    .m-role.admin{ background:rgba(225,48,108,.12); color:var(--accent); }
+    .m-dot{ text-align:right; color:var(--txt3); font-size:18px; }
+    .team-status-grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:8px;
+    }
+    .team-status{
+      background:var(--card); border-radius:16px; border:.5px solid var(--sep);
+      padding:12px 12px;
+      cursor:pointer;
+    }
+    .team-status:active{ opacity:.8; }
+    .team-status .l{ font-size:11px; font-weight:900; color:var(--txt3); display:flex; align-items:center; gap:6px; }
+    .team-status .dot{ width:8px; height:8px; border-radius:999px; display:inline-block; }
+    .team-status .chev{ margin-left:auto; color:var(--txt3); font-size:18px; line-height:1; }
+    .team-status.new .dot{ background:#FF3B30; }
+    .team-status.prog .dot{ background:#FF9500; }
+    .team-status.done .dot{ background:#34C759; }
+    .team-status .v{ margin-top:6px; font-size:20px; font-weight:1000; color:var(--txt); }
+    .team-status .s{ margin-top:2px; font-size:10px; font-weight:800; color:var(--txt3); }
+    .team-act-row{
+      display:flex; align-items:flex-start; gap:10px;
+      padding:10px 2px;
+      border-top:.5px solid var(--sep);
+    }
+    .team-act-row:first-of-type{ border-top:none; }
+    .team-act-day{
+      margin:12px 2px 6px;
+      font-size:11px;
+      font-weight:900;
+      color:var(--txt3);
+      letter-spacing:.02em;
+    }
+    .team-act-day:first-of-type{ margin-top:2px; }
+    .team-act-days{ margin-top:2px; }
+    .team-day-row{
+      width:100%;
+      border:none;
+      background:none;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:14px 2px;
+      border-top:.5px solid var(--sep);
+      text-align:left;
+    }
+    .team-day-row:first-child{ border-top:none; }
+    .team-day-left{ display:flex; align-items:center; gap:10px; min-width:0; }
+    .team-day-ic{ width:22px; height:22px; color:var(--txt3); flex-shrink:0; }
+    .team-day-txt{ font-size:16px; font-weight:900; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .team-day-chev{ color:var(--txt3); font-size:20px; line-height:1; transform:rotate(0deg); transition:transform .18s ease; }
+    .team-day.open .team-day-chev{ transform:rotate(90deg); }
+    .team-day-items{ display:none; padding:0 0 8px; }
+    .team-day.open + .team-day-items{ display:block; }
+    .team-day-items .team-act-row{ padding:10px 2px; }
+    .team-act-ic{
+      width:32px; height:32px; border-radius:999px;
+      display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; font-size:13px; font-weight:900; color:#fff;
+    }
+    .team-act-t{ font-size:12px; font-weight:900; color:var(--txt); line-height:1.35; flex:1; min-width:0; }
+    .team-act-s{ margin-top:2px; font-size:11px; font-weight:800; color:var(--txt3); }
+    .team-act-ts{ font-size:10px; font-weight:800; color:var(--txt3); flex-shrink:0; white-space:nowrap; padding-top:2px; }
   </style>
 </head>
 <body>
@@ -737,7 +1319,17 @@
     <button class="ico-btn ham" id="hamBtn" aria-label="メニュー">
       <svg viewBox="0 0 24 24"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/></svg>
     </button>
-    <h1 class="hdr-title" id="hdrTitle">📱 DM管理</h1>
+    <h1 class="hdr-title" id="hdrTitle">DM管理</h1>
+    <button class="ico-btn" id="moneyBtn" aria-label="収益">
+      <!-- coin with Yen mark -->
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M7.8 7.1l4.2 4.9 4.2-4.9"/>
+        <path d="M12 12v5.8"/>
+        <path d="M9 12.9h6"/>
+        <path d="M9.6 14.8h4.9"/>
+      </svg>
+    </button>
     <button class="ico-btn" id="schedBtn" aria-label="スケジュール">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     </button>
@@ -757,6 +1349,15 @@
         <button class="ico-btn" id="sideAddFolder" style="width:36px;height:36px;font-size:22px;" aria-label="追加">＋</button>
       </div>
       <div class="sidebar-scroll" id="folderTree"></div>
+      <div class="sidebar-bottom">
+        <button type="button" class="team-btn" id="teamBtn">
+          <span class="l">
+            <span class="ic">👥</span>
+            <span class="ttl" id="teamBtnTtl">チームを管理</span>
+          </span>
+          <span class="chev">›</span>
+        </button>
+      </div>
     </aside>
 
     <!-- Main -->
@@ -914,14 +1515,42 @@
         </div>
       </div>
       <div class="fg">
-        <label>指示のメモ</label>
+        <label>報酬額</label>
+        <div class="copy-row">
+          <input type="number" class="fi" id="projReward" placeholder="例：30000" inputmode="numeric" min="0" step="1">
+          <button class="copy-btn" data-copy="projReward">⎘</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label id="projExpensesLbl">経費（項目/金額）</label>
+        <div id="projExpenses"></div>
+        <button type="button" class="tmpl-btn tmpl-copy" id="projAddExpenseBtn" style="margin-top:8px;width:100%"></button>
+      </div>
+      <div class="fg">
+        <label id="projCostLbl">合計</label>
+        <div class="copy-row">
+          <input type="number" class="fi" id="projCost" placeholder="例：5000" inputmode="numeric" min="0" step="1">
+          <button class="copy-btn" data-copy="projCost">⎘</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label id="projPlatformsLbl">投稿プラットフォーム（複数選択）</label>
+        <div class="settings-lang wrap" role="group" aria-label="投稿プラットフォーム" style="width:max-content">
+          <button type="button" class="settings-lang-btn" data-pl="tiktok" id="plTikTok">TikTok</button>
+          <button type="button" class="settings-lang-btn" data-pl="instagram" id="plInstagram">Instagram</button>
+          <button type="button" class="settings-lang-btn" data-pl="youtube" id="plYouTube">YouTube</button>
+          <button type="button" class="settings-lang-btn" data-pl="other" id="plOther">その他</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label id="projInstrLbl">指示のメモ</label>
         <div class="copy-row">
           <textarea class="fi fi-ta" id="projInstr" placeholder="撮影指示・注意事項など..."></textarea>
           <button class="copy-btn" data-copy="projInstr">⎘</button>
         </div>
       </div>
       <div class="fg">
-        <label>タグ</label>
+        <label id="projTagsLbl">タグ</label>
         <div class="copy-row">
           <button class="copy-btn" id="hashBtn" style="background:rgba(225,48,108,.12);color:var(--accent);font-weight:700;font-size:18px">#</button>
           <input type="text" class="fi" id="projTags" placeholder="#タグ #複数OK">
@@ -929,7 +1558,7 @@
         </div>
       </div>
       <div class="fg">
-        <label>マップURL</label>
+        <label id="projMapLbl">マップURL</label>
         <div class="copy-row">
           <input type="url" class="fi" id="projMapUrl" placeholder="https://maps.google.com/...">
           <button class="copy-btn" data-copy="projMapUrl">⎘</button>
@@ -959,6 +1588,20 @@
     <div class="settings-pane show" id="paneSettingsHome">
       <div class="settings-menu">
         <div class="settings-item">
+          <div class="settings-item-row" id="settingsGoogleAuthRow" role="button" tabindex="0">
+            <span class="settings-item-ttl" id="settingsGoogleAuthTtl">Googleアカウントでログイン</span>
+            <span class="settings-item-sub" id="settingsGoogleAuthSub">—</span>
+            <span class="settings-item-chev">›</span>
+          </div>
+        </div>
+        <div class="settings-item">
+          <div class="settings-item-row" id="settingsGoRevenue">
+            <span class="settings-item-ttl" id="settingsGoRevenueTtl">報酬に関する設定</span>
+            <span class="settings-item-sub" id="settingsGoRevenueSub">報酬換算の基準など</span>
+            <span class="settings-item-chev">›</span>
+          </div>
+        </div>
+        <div class="settings-item">
           <div class="settings-item-row" id="settingsGoTemplates">
             <span class="settings-item-ttl">テンプレート</span>
             <span class="settings-item-sub">定型文</span>
@@ -970,6 +1613,20 @@
             <span class="settings-item-ttl">データ管理</span>
             <span class="settings-item-sub">バックアップ</span>
             <span class="settings-item-chev">›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-pane" id="paneRevenue">
+      <div class="settings-section-ttl" id="paneRevenueSecTtl">報酬に関する設定</div>
+      <div class="tmpl-card">
+        <div class="tmpl-row rev-basis-row" style="cursor:default">
+          <span class="tmpl-title" id="revBasisTtl">報酬換算の基準</span>
+          <div class="settings-lang rev-basis-ctl" role="group" aria-label="報酬換算の基準">
+            <button type="button" class="settings-lang-btn" id="revBasisShoot">撮影月</button>
+            <button type="button" class="settings-lang-btn" id="revBasisDeadline">提出日</button>
+            <button type="button" class="settings-lang-btn" id="revBasisNext">翌月</button>
           </div>
         </div>
       </div>
@@ -1204,6 +1861,42 @@
   </div>
 </div>
 
+<!-- Modal: Team Join Request -->
+<div class="modal-ov" id="teamJoinModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl" id="teamJoinTtl">チーム参加</div>
+    <div class="modal-body">
+      <div style="font-size:14px;font-weight:900;color:var(--txt2);margin:0 0 8px" id="teamJoinTeamName">チーム</div>
+      <div style="font-size:12px;color:var(--txt3);line-height:1.6" id="teamJoinDesc">
+        このリンクから参加をリクエストできます。<br>
+        チーム参加にはGoogleログインが必須です。
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-row btn-cancel" id="teamJoinCancel">キャンセル</button>
+      <button class="btn-row btn-primary" id="teamJoinRequestBtn">参加をリクエスト</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: チーム管理にはログイン必須 -->
+<div class="modal-ov" id="loginRequiredModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl" id="loginReqModalTtl">Googleログインが必要です</div>
+    <div class="modal-body">
+      <p id="loginReqModalBody" style="font-size:15px;line-height:1.55;color:var(--txt2);font-weight:700;margin:0">
+        チーム管理には Google アカウントでのログインが必要です。設定からログインしてください。
+      </p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-row btn-primary" id="loginReqOpenSettings">設定を開く</button>
+      <button type="button" class="btn-row btn-cancel" id="loginReqModalClose">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <!-- Schedule View -->
 <div class="sched-ov" id="schedOv">
   <div class="sched-hdr">
@@ -1214,6 +1907,479 @@
     <span style="min-width:44px"></span>
   </div>
   <div class="sched-list" id="schedList"></div>
+</div>
+
+<!-- Revenue View -->
+<div class="rev-ov" id="revOv">
+  <div class="rev-hdr">
+    <button class="ico-btn" id="revClose" aria-label="戻る">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <span class="hdr-title" id="revHdrTitle">報酬管理</span>
+    <span style="min-width:44px"></span>
+  </div>
+  <div class="rev-body">
+    <div class="settings-lang" id="revTabs" role="group" aria-label="表示切替" style="width:max-content;margin:0 auto 10px">
+      <button type="button" class="settings-lang-btn on" id="revTabMonth">今月</button>
+      <button type="button" class="settings-lang-btn" id="revTabYear">年間</button>
+    </div>
+    <div class="rev-row" id="revMonthNav">
+      <button type="button" class="rev-nav" id="revPrev" aria-label="前の月">‹</button>
+      <div class="rev-month" id="revMonth">2026-05</div>
+      <button type="button" class="rev-nav" id="revNext" aria-label="次の月">›</button>
+    </div>
+
+    <div id="revGraphWrap" class="ana-root" style="display:none">
+      <div class="ana-panel">
+        <div class="ana-nav">
+          <button type="button" class="rev-nav" id="anaPrev" aria-label="前の月">‹</button>
+          <div class="rev-month" id="anaMonthTitle" style="flex:1;text-align:center"></div>
+          <button type="button" class="rev-nav" id="anaNext" aria-label="次の月">›</button>
+        </div>
+      </div>
+
+      <div class="ana-panel">
+        <div class="ana-sec-hdr" id="anaPlatformTtl">プラットフォーム別の収益</div>
+        <div id="anaPlatformList" class="ana-platform-list"></div>
+      </div>
+
+      <div class="ana-panel">
+        <div class="ana-sec-hdr" id="anaStatsTtl">案件数・平均単価</div>
+        <div class="ana-kpi-grid">
+          <div class="ana-kpi-cell">
+            <div class="ana-kpi-lbl" id="anaKpiAllLbl">案件数</div>
+            <div class="ana-kpi-mid">
+              <span><span class="ana-kpi-val" id="anaKpiAllVal">0</span><span class="ana-kpi-unit" id="anaKpiAllUnit"> 件</span></span>
+              <span class="ana-kpi-badge" id="anaKpiAllBadge" style="display:none"></span>
+            </div>
+            <div class="ana-kpi-mom" id="anaMomLblAll">前月比</div>
+          </div>
+          <div class="ana-kpi-cell">
+            <div class="ana-kpi-lbl" id="anaKpiDoneLbl">完了案件数</div>
+            <div class="ana-kpi-mid">
+              <span><span class="ana-kpi-val" id="anaKpiDoneVal">0</span><span class="ana-kpi-unit" id="anaKpiDoneUnit"> 件</span></span>
+              <span class="ana-kpi-badge" id="anaKpiDoneBadge" style="display:none"></span>
+            </div>
+            <div class="ana-kpi-mom" id="anaMomLblDone">前月比</div>
+          </div>
+          <div class="ana-kpi-cell ana-kpi-cell--avg">
+            <div class="ana-kpi-lbl" id="anaKpiAvgLbl">平均単価</div>
+            <div class="ana-kpi-mid">
+              <span><span class="ana-kpi-val" id="anaKpiAvgVal">¥0</span><span class="ana-kpi-unit" id="anaKpiAvgUnit" style="display:none"></span></span>
+              <span class="ana-kpi-badge" id="anaKpiAvgBadge" style="display:none"></span>
+            </div>
+            <div class="ana-kpi-mom" id="anaMomLblAvg">前月比</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ana-panel">
+        <div class="ana-sec-hdr" id="anaCostTtl">経費内訳（今月）</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:-2px">
+          <div style="flex:0 0 48%;max-width:48%;overflow:hidden">
+            <canvas class="rev-chart" id="revExpPie" style="height:132px;margin-top:-8px"></canvas>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div id="anaExpLegend" style="padding:0"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ana-panel">
+        <div class="ana-sec-hdr" id="anaTrendTtl">月次推移</div>
+        <canvas class="rev-chart ana-trend-canvas" id="anaTrendChart" style="margin-top:0"></canvas>
+        <div id="anaBaseNote" style="font-size:11px;font-weight:900;color:var(--txt3);margin:10px 0 0;text-align:left"></div>
+      </div>
+    </div>
+
+    <div class="rev-card" id="revCard">
+      <div id="revMonthWrap">
+      <div class="fg" style="margin-bottom:0">
+        <label id="revBudgetLbl">今月の目標額</label>
+        <input type="number" class="fi" id="revBudget" placeholder="例：300000" inputmode="numeric" min="0" step="1">
+      </div>
+      <div class="rev-kpi">
+        <div class="rev-kpi-item">
+          <div class="rev-kpi-l" id="revExpectedLbl">想定額</div>
+          <div class="rev-kpi-v" id="revExpected">¥0</div>
+          <div class="rev-kpi-s" id="revExpectedSub">終了以外の合計</div>
+        </div>
+        <div class="rev-kpi-item">
+          <div class="rev-kpi-l" id="revConfirmedLbl">確定額</div>
+          <div class="rev-kpi-v" id="revConfirmed">¥0</div>
+          <div class="rev-kpi-s" id="revConfirmedSub">決定済みの合計</div>
+        </div>
+        <div class="rev-kpi-item">
+          <div class="rev-kpi-l" id="revExpExpectedLbl">想定経費額</div>
+          <div class="rev-kpi-v" id="revExpExpected">¥0</div>
+          <div class="rev-kpi-s" id="revExpExpectedSub">決定済み＋終了 の合計</div>
+        </div>
+        <div class="rev-kpi-item">
+          <div class="rev-kpi-l" id="revExpConfirmedLbl">確定経費額</div>
+          <div class="rev-kpi-v" id="revExpConfirmed">¥0</div>
+          <div class="rev-kpi-s" id="revExpConfirmedSub">終了 の合計</div>
+        </div>
+        <div class="rev-kpi-item" style="grid-column:1/-1">
+          <div class="rev-kpi-l" id="revProfitLbl">利益</div>
+          <div class="rev-kpi-v" id="revProfit">¥0</div>
+          <div class="rev-kpi-s" id="revProfitSub">確定 − 経費</div>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Team View -->
+<div class="team-ov" id="teamListOv">
+  <div class="team-hdr">
+    <button class="ico-btn" id="teamListClose" aria-label="戻る">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <span class="hdr-title" id="teamListHdrTitle">チーム</span>
+    <button class="ico-btn" id="teamListAdd" aria-label="追加" style="min-width:44px;font-size:22px;font-weight:900;color:var(--accent)">＋</button>
+  </div>
+  <div class="team-body">
+    <div class="team-list-card" style="margin-top:0">
+      <div id="teamList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="team-ov" id="teamEditOv">
+  <div class="team-hdr">
+    <button class="ico-btn" id="teamEditClose" aria-label="戻る">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <span class="hdr-title" id="teamEditHdrTitle">チームを管理</span>
+    <span style="min-width:44px"></span>
+  </div>
+  <div class="team-body">
+    <div class="team-edit-pane show" id="teamEditPane">
+      <div class="team-edit-title">チーム編集</div>
+      <div class="team-list-card" style="margin-top:0">
+        <div class="fg" style="margin-bottom:0">
+          <label>チーム名</label>
+          <input type="text" class="fi" id="teamEditName" placeholder="チーム名">
+        </div>
+        <div style="margin-top:10px">
+          <button type="button" class="team-save" id="teamEditSave">変更を保存</button>
+        </div>
+      </div>
+
+      <div class="team-edit-title">メンバーを招待</div>
+      <div class="team-list-card" style="margin-top:0">
+        <button type="button" class="team-save" id="teamInviteLinkBtn">招待リンクを発行</button>
+        <div id="teamInviteLinkBox" style="display:none;margin-top:10px">
+          <div style="font-size:11px;font-weight:900;color:var(--txt3);margin:0 2px 6px">招待リンク（仮）</div>
+          <div style="display:flex;gap:10px;align-items:center;justify-content:space-between">
+            <div id="teamInviteLinkText" style="font-weight:900;font-size:12px;color:var(--txt2);word-break:break-all;flex:1;min-width:0"></div>
+            <button type="button" class="team-kick" id="teamInviteLinkCopy">コピー</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="team-edit-title">メンバー</div>
+      <div class="team-list-card" style="margin-top:0">
+        <div id="teamEditMembers"></div>
+      </div>
+
+      <div class="team-edit-title">権限設定</div>
+      <div class="team-list-card" style="margin-top:0">
+        <div style="font-size:12px;font-weight:1000;color:var(--txt2);margin:2px 2px 8px">チームメンバーの報酬の閲覧</div>
+        <div class="settings-lang" role="group" aria-label="報酬の閲覧権限" style="width:100%;margin:0">
+          <button type="button" class="settings-lang-btn" id="teamPermRevSelf">自分のみ</button>
+          <button type="button" class="settings-lang-btn" id="teamPermRevSelfAll">自分＋チーム合計</button>
+          <button type="button" class="settings-lang-btn" id="teamPermRevAll">メンバー別も閲覧</button>
+        </div>
+
+        <div style="height:12px"></div>
+        <div style="font-size:12px;font-weight:1000;color:var(--txt2);margin:2px 2px 8px">案件の割り振り権限</div>
+        <div class="settings-lang" role="group" aria-label="割り振り権限" style="width:100%;margin:0">
+          <button type="button" class="settings-lang-btn" id="teamPermAssignAdmin">管理者のみ</button>
+          <button type="button" class="settings-lang-btn" id="teamPermAssignOwner">管理者＋担当者設定</button>
+        </div>
+        <div id="teamAssignOwnersWrap" style="display:none;margin-top:10px">
+          <div style="font-size:11px;font-weight:900;color:var(--txt3);margin:0 2px 6px">担当者（参加メンバーから選択）</div>
+          <div id="teamAssignOwnersList"></div>
+        </div>
+
+        <div style="height:12px"></div>
+        <div style="font-size:12px;font-weight:1000;color:var(--txt2);margin:2px 2px 8px">案件削除の権限</div>
+        <div class="settings-lang" role="group" aria-label="削除権限" style="width:100%;margin:0">
+          <button type="button" class="settings-lang-btn" id="teamPermDeleteAdmin">管理者のみ</button>
+          <button type="button" class="settings-lang-btn" id="teamPermDeleteAll">全員編集可</button>
+        </div>
+      </div>
+
+      <div class="team-edit-title">報酬に関する設定</div>
+      <div class="team-list-card" style="margin-top:0;padding:16px 14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="font-size:20px;font-weight:1000;color:var(--txt)" id="teamRevBasisTitle2">報酬換算の基準</div>
+          <div class="settings-lang" role="group" aria-label="報酬換算の基準" style="width:max-content;margin:0">
+            <button type="button" class="settings-lang-btn" id="teamRevBasisShoot2">撮影月</button>
+            <button type="button" class="settings-lang-btn" id="teamRevBasisDeadline2">提出日</button>
+            <button type="button" class="settings-lang-btn" id="teamRevBasisNext2">翌月</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="team-edit-title">危険な操作</div>
+      <div class="team-list-card" style="margin-top:0">
+        <button type="button" class="team-danger dissolve" id="teamDissolveBtn">チームを解散する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="team-ov" id="teamReqOv">
+  <div class="team-hdr">
+    <button class="ico-btn" id="teamReqClose" aria-label="戻る">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <span class="hdr-title">参加リクエスト</span>
+    <span style="min-width:44px"></span>
+  </div>
+  <div class="team-body">
+    <div class="team-list-card" style="margin-top:0">
+      <div id="teamReqList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="team-ov" id="teamOv">
+  <div class="team-hdr">
+    <button class="ico-btn" id="teamClose" aria-label="戻る">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <span class="hdr-title" id="teamHdrTitle">チームを管理</span>
+    <button class="ico-btn" id="teamReqBtn" aria-label="参加リクエスト" style="min-width:44px;position:relative">
+      <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="9" r="4"/></svg>
+      <span class="team-req-dot" id="teamReqDot" aria-hidden="true" style="display:none"></span>
+    </button>
+  </div>
+  <div class="team-body">
+    <div class="team-card">
+      <div class="team-top">
+        <div class="l">
+          <div class="team-ic" aria-hidden="true" id="teamIc">H</div>
+          <div style="min-width:0">
+            <div class="team-name" id="teamName">HERACチーム <span class="team-badge" id="teamRoleBadge">管理者</span></div>
+            <div class="team-sub"><span id="teamMembersLbl">メンバー</span> <span id="teamMembersCnt">0</span><span id="teamMembersUnit">人</span></div>
+          </div>
+        </div>
+        <button type="button" class="team-edit" id="teamEditBtn">チーム編集</button>
+      </div>
+      <div class="team-kpis">
+        <div class="team-kpi">
+          <div class="v" id="teamKpiSales">¥0</div>
+          <div class="l" id="teamKpiSalesLbl">今月の売上</div>
+          <div class="s"><span id="teamKpiSalesMomLbl">前月比</span> <span class="up" id="teamKpiSalesMom">+0%</span></div>
+        </div>
+        <div class="team-kpi">
+          <div class="v"><span id="teamKpiProjects">0</span><span style="font-size:11px;font-weight:900;color:var(--txt3)">件</span></div>
+          <div class="l" id="teamKpiProjectsLbl">今月の会話数</div>
+          <div class="s"><span id="teamKpiProjectsMomLbl">前月比</span> <span class="up" id="teamKpiProjectsMom">+0%</span></div>
+        </div>
+        <div class="team-kpi">
+          <div class="v"><span id="teamKpiNewDm">0</span><span style="font-size:11px;font-weight:900;color:var(--txt3)">件</span></div>
+          <div class="l" id="teamKpiNewDmLbl">未対応DM</div>
+          <div class="s" style="color:rgba(225,48,108,.95);font-weight:900" id="teamKpiNewDmSub">要速速対応</div>
+        </div>
+        <div class="team-kpi">
+          <div class="v"><span id="teamKpiDone">0</span><span style="font-size:11px;font-weight:900;color:var(--txt3)">件</span></div>
+          <div class="l" id="teamKpiDoneLbl">完了案件</div>
+          <div class="s" id="teamKpiDoneSub">今月</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="team-tabs" role="tablist" aria-label="チーム管理タブ">
+          <button type="button" class="team-tab on" id="teamTabMembers" role="tab">
+            <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="9" r="4"/></svg></span>
+            <span id="teamTabMembersT">メンバー</span>
+          </button>
+          <button type="button" class="team-tab" id="teamTabProjects" role="tab">
+            <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h7"/><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg></span>
+            <span id="teamTabProjectsT">案件</span>
+          </button>
+          <button type="button" class="team-tab" id="teamTabAnalytics" role="tab">
+            <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 17V10"/><path d="M12 17V7"/><path d="M16 17v-4"/></svg></span>
+            <span id="teamTabAnalyticsT">報酬</span>
+          </button>
+          <button type="button" class="team-tab" id="teamTabActivity" role="tab">
+            <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+            <span id="teamTabActivityT">履歴</span>
+          </button>
+    </div>
+
+    <div class="team-pane show" id="teamPaneMembers">
+      <div class="team-list-card">
+        <div class="team-list-hdr">
+          <div class="team-list-ttl" id="teamMembersTtl">メンバー一覧</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 88px 62px 62px 26px;gap:8px;padding:0 2px 8px;color:var(--txt3);font-weight:900;font-size:10px">
+          <div id="teamHdrMember"></div>
+          <div style="text-align:right" id="teamHdrSales">今月の売上</div>
+          <div style="text-align:right" id="teamHdrProg">進行案件数</div>
+          <div style="text-align:right" id="teamHdrDone">終了案件数</div>
+          <div></div>
+        </div>
+        <div id="teamMemberList"></div>
+        <button type="button" class="team-invite" id="teamInviteBtn">👤＋ <span id="teamInviteBtnT">メンバーを招待する</span></button>
+      </div>
+
+      <div class="team-sec">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 2px 8px">
+          <div class="team-sec-ttl" style="margin:0" id="teamStatusTtl">案件のステータス</div>
+          <button type="button" class="team-add">すべて見る ›</button>
+        </div>
+        <div class="team-status-grid">
+          <div class="team-status new" id="teamStNew">
+            <div class="l"><span class="dot"></span><span id="teamStNewLbl">未対応</span><span class="chev">›</span></div>
+            <div class="v" id="teamStNewVal">0件</div>
+            <div class="s" id="teamStNewSub">新着：0件</div>
+          </div>
+          <div class="team-status prog" id="teamStProg">
+            <div class="l"><span class="dot"></span><span id="teamStProgLbl">進行中</span><span class="chev">›</span></div>
+            <div class="v" id="teamStProgVal">0件</div>
+            <div class="s" id="teamStProgSub">期限間近：0件</div>
+          </div>
+          <div class="team-status done" id="teamStDone">
+            <div class="l"><span class="dot"></span><span id="teamStDoneLbl">完了</span><span class="chev">›</span></div>
+            <div class="v" id="teamStDoneVal">0件</div>
+            <div class="s" id="teamStDoneSub">今月</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="team-pane" id="teamPaneProjects">
+      <div class="team-list-card" style="text-align:center;color:var(--txt3);font-weight:900;font-size:12px;padding:20px 12px" id="teamProjectsEmpty">準備中</div>
+    </div>
+    <div class="team-pane" id="teamPaneAnalytics">
+      <div class="rev-body" style="padding:0">
+        <div class="settings-lang" id="teamRevTabs" role="group" aria-label="表示切替" style="width:max-content;margin:0 auto 10px">
+          <button type="button" class="settings-lang-btn on" id="teamRevTabMonth">今月</button>
+          <button type="button" class="settings-lang-btn" id="teamRevTabYear">分析</button>
+        </div>
+        <div class="rev-row" id="teamRevMonthNav">
+          <button type="button" class="rev-nav" id="teamRevPrev" aria-label="前の月">‹</button>
+          <div class="rev-month" id="teamRevMonth">2026-05</div>
+          <button type="button" class="rev-nav" id="teamRevNext" aria-label="次の月">›</button>
+        </div>
+
+        <div id="teamRevGraphWrap" class="ana-root" style="display:none">
+          <div class="ana-panel">
+            <div class="ana-nav">
+              <button type="button" class="rev-nav" id="teamAnaPrev" aria-label="前の月">‹</button>
+              <div class="rev-month" id="teamAnaMonthTitle" style="flex:1;text-align:center"></div>
+              <button type="button" class="rev-nav" id="teamAnaNext" aria-label="次の月">›</button>
+            </div>
+          </div>
+
+          <div class="ana-panel">
+            <div class="ana-sec-hdr" id="teamAnaPlatformTtl">プラットフォーム別の収益</div>
+            <div id="teamAnaPlatformList" class="ana-platform-list"></div>
+          </div>
+
+          <div class="ana-panel">
+            <div class="ana-sec-hdr" id="teamAnaStatsTtl">案件数・平均単価</div>
+            <div class="ana-kpi-grid">
+              <div class="ana-kpi-cell">
+                <div class="ana-kpi-lbl" id="teamAnaKpiAllLbl">案件数</div>
+                <div class="ana-kpi-mid">
+                  <span><span class="ana-kpi-val" id="teamAnaKpiAllVal">0</span><span class="ana-kpi-unit" id="teamAnaKpiAllUnit"> 件</span></span>
+                  <span class="ana-kpi-badge" id="teamAnaKpiAllBadge" style="display:none"></span>
+                </div>
+                <div class="ana-kpi-mom" id="teamAnaMomLblAll">前月比</div>
+              </div>
+              <div class="ana-kpi-cell">
+                <div class="ana-kpi-lbl" id="teamAnaKpiDoneLbl">完了案件数</div>
+                <div class="ana-kpi-mid">
+                  <span><span class="ana-kpi-val" id="teamAnaKpiDoneVal">0</span><span class="ana-kpi-unit" id="teamAnaKpiDoneUnit"> 件</span></span>
+                  <span class="ana-kpi-badge" id="teamAnaKpiDoneBadge" style="display:none"></span>
+                </div>
+                <div class="ana-kpi-mom" id="teamAnaMomLblDone">前月比</div>
+              </div>
+              <div class="ana-kpi-cell ana-kpi-cell--avg">
+                <div class="ana-kpi-lbl" id="teamAnaKpiAvgLbl">平均単価</div>
+                <div class="ana-kpi-mid">
+                  <span><span class="ana-kpi-val" id="teamAnaKpiAvgVal">¥0</span><span class="ana-kpi-unit" id="teamAnaKpiAvgUnit" style="display:none"></span></span>
+                  <span class="ana-kpi-badge" id="teamAnaKpiAvgBadge" style="display:none"></span>
+                </div>
+                <div class="ana-kpi-mom" id="teamAnaMomLblAvg">前月比</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ana-panel">
+            <div class="ana-sec-hdr" id="teamAnaCostTtl">経費内訳（今月）</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:-2px">
+              <div style="flex:0 0 48%;max-width:48%;overflow:hidden">
+                <canvas class="rev-chart" id="teamRevExpPie" style="height:132px;margin-top:-8px"></canvas>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div id="teamAnaExpLegend" style="padding:0"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ana-panel">
+            <div class="ana-sec-hdr" id="teamAnaTrendTtl">月次推移</div>
+            <canvas class="rev-chart ana-trend-canvas" id="teamAnaTrendChart" style="margin-top:0"></canvas>
+            <div id="teamAnaBaseNote" style="font-size:11px;font-weight:900;color:var(--txt3);margin:10px 0 0;text-align:left"></div>
+          </div>
+        </div>
+
+        <div class="rev-card" id="teamRevCard">
+          <div id="teamRevMonthWrap">
+          <div class="fg" style="margin-bottom:0">
+            <label id="teamRevBudgetLbl">今月の目標額</label>
+            <input type="number" class="fi" id="teamRevBudget" placeholder="例：300000" inputmode="numeric" min="0" step="1">
+          </div>
+          <div class="rev-kpi">
+            <div class="rev-kpi-item">
+              <div class="rev-kpi-l" id="teamRevExpectedLbl">想定額</div>
+              <div class="rev-kpi-v" id="teamRevExpected">¥0</div>
+              <div class="rev-kpi-s" id="teamRevExpectedSub">終了以外の合計</div>
+            </div>
+            <div class="rev-kpi-item">
+              <div class="rev-kpi-l" id="teamRevConfirmedLbl">確定額</div>
+              <div class="rev-kpi-v" id="teamRevConfirmed">¥0</div>
+              <div class="rev-kpi-s" id="teamRevConfirmedSub">決定済みの合計</div>
+            </div>
+            <div class="rev-kpi-item">
+              <div class="rev-kpi-l" id="teamRevExpExpectedLbl">想定経費額</div>
+              <div class="rev-kpi-v" id="teamRevExpExpected">¥0</div>
+              <div class="rev-kpi-s" id="teamRevExpExpectedSub">決定済み＋終了 の合計</div>
+            </div>
+            <div class="rev-kpi-item">
+              <div class="rev-kpi-l" id="teamRevExpConfirmedLbl">確定経費額</div>
+              <div class="rev-kpi-v" id="teamRevExpConfirmed">¥0</div>
+              <div class="rev-kpi-s" id="teamRevExpConfirmedSub">終了 の合計</div>
+            </div>
+            <div class="rev-kpi-item" style="grid-column:1/-1">
+              <div class="rev-kpi-l" id="teamRevProfitLbl">利益</div>
+              <div class="rev-kpi-v" id="teamRevProfit">¥0</div>
+              <div class="rev-kpi-s" id="teamRevProfitSub">確定 − 経費</div>
+            </div>
+          </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="team-pane" id="teamPaneActivity">
+      <div class="team-list-card">
+        <div class="team-list-hdr">
+          <div class="team-list-ttl" id="teamActTtl">最近のアクティビティ</div>
+        </div>
+        <div class="team-act-days" id="teamActivityDays"></div>
+      </div>
+    </div>
+    <!-- チーム編集は teamEditOv に移動 -->
+  </div>
 </div>
 
 <!-- Modal: Move -->
@@ -1228,7 +2394,7 @@
   </div>
 </div>
 
-<script src="i18n.js"></script>
+<script src="i18n.js?v=7"></script>
 <script>
 'use strict';
 
@@ -1383,6 +2549,7 @@ function applyChromeStatic() {
   if (metaTitle) metaTitle.setAttribute('content', tt('meta_app_title'));
   document.getElementById('hamBtn').setAttribute('aria-label', tt('aria_menu'));
   document.getElementById('schedBtn').setAttribute('aria-label', tt('aria_schedule'));
+  document.getElementById('moneyBtn').setAttribute('aria-label', tt('aria_money'));
   document.getElementById('settingsBtn').setAttribute('aria-label', tt('aria_settings'));
   document.getElementById('fab').setAttribute('aria-label', tt('fab_add'));
   document.querySelector('.sidebar-label').textContent = tt('sidebar_folders');
@@ -1397,6 +2564,8 @@ function applyChromeStatic() {
   document.getElementById('settingsGoTemplates').querySelector('.settings-item-sub').textContent = tt('settings_templates_sub');
   document.getElementById('settingsGoData').querySelector('.settings-item-ttl').textContent = tt('settings_data');
   document.getElementById('settingsGoData').querySelector('.settings-item-sub').textContent = tt('settings_data_sub');
+  document.getElementById('settingsGoRevenueTtl').textContent = tt('settings_revenue');
+  document.getElementById('settingsGoRevenueSub').textContent = tt('settings_revenue_sub');
   const b1 = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-title');
   const b1b = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-body');
   if (b1) b1.textContent = tt('backup_create');
@@ -1417,7 +2586,36 @@ function applyChromeStatic() {
   document.getElementById('backupHistoryBtn').textContent = tt('backup_history');
   document.querySelector('#paneTemplates .settings-section-ttl').textContent = tt('settings_templates_sec');
   document.querySelector('#paneData .settings-section-ttl').textContent = tt('settings_data_sec');
+  document.getElementById('paneRevenueSecTtl').textContent = tt('settings_revenue_sec');
   document.getElementById('addTmplBtn').textContent = tt('tmpl_add_btn');
+
+  // Revenue basis selector
+  const basis = getRevenueBasis();
+  const bShoot = document.getElementById('revBasisShoot');
+  const bDead = document.getElementById('revBasisDeadline');
+  const bNext = document.getElementById('revBasisNext');
+  if (bShoot) bShoot.classList.toggle('on', basis === 'shoot');
+  if (bDead) bDead.classList.toggle('on', basis === 'deadline');
+  if (bNext) bNext.classList.toggle('on', basis === 'deadlineNext');
+  const tbShoot = document.getElementById('teamRevBasisShoot');
+  const tbDead = document.getElementById('teamRevBasisDeadline');
+  const tbNext = document.getElementById('teamRevBasisNext');
+  if (tbShoot) tbShoot.classList.toggle('on', basis === 'shoot');
+  if (tbDead) tbDead.classList.toggle('on', basis === 'deadline');
+  if (tbNext) tbNext.classList.toggle('on', basis === 'deadlineNext');
+  const t1 = document.getElementById('revBasisTtl');
+  if (t1) t1.textContent = tt('rev_basis_ttl');
+  const t2 = document.getElementById('teamRevBasisTitle');
+  if (t2) t2.textContent = tt('rev_basis_ttl');
+  const revTtl = document.getElementById('paneRevenueSecTtl');
+  if (revTtl) revTtl.textContent = tt('settings_revenue_sec');
+
+  const trs = document.getElementById('teamRevenueSettingsTtl');
+  const trsSub = document.getElementById('teamRevenueSettingsSub');
+  const trsHdr = document.getElementById('teamRevenueSettingsHdr');
+  if (trs) trs.textContent = tt('settings_revenue');
+  if (trsSub) trsSub.textContent = tt('settings_revenue_sub');
+  if (trsHdr) trsHdr.textContent = tt('settings_revenue');
 
   document.querySelector('#folderModal .fg:nth-of-type(1) label').textContent = tt('folder_name');
   document.getElementById('fldName').placeholder = tt('folder_ph');
@@ -1448,13 +2646,87 @@ function applyChromeStatic() {
   document.getElementById('projName').placeholder = tt('proj_name_ph');
   document.querySelector('#projModal .fg:nth-of-type(3) label').textContent = tt('proj_shoot');
   document.querySelector('#projModal .fg:nth-of-type(4) label').textContent = tt('proj_deadline');
-  document.querySelector('#projModal .fg:nth-of-type(5) label').textContent = tt('proj_instr');
+  document.querySelector('#projModal .fg:nth-of-type(5) label').textContent = tt('proj_reward');
+  document.getElementById('projReward').placeholder = tt('proj_reward_ph');
+  document.getElementById('projCost').placeholder = tt('proj_cost_ph');
+  document.getElementById('projCostLbl').textContent = tt('proj_cost_total');
+  document.getElementById('projExpensesLbl').textContent = tt('proj_expense_hdr');
+  document.getElementById('projAddExpenseBtn').textContent = tt('proj_expense_add');
+  document.getElementById('projPlatformsLbl').textContent = tt('proj_platforms');
+  document.getElementById('plTikTok').textContent = tt('platform_tiktok');
+  document.getElementById('plInstagram').textContent = tt('platform_instagram');
+  document.getElementById('plYouTube').textContent = tt('platform_youtube');
+  document.getElementById('plOther').textContent = tt('platform_other');
+  document.getElementById('projInstrLbl').textContent = tt('proj_instr');
   document.getElementById('projInstr').placeholder = tt('proj_instr_ph');
-  document.querySelector('#projModal .fg:nth-of-type(6) label').textContent = tt('proj_tags');
+  document.getElementById('projTagsLbl').textContent = tt('proj_tags');
   document.getElementById('projTags').placeholder = tt('proj_tags_ph');
-  document.querySelector('#projModal .fg:nth-of-type(7) label').textContent = tt('proj_map');
+  document.getElementById('projMapLbl').textContent = tt('proj_map');
   document.getElementById('projCancel').textContent = tt('cancel');
   document.getElementById('projSave').textContent = tt('save');
+
+  // Revenue view
+  document.getElementById('revHdrTitle').textContent = tt('rev_title');
+  document.getElementById('revTabMonth').textContent = tt('rev_tab_month');
+  document.getElementById('revTabYear').textContent = tt('rev_tab_year');
+  document.getElementById('revBudgetLbl').textContent = tt('rev_goal');
+  document.getElementById('revExpectedLbl').textContent = tt('rev_expected');
+  document.getElementById('revExpectedSub').textContent = tt('rev_expected_sub');
+  document.getElementById('revConfirmedLbl').textContent = tt('rev_confirmed');
+  document.getElementById('revConfirmedSub').textContent = tt('rev_confirmed_sub');
+  document.getElementById('revExpExpectedLbl').textContent = tt('rev_exp_expected');
+  document.getElementById('revExpExpectedSub').textContent = tt('rev_exp_expected_sub');
+  document.getElementById('revExpConfirmedLbl').textContent = tt('rev_exp_confirmed');
+  document.getElementById('revExpConfirmedSub').textContent = tt('rev_exp_confirmed_sub');
+  document.getElementById('revProfitLbl').textContent = tt('rev_profit');
+  document.getElementById('revProfitSub').textContent = tt('rev_profit_sub');
+
+  const tb = document.getElementById('teamBtnTtl');
+  if (tb) tb.textContent = tt('team_manage');
+  const th = document.getElementById('teamHdrTitle');
+  if (th) th.textContent = tt('team_title');
+  const te = document.getElementById('teamEditBtn');
+  if (te) te.textContent = tt('team_edit');
+  const tin = document.getElementById('teamInviteBtnT');
+  if (tin) tin.textContent = tt('team_invite');
+
+  const gTtl = document.getElementById('settingsGoogleAuthTtl');
+  const gSub = document.getElementById('settingsGoogleAuthSub');
+  if (gTtl) gTtl.textContent = tt('settings_google_login');
+  if (gSub) gSub.textContent = tt('settings_google_out');
+  const lrT = document.getElementById('loginReqModalTtl');
+  const lrB = document.getElementById('loginReqModalBody');
+  const lrO = document.getElementById('loginReqOpenSettings');
+  const lrC = document.getElementById('loginReqModalClose');
+  if (lrT) lrT.textContent = tt('login_req_title');
+  if (lrB) lrB.textContent = tt('login_req_body');
+  if (lrO) lrO.textContent = tt('login_req_open_settings');
+  if (lrC) lrC.textContent = tt('login_req_close');
+
+  // Analysis (revTabYear)
+  const apT = document.getElementById('anaPlatformTtl');
+  const stT = document.getElementById('anaStatsTtl');
+  const cT  = document.getElementById('anaCostTtl');
+  const trT = document.getElementById('anaTrendTtl');
+  const ca  = document.getElementById('anaKpiAllLbl');
+  const cd  = document.getElementById('anaKpiDoneLbl');
+  const au  = document.getElementById('anaKpiAvgLbl');
+  const m1 = document.getElementById('anaMomLblAll');
+  const m2 = document.getElementById('anaMomLblDone');
+  const m3 = document.getElementById('anaMomLblAvg');
+  const bn = document.getElementById('anaBaseNote');
+  if (apT) apT.textContent = tt('ana_platform');
+  if (stT) stT.textContent = tt('ana_stats');
+  if (cT)  cT.textContent  = tt('ana_cost_breakdown');
+  if (trT) trT.textContent = tt('ana_trend');
+  if (bn)  bn.textContent  = tt('ana_base_note');
+  if (ca)  ca.textContent  = tt('ana_count_all');
+  if (cd)  cd.textContent  = tt('ana_count_done');
+  if (au)  au.textContent  = tt('ana_avg_unit');
+  const mom = tt('ana_mom');
+  if (m1) m1.textContent = mom;
+  if (m2) m2.textContent = mom;
+  if (m3) m3.textContent = mom;
 
   document.querySelectorAll('#tmplModal .fg label')[0].textContent = tt('tmpl_title');
   document.querySelectorAll('#tmplModal .fg label')[1].textContent = tt('tmpl_body');
@@ -1520,6 +2792,14 @@ function applyAllLocalizations() {
   if (ttOpen) {
     document.getElementById('tmplModalTtl').textContent = editingTemplateId ? tt('tmpl_modal_edit') : tt('tmpl_modal_add');
   }
+  if (document.getElementById('revOv').classList.contains('show')) renderRevenue();
+  if (document.getElementById('teamOv').classList.contains('show')) renderTeam();
+
+  import('./js/firebase-auth.mjs')
+    .then((m) => {
+      updateGoogleAuthUi(m);
+    })
+    .catch(() => {});
 }
 
 // =========================================================
@@ -1639,7 +2919,18 @@ async function loadNativeOrLocal() {
       S.folders   = d.folders   || JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
       S.accounts  = d.accounts  || [];
       S.templates = d.templates || [];
-      try { localStorage.setItem(SK, JSON.stringify({ folders:S.folders, accounts:S.accounts, templates:S.templates })); } catch {}
+      // 旧データではmetaが無い/空のことがあるので、localStorageのmetaを優先的に救済する
+      let meta = (d.meta && typeof d.meta === 'object') ? d.meta : {};
+      if (!Object.keys(meta || {}).length) {
+        try {
+          const ls = JSON.parse(localStorage.getItem(SK) || '{}');
+          if (ls && ls.meta && typeof ls.meta === 'object') meta = ls.meta;
+        } catch {}
+      }
+      S.meta = meta || {};
+      try { localStorage.setItem(SK, JSON.stringify({ folders:S.folders, accounts:S.accounts, templates:S.templates, meta: S.meta || {} })); } catch {}
+      // upgrade native file to latest schema (with meta)
+      try { await writeNativeDataFile(getBackupJSON()); } catch {}
       return;
     }
     load();
@@ -1726,8 +3017,18 @@ function isNativeApp() {
   }
 }
 
+function cssVar(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    const s = String(v || '').trim();
+    return s || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function getBackupJSON() {
-  return JSON.stringify({ folders: S.folders, accounts: S.accounts, templates: S.templates });
+  return JSON.stringify({ folders: S.folders, accounts: S.accounts, templates: S.templates, meta: S.meta || {} });
 }
 
 function applyBackupJSON(jsonText) {
@@ -1740,6 +3041,7 @@ function applyBackupJSON(jsonText) {
   S.folders = folders;
   S.accounts = accounts;
   S.templates = templates;
+  S.meta = d.meta && typeof d.meta === 'object' ? d.meta : (S.meta || {});
   save();
   renderTree();
   renderMain();
@@ -1764,6 +3066,7 @@ function mergeBackupObject(d) {
   S.folders = mergeById(S.folders, d.folders);
   S.accounts = mergeById(S.accounts, d.accounts);
   S.templates = mergeById(S.templates || [], d.templates || []);
+  if (d.meta && typeof d.meta === 'object') S.meta = { ...(S.meta || {}), ...d.meta };
   save();
   renderTree();
   renderMain();
@@ -2014,6 +3317,9 @@ function cardHTML(a) {
       ${safeUrl ? `<div class="d-row"><span class="d-lbl">${esc(tt('lbl_url'))}</span><a class="d-val d-link" href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer">${esc(safeUrl)}</a></div>` : ''}
       ${memo    ? `<div class="d-row"><span class="d-lbl">${esc(tt('lbl_memo'))}</span><span class="d-val">${esc(memo).replace(/\n/g,'<br>')}</span></div>` : ''}
       ${S.searchQuery ? `<div class="d-row"><span class="d-lbl">${esc(tt('lbl_folder'))}</span><span class="d-val">${esc(folderPath(a.folderId))}</span></div>` : ''}
+      ${(a.project && a.project.rewardYen != null && a.project.rewardYen !== '') ? `<div class="d-row"><span class="d-lbl">${esc(tt('proj_reward'))}</span><span class="d-val">${esc(formatYen(a.project.rewardYen))}</span></div>` : ''}
+      ${(a.project && a.project.costYen != null && a.project.costYen !== '') ? `<div class="d-row"><span class="d-lbl">${esc(tt('proj_cost'))}</span><span class="d-val">${esc(formatYen(a.project.costYen))}</span></div>` : ''}
+      ${(a.project && Array.isArray(a.project.platforms) && a.project.platforms.length) ? `<div class="d-row"><span class="d-lbl">${esc(tt('proj_platforms'))}</span><span class="d-val">${esc(a.project.platforms.map(k => tt('platform_' + k)).join(' / '))}</span></div>` : ''}
       <div class="d-btns">
         <button class="d-btn btn-proj" style="grid-column:1/-1" data-act="proj" data-aid="${esc(a.id)}">${esc(tt('card_proj'))}</button>
         <button class="d-btn btn-edit"  data-act="edit"   data-aid="${esc(a.id)}">${esc(tt('card_edit'))}</button>
@@ -2023,6 +3329,65 @@ function cardHTML(a) {
       </div>
     </div>
   </div>`;
+}
+
+function formatYen(v) {
+  const n = typeof v === 'number' ? v : Number(String(v).replace(/[^\d]/g, ''));
+  if (!Number.isFinite(n)) return '';
+  try { return '¥' + Math.round(n).toLocaleString('ja-JP'); } catch { return '¥' + Math.round(n); }
+}
+
+function expenseSumYen(p) {
+  if (!p) return 0;
+  // expenses が存在するなら（空でも）内訳合計を採用する
+  const hasBreakdown = !!p && Object.prototype.hasOwnProperty.call(p, 'expenses') && Array.isArray(p.expenses);
+  const arr = hasBreakdown ? p.expenses : [];
+  const s = arr.reduce((m, x) => m + (Number(x?.amountYen || 0) || 0), 0);
+  if (hasBreakdown) return s;
+  // 互換: 旧データ(costYen)は内訳が未導入の時だけ使う
+  return Number(p.costYen || 0) || 0;
+}
+
+function renderProjectExpenses(p) {
+  const wrap = document.getElementById('projExpenses');
+  if (!wrap) return;
+  const arr = Array.isArray(p.expenses) ? p.expenses : [];
+  if (!arr.length) {
+    wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;padding:6px 2px">${esc(tt('proj_expense_add'))}</div>`;
+    return;
+  }
+  wrap.innerHTML = arr.map((x) => `
+    <div class="copy-row" style="margin-top:8px">
+      <input type="text" class="fi" data-exp-name="${esc(x.id)}" placeholder="${esc(tt('proj_expense_ph'))}" value="${esc(x.name || '')}">
+      <input type="number" class="fi" data-exp-amt="${esc(x.id)}" placeholder="${esc(tt('proj_expense_amt_ph'))}" value="${esc((x.amountYen == null || x.amountYen === 0) ? '' : String(x.amountYen))}" inputmode="numeric" min="0" step="1" style="max-width:120px">
+      <button class="copy-btn" data-exp-del="${esc(x.id)}" aria-label="削除" style="background:rgba(255,59,48,.12);color:#FF3B30">✕</button>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('[data-exp-del]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.expDel;
+      p.expenses = (p.expenses || []).filter((e) => e.id !== id);
+      document.getElementById('projCost').value = String(expenseSumYen(p) || '');
+      renderProjectExpenses(p);
+    });
+  });
+  const sync = () => {
+    const names = [...wrap.querySelectorAll('[data-exp-name]')];
+    const amts  = [...wrap.querySelectorAll('[data-exp-amt]')];
+    const mapN = Object.fromEntries(names.map(i => [i.dataset.expName, i.value]));
+    const mapA = Object.fromEntries(amts.map(i => [i.dataset.expAmt, i.value]));
+    p.expenses = (p.expenses || []).map((e) => {
+      const raw = String(mapA[e.id] || '').trim();
+      const n = raw ? Number(raw.replace(/[^\d]/g, '')) : null;
+      return {
+        ...e,
+        name: String(mapN[e.id] || '').trim(),
+        amountYen: Number.isFinite(n) ? Math.max(0, Math.round(n)) : null
+      };
+    });
+    document.getElementById('projCost').value = String(expenseSumYen(p) || '');
+  };
+  wrap.querySelectorAll('input').forEach((inp) => inp.addEventListener('input', sync));
 }
 
 function bindCards() {
@@ -2431,6 +3796,21 @@ function hideModal(id) {
   }
 }
 
+function updateGoogleAuthUi(mod) {
+  const ttl = document.getElementById('settingsGoogleAuthTtl');
+  const sub = document.getElementById('settingsGoogleAuthSub');
+  if (!ttl || !sub) return;
+  const u = mod && typeof mod.getCurrentUser === 'function' ? mod.getCurrentUser() : null;
+  if (u) {
+    const label = (u.email || u.displayName || '').trim();
+    ttl.textContent = label || tt('settings_google_login');
+    sub.textContent = tt('settings_google_tap_logout');
+  } else {
+    ttl.textContent = tt('settings_google_login');
+    sub.textContent = tt('settings_google_out');
+  }
+}
+
 function initModals() {
   // Undo
   const ub = document.getElementById('undoBtn');
@@ -2443,7 +3823,7 @@ function initModals() {
   });
 
   // Close on backdrop tap
-  ['folderModal','accModal','moveModal','projModal','tmplModal','backupModal'].forEach(id => {
+  ['folderModal','accModal','moveModal','projModal','tmplModal','backupModal','loginRequiredModal'].forEach(id => {
     document.getElementById(id).addEventListener('click', e => {
       if (e.target === document.getElementById(id)) hideModal(id);
     });
@@ -2507,16 +3887,77 @@ function initModals() {
   document.getElementById('tmplSave').addEventListener('click', saveTemplate);
   document.getElementById('settingsGoTemplates').addEventListener('click', () => setSettingsTab('templates'));
   document.getElementById('settingsGoData').addEventListener('click', () => setSettingsTab('data'));
+  document.getElementById('settingsGoRevenue').addEventListener('click', () => setSettingsTab('revenue'));
+
+  const googleAuthRow = document.getElementById('settingsGoogleAuthRow');
+  if (googleAuthRow) {
+    const goGoogleAuth = async () => {
+      try {
+        const m = await import('./js/firebase-auth.mjs');
+        if (!m.hasFirebaseConfig()) {
+          toast(tt('google_login_config_missing'));
+          return;
+        }
+        await m.initFirebase();
+        if (m.getCurrentUser()) {
+          if (!confirm(tt('google_logout_confirm'))) return;
+          await m.signOutGoogle();
+          toast(tt('google_logout_ok'));
+          updateGoogleAuthUi(m);
+        } else {
+          await m.signInWithGoogle();
+          await m.waitForInitialAuth();
+          if (m.getCurrentUser()) toast(tt('google_login_ok'));
+          updateGoogleAuthUi(m);
+        }
+      } catch (e) {
+        console.error(e);
+        toast(tt('google_login_error'));
+      }
+    };
+    googleAuthRow.addEventListener('click', goGoogleAuth);
+    googleAuthRow.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        goGoogleAuth();
+      }
+    });
+  }
+  const loginReqClose = document.getElementById('loginReqModalClose');
+  if (loginReqClose) loginReqClose.addEventListener('click', () => hideModal('loginRequiredModal'));
+  const loginReqOpen = document.getElementById('loginReqOpenSettings');
+  if (loginReqOpen) {
+    loginReqOpen.addEventListener('click', () => {
+      hideModal('loginRequiredModal');
+      openSettings();
+    });
+  }
   document.getElementById('settingsGoTerms').addEventListener('click', () => setSettingsTab('terms'));
   document.getElementById('settingsGoPrivacy').addEventListener('click', () => setSettingsTab('privacy'));
   document.getElementById('settingsGoGuide').addEventListener('click', () => setSettingsTab('guide'));
   document.getElementById('langBtnJa').addEventListener('click', () => setAppLang('ja'));
   document.getElementById('langBtnEn').addEventListener('click', () => setAppLang('en'));
+  document.getElementById('revBasisShoot').addEventListener('click', () => setRevenueBasis('shoot'));
+  document.getElementById('revBasisDeadline').addEventListener('click', () => setRevenueBasis('deadline'));
+  document.getElementById('revBasisNext').addEventListener('click', () => setRevenueBasis('deadlineNext'));
 
   // Data management / backup
   document.getElementById('backupCopyBtn').addEventListener('click', () => {
     const json = getBackupJSON();
     navigator.clipboard.writeText(json).then(() => toast(tt('toast_json_copied'))).catch(() => toast(tt('toast_copy_fail')));
+  });
+
+  // Project platforms (multi-select)
+  document.querySelectorAll('#projModal [data-pl]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      btn.classList.toggle('on');
+      const a = account(projAccountId);
+      if (a && a.project) {
+        const list = [...document.querySelectorAll('#projModal [data-pl].on')].map(b => b.dataset.pl).filter(Boolean);
+        a.project.platforms = list;
+      }
+    });
   });
 
   document.getElementById('backupExportBtn').addEventListener('click', async () => {
@@ -2625,6 +4066,145 @@ function initModals() {
   // Schedule
   document.getElementById('schedBtn').addEventListener('click', openSchedule);
   document.getElementById('schedClose').addEventListener('click', closeSchedule);
+
+  // Revenue
+  document.getElementById('moneyBtn').addEventListener('click', openRevenue);
+  document.getElementById('revClose').addEventListener('click', closeRevenue);
+  document.getElementById('revPrev').addEventListener('click', () => { revMonthKey = shiftMonthKey(revMonthKey || monthKeyFromDate(new Date()), -1); renderRevenue(); });
+  document.getElementById('revNext').addEventListener('click', () => { revMonthKey = shiftMonthKey(revMonthKey || monthKeyFromDate(new Date()), 1); renderRevenue(); });
+  const anaPrev = document.getElementById('anaPrev');
+  const anaNext = document.getElementById('anaNext');
+  if (anaPrev) anaPrev.addEventListener('click', () => { revMonthKey = shiftMonthKey(revMonthKey || monthKeyFromDate(new Date()), -1); renderRevenue(); });
+  if (anaNext) anaNext.addEventListener('click', () => { revMonthKey = shiftMonthKey(revMonthKey || monthKeyFromDate(new Date()), 1); renderRevenue(); });
+  document.getElementById('revTabMonth').addEventListener('click', () => { revTab = 'month'; renderRevenue(); });
+  document.getElementById('revTabYear').addEventListener('click', () => { revTab = 'year'; renderRevenue(); });
+  document.getElementById('revBudget').addEventListener('input', () => {
+    const k = revMonthKey || monthKeyFromDate(new Date());
+    const raw = String(document.getElementById('revBudget').value || '').trim();
+    const n = raw ? Number(raw.replace(/[^\d]/g, '')) : 0;
+    const budgets = getRevenueBudgets();
+    budgets[k] = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+    save();
+    renderRevenue();
+  });
+
+  // Team
+  const teamBtn = document.getElementById('teamBtn');
+  if (teamBtn) teamBtn.addEventListener('click', openTeam);
+  const teamListClose = document.getElementById('teamListClose');
+  if (teamListClose) teamListClose.addEventListener('click', closeTeamList);
+  const teamListAdd = document.getElementById('teamListAdd');
+  if (teamListAdd) teamListAdd.addEventListener('click', async () => {
+    const user = await getLoggedInUserOrPrompt();
+    if (!user) return;
+    const name = prompt('チーム名を入力してください', '新しいチーム');
+    if (!name || !name.trim()) return;
+    try {
+      const api = await getCloudTeamApi();
+      const team = await api.createTeam({ user, name: name.trim() });
+      cloudTeams = await api.listMyTeams({ user });
+      cloudSelectedTeam = team;
+      renderTeamList();
+      toast('チームを作成しました');
+    } catch (e) {
+      console.error(e);
+      toast('チームを作成できませんでした');
+    }
+  });
+  const teamEditClose = document.getElementById('teamEditClose');
+  if (teamEditClose) teamEditClose.addEventListener('click', closeTeamEdit);
+  const teamReqClose = document.getElementById('teamReqClose');
+  if (teamReqClose) teamReqClose.addEventListener('click', closeTeamReq);
+  const teamClose = document.getElementById('teamClose');
+  if (teamClose) teamClose.addEventListener('click', closeTeam);
+  const teamEdit = document.getElementById('teamEditBtn');
+  if (teamEdit) teamEdit.addEventListener('click', () => openTeamEdit());
+  // Fallback: ensure tap works even if the button is re-rendered or listener missed at init
+  document.addEventListener('click', (e) => {
+    const t = e.target && e.target.closest ? e.target.closest('#teamEditBtn') : null;
+    if (!t) return;
+    openTeamEdit();
+  });
+  const reqBtn = document.getElementById('teamReqBtn');
+  if (reqBtn) reqBtn.addEventListener('click', () => openTeamReq());
+  const tTabs = [
+    ['members','teamTabMembers'],
+    ['projects','teamTabProjects'],
+    ['analytics','teamTabAnalytics'],
+    ['activity','teamTabActivity'],
+  ];
+  tTabs.forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', () => { setTeamTab(k); });
+  });
+  const inv = document.getElementById('teamInviteBtn');
+  if (inv) inv.addEventListener('click', () => toast(tt('toast_coming_soon')));
+  const actDays = document.getElementById('teamActivityDays');
+  if (actDays) actDays.addEventListener('click', (e) => {
+    const rowBtn = e.target && e.target.closest ? e.target.closest('.team-day-row') : null;
+    if (!rowBtn) return;
+    const wrap = rowBtn.closest('.team-day');
+    if (!wrap) return;
+    wrap.classList.toggle('open');
+  });
+
+  const trbShoot2 = document.getElementById('teamRevBasisShoot2');
+  const trbDead2 = document.getElementById('teamRevBasisDeadline2');
+  const trbNext2 = document.getElementById('teamRevBasisNext2');
+  if (trbShoot2) trbShoot2.addEventListener('click', () => { setTeamRevenueBasis('shoot'); renderTeam(); });
+  if (trbDead2) trbDead2.addEventListener('click', () => { setTeamRevenueBasis('deadline'); renderTeam(); });
+  if (trbNext2) trbNext2.addEventListener('click', () => { setTeamRevenueBasis('deadlineNext'); renderTeam(); });
+
+  const invLinkBtn = document.getElementById('teamInviteLinkBtn');
+  if (invLinkBtn) invLinkBtn.addEventListener('click', () => issueInviteLink());
+  const invCopy = document.getElementById('teamInviteLinkCopy');
+  if (invCopy) invCopy.addEventListener('click', () => copyInviteLink());
+
+  const permRevSelf = document.getElementById('teamPermRevSelf');
+  const permRevSelfAll = document.getElementById('teamPermRevSelfAll');
+  const permRevAll = document.getElementById('teamPermRevAll');
+  if (permRevSelf) permRevSelf.addEventListener('click', () => setTeamSetting('rewardVisibility','self'));
+  if (permRevSelfAll) permRevSelfAll.addEventListener('click', () => setTeamSetting('rewardVisibility','self_plus_total'));
+  if (permRevAll) permRevAll.addEventListener('click', () => setTeamSetting('rewardVisibility','all'));
+
+  const permAsAdmin = document.getElementById('teamPermAssignAdmin');
+  const permAsOwner = document.getElementById('teamPermAssignOwner');
+  if (permAsAdmin) permAsAdmin.addEventListener('click', () => setTeamSetting('assignPermission','admin_only'));
+  if (permAsOwner) permAsOwner.addEventListener('click', () => setTeamSetting('assignPermission','owner_set'));
+
+  const permDelAdmin = document.getElementById('teamPermDeleteAdmin');
+  const permDelAll = document.getElementById('teamPermDeleteAll');
+  if (permDelAdmin) permDelAdmin.addEventListener('click', () => setTeamSetting('deletePermission','admin_only'));
+  if (permDelAll) permDelAll.addEventListener('click', () => setTeamSetting('deletePermission','all_edit'));
+
+  const teamEditSave = document.getElementById('teamEditSave');
+  if (teamEditSave) teamEditSave.addEventListener('click', () => saveTeamEdits());
+  const teamDissolveBtn = document.getElementById('teamDissolveBtn');
+  if (teamDissolveBtn) teamDissolveBtn.addEventListener('click', () => dissolveSelectedTeam());
+
+  // Team revenue (inside team tab)
+  const trPrev = document.getElementById('teamRevPrev');
+  const trNext = document.getElementById('teamRevNext');
+  if (trPrev) trPrev.addEventListener('click', () => { teamRevMonthKey = shiftMonthKey(teamRevMonthKey || monthKeyFromDate(new Date()), -1); renderTeamRevenue(); });
+  if (trNext) trNext.addEventListener('click', () => { teamRevMonthKey = shiftMonthKey(teamRevMonthKey || monthKeyFromDate(new Date()), 1); renderTeamRevenue(); });
+  const taPrev = document.getElementById('teamAnaPrev');
+  const taNext = document.getElementById('teamAnaNext');
+  if (taPrev) taPrev.addEventListener('click', () => { teamRevMonthKey = shiftMonthKey(teamRevMonthKey || monthKeyFromDate(new Date()), -1); renderTeamRevenue(); });
+  if (taNext) taNext.addEventListener('click', () => { teamRevMonthKey = shiftMonthKey(teamRevMonthKey || monthKeyFromDate(new Date()), 1); renderTeamRevenue(); });
+  const trM = document.getElementById('teamRevTabMonth');
+  const trY = document.getElementById('teamRevTabYear');
+  if (trM) trM.addEventListener('click', () => { teamRevTab = 'month'; renderTeamRevenue(); });
+  if (trY) trY.addEventListener('click', () => { teamRevTab = 'year'; renderTeamRevenue(); });
+  const trB = document.getElementById('teamRevBudget');
+  if (trB) trB.addEventListener('input', () => {
+    const k = teamRevMonthKey || monthKeyFromDate(new Date());
+    const raw = String(document.getElementById('teamRevBudget').value || '').trim();
+    const n = raw ? Number(raw.replace(/[^\d]/g, '')) : 0;
+    const budgets = getRevenueBudgets();
+    budgets[k] = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+    save();
+    renderTeamRevenue();
+  });
 
   // Folder buttons
   document.getElementById('sideAddFolder').addEventListener('click', () => openAddFolder());
@@ -2915,6 +4495,7 @@ function closeSettings() {
 
 const SETTINGS_TAB_KEYS = {
   home: 'settings_title',
+  revenue: 'settings_revenue_sec',
   templates: 'settings_templates_sec',
   data: 'settings_data_sec',
   terms: 'nav_terms',
@@ -2925,12 +4506,14 @@ const SETTINGS_TAB_KEYS = {
 function setSettingsTab(key) {
   settingsPanelKey = key;
   const home = key === 'home';
+  const isRev = key === 'revenue';
   const isT = key === 'templates';
   const isD = key === 'data';
   const isTerms = key === 'terms';
   const isPrivacy = key === 'privacy';
   const isGuide = key === 'guide';
   document.getElementById('paneSettingsHome')?.classList.toggle('show', home);
+  document.getElementById('paneRevenue')?.classList.toggle('show', isRev);
   document.getElementById('paneTemplates')?.classList.toggle('show', isT);
   document.getElementById('paneData')?.classList.toggle('show', isD);
   document.getElementById('paneTerms')?.classList.toggle('show', isTerms);
@@ -3051,11 +4634,20 @@ function saveTemplate() {
 // =========================================================
 // SORT
 // =========================================================
-const SORT_MODE_KEYS = ['priority', 'status', 'shoot', 'deadline', 'newest'];
+const SORT_MODE_KEYS = ['priority', 'status', 'reward', 'shoot', 'deadline', 'newest'];
 const STATUS_GRP_ORDER = ['相談中','保留中','決定済み','終了'];
 
 function applySortMode(accs) {
   switch (S.sortMode) {
+    case 'reward':
+      return [...accs].sort((a, b) => {
+        const ra = a.project && a.project.rewardYen != null ? Number(a.project.rewardYen) : null;
+        const rb = b.project && b.project.rewardYen != null ? Number(b.project.rewardYen) : null;
+        const va = Number.isFinite(ra) ? ra : -1;
+        const vb = Number.isFinite(rb) ? rb : -1;
+        if (va !== vb) return vb - va; // 高い順
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      });
     case 'newest':
       return [...accs].sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
     case 'shoot':
@@ -3268,16 +4860,34 @@ let projStatus    = null;
 function openProjectModal(aid) {
   projAccountId = aid;
   const a = account(aid);
-  const p = a.project || {};
+  if (!a.project) a.project = {};
+  const p = a.project;
   document.getElementById('projModalTtl').textContent = tt('proj_ttl_user', { user: a.username });
   document.getElementById('projName').value    = p.name         || '';
   document.getElementById('projShoot').value   = p.shootDate    || '';
   document.getElementById('projDeadline').value= p.deadline     || '';
+  document.getElementById('projReward').value  = p.rewardYen != null ? String(p.rewardYen) : '';
+  // costYen は互換用。内訳があれば合計で表示する
+  const costSum = expenseSumYen(p);
+  document.getElementById('projCost').value    = costSum ? String(costSum) : '';
   document.getElementById('projInstr').value   = p.instructions || '';
   document.getElementById('projTags').value    = p.tags         || '';
   document.getElementById('projMapUrl').value  = p.mapUrl       || '';
+  p.platforms = normalizePlatformList(p.platforms);
+  document.querySelectorAll('#projModal [data-pl]').forEach((btn) => {
+    const key = btn.dataset.pl;
+    btn.classList.toggle('on', p.platforms.includes(key));
+  });
   projStatus = p.status || null;
   renderProjStatus();
+  // expenses editor
+  if (!Array.isArray(p.expenses)) p.expenses = [];
+  renderProjectExpenses(p);
+  document.getElementById('projAddExpenseBtn').onclick = () => {
+    if (!Array.isArray(p.expenses)) p.expenses = [];
+    p.expenses.push({ id: uid(), name: '', amountYen: null });
+    renderProjectExpenses(p);
+  };
   showModal('projModal');
 }
 
@@ -3300,11 +4910,40 @@ function renderProjStatus() {
 function saveProject() {
   const a = account(projAccountId);
   if (!a) return;
+  const rewardRaw = String(document.getElementById('projReward').value || '').trim();
+  const rewardNum = rewardRaw ? Number(rewardRaw.replace(/[^\d]/g, '')) : null;
+  // expense breakdown (preferred)
+  const p0 = a.project || {};
+  const wrap = document.getElementById('projExpenses');
+  let expenses = Array.isArray(p0.expenses) ? p0.expenses : [];
+  if (wrap) {
+    const names = [...wrap.querySelectorAll('[data-exp-name]')];
+    const amts  = [...wrap.querySelectorAll('[data-exp-amt]')];
+    const mapN = Object.fromEntries(names.map(i => [i.dataset.expName, i.value]));
+    const mapA = Object.fromEntries(amts.map(i => [i.dataset.expAmt, i.value]));
+    expenses = expenses.map((e) => {
+      const raw = String(mapA[e.id] || '').trim();
+      const n = raw ? Number(raw.replace(/[^\d]/g, '')) : null;
+      return {
+        ...e,
+        name: String(mapN[e.id] || '').trim(),
+        amountYen: Number.isFinite(n) ? Math.max(0, Math.round(n)) : null
+      };
+    }).filter(e => e.name || e.amountYen);
+  }
+  // fallback total cost (legacy)
+  const costRaw = String(document.getElementById('projCost').value || '').trim();
+  const costNum = costRaw ? Number(costRaw.replace(/[^\d]/g, '')) : null;
+  const platforms = normalizePlatformList([...document.querySelectorAll('#projModal [data-pl].on')].map(b => b.dataset.pl).filter(Boolean));
   a.project = {
     status:       projStatus,
     name:         document.getElementById('projName').value.trim(),
     shootDate:    document.getElementById('projShoot').value,
     deadline:     document.getElementById('projDeadline').value,
+    rewardYen:    Number.isFinite(rewardNum) ? Math.max(0, Math.round(rewardNum)) : null,
+    costYen:      Number.isFinite(costNum) ? Math.max(0, Math.round(costNum)) : null,
+    expenses,
+    platforms,
     instructions: document.getElementById('projInstr').value.trim(),
     tags:         document.getElementById('projTags').value.trim(),
     mapUrl:       sanitizeUrl(document.getElementById('projMapUrl').value),
@@ -3312,6 +4951,1903 @@ function saveProject() {
   save(); renderTree(); renderMain();
   hideModal('projModal');
   toast(tt('toast_proj_saved'));
+}
+
+// =========================================================
+// REVENUE
+// =========================================================
+let revMonthKey = null;
+let revTab = 'month'; // 'month' | 'year' (label: graphs)
+const REV_CHART_META = new Map(); // canvasId -> meta
+function monthKeyFromDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+function parseMonthKey(k) {
+  const [y, m] = String(k).split('-').map(Number);
+  if (!y || !m) return new Date();
+  return new Date(y, m - 1, 1);
+}
+function formatAnalysisMonthTitle(k) {
+  const d = parseMonthKey(k);
+  if (getAppLang() === 'en') {
+    return d.toLocaleString('en-US', { month: 'long', year: 'numeric' }) + ' ▾';
+  }
+  return `${d.getFullYear()}年${d.getMonth() + 1}月 ▾`;
+}
+function shiftMonthKey(k, delta) {
+  const d = parseMonthKey(k);
+  d.setMonth(d.getMonth() + delta);
+  return monthKeyFromDate(d);
+}
+function projectMonthKey(a) {
+  const p = a.project || {};
+  const basis = getRevenueBasis();
+  const pick = (basis === 'shoot') ? (p.shootDate || p.deadline || a.createdAt)
+    : (basis === 'deadline' || basis === 'deadlineNext') ? (p.deadline || p.shootDate || a.createdAt)
+    : (p.deadline || p.shootDate || a.createdAt);
+  const d = pick ? new Date(pick) : new Date();
+  if (isNaN(d)) return monthKeyFromDate(new Date());
+  const mk = monthKeyFromDate(d);
+  if (basis === 'deadlineNext') return shiftMonthKey(mk, 1);
+  return mk;
+}
+function getRevenueBudgets() {
+  if (!S.meta) S.meta = {};
+  if (!S.meta.revenueBudgets) S.meta.revenueBudgets = {};
+  return S.meta.revenueBudgets;
+}
+
+function getRevenueBasis() {
+  if (!S.meta) S.meta = {};
+  const team = _selectedTeam && _selectedTeam();
+  const v = team && team.settings ? team.settings.revenueBasis : S.meta.revenueBasis;
+  return v === 'shoot' || v === 'deadline' || v === 'deadlineNext' ? v : 'deadline';
+}
+
+function setRevenueBasis(v) {
+  if (!S.meta) S.meta = {};
+  if (v !== 'shoot' && v !== 'deadline' && v !== 'deadlineNext') return;
+  // 互換：個人用はS.meta、チーム用は選択中チーム設定に保存
+  const team = _selectedTeam && _selectedTeam();
+  if (team) {
+    if (!team.settings) team.settings = {};
+    team.settings.revenueBasis = v;
+  } else {
+    S.meta.revenueBasis = v;
+  }
+  save();
+  applyAllLocalizations();
+}
+function openRevenue() {
+  if (!revMonthKey) revMonthKey = monthKeyFromDate(new Date());
+  renderRevenue();
+  document.getElementById('revOv').classList.add('show');
+}
+function closeRevenue() {
+  document.getElementById('revOv').classList.remove('show');
+}
+function _teamState() {
+  if (!S.meta) S.meta = {};
+  if (!S.meta.team) {
+    S.meta.team = {
+      name: 'HERACチーム',
+      mode: 'all',
+      members: [
+        { id:'m1', handle:'@vivian', role:'admin',  color:'#E04B7B', sales:130000, cases:3 },
+        { id:'m2', handle:'@jjbjb',  role:'member', color:'#2F86D9', sales:90000,  cases:3 },
+        { id:'m3', handle:'@jjbjb',  role:'member', color:'#22B8C7', sales:15000,  cases:2 },
+        { id:'m4', handle:'@ninni',  role:'member', color:'#4CAF50', sales:50000,  cases:2 },
+        { id:'m5', handle:'@snen',   role:'member', color:'#E04B7B', sales:50000,  cases:2 },
+      ],
+      activities: [
+        { handle:'@jjbjb', color:'#2F86D9', text:'さんが案件"YouTubeタイアップ"を、完了しました', time:'3分前' },
+        { handle:'@vivke', color:'#E04B7B', text:'さんが新品PRの案件が、未対応に追加されました', time:'15分前' },
+        { handle:'@vivke', color:'#E04B7B', text:'さんがチームに参加しました', time:'1日前' },
+      ],
+    };
+  }
+  if (!Array.isArray(S.meta.team.members)) S.meta.team.members = [];
+  if (!S.meta.team.members.length) S.meta.team.members.push({ id:'m1', handle:'@vivian', role:'admin', color:'#E04B7B', sales:130000, cases:3 });
+  if (!S.meta.team.activities) {
+    S.meta.team.activities = [
+      { handle:'@jjbjb', color:'#2F86D9', text:'さんが案件"YouTubeタイアップ"を、完了しました', time:'3分前' },
+      { handle:'@vivke', color:'#E04B7B', text:'さんが新品PRの案件が、未対応に追加されました', time:'15分前' },
+      { handle:'@vivke', color:'#E04B7B', text:'さんがチームに参加しました', time:'1日前' },
+    ];
+  }
+  // upgrade from single-default @you to demo team
+  if (S.meta.team.members.length === 1 && S.meta.team.members[0].handle === '@you') {
+    S.meta.team.members = [
+      { id:'m1', handle:'@vivian', role:'admin',  color:'#E04B7B', sales:130000, cases:3 },
+      { id:'m2', handle:'@jjbjb',  role:'member', color:'#2F86D9', sales:90000,  cases:3 },
+      { id:'m3', handle:'@jjbjb',  role:'member', color:'#22B8C7', sales:15000,  cases:2 },
+      { id:'m4', handle:'@ninni',  role:'member', color:'#4CAF50', sales:50000,  cases:2 },
+      { id:'m5', handle:'@snen',   role:'member', color:'#E04B7B', sales:50000,  cases:2 },
+    ];
+  }
+  if (S.meta.team.mode !== 'all' && S.meta.team.mode !== 'assign') S.meta.team.mode = 'all';
+  if (!S.meta.team.name) S.meta.team.name = 'HERACチーム';
+  return S.meta.team;
+}
+let teamTab = 'members';
+let teamRevMonthKey = null;
+let teamRevTab = 'month';
+let cloudTeamApi = null;
+let cloudTeamUnsubscribe = null;
+let cloudTeams = [];
+let cloudSelectedTeam = null;
+let cloudTeamMembers = [];
+let cloudTeamActivity = [];
+let cloudTeamJoinRequests = [];
+// 仮：ログイン概念がまだ無いので、デモの管理者ハンドルを「自分」として扱う
+const CURRENT_HANDLE = '@vivian';
+function isTeamAdmin(team) {
+  if (!team) return false;
+  if (team.myRole) return team.myRole === 'admin';
+  if (team.createdBy && String(team.createdBy).trim() === CURRENT_HANDLE) return true;
+  const ms = Array.isArray(team.members) ? team.members : [];
+  const me = ms.find(m => String(m.handle || '').trim() === CURRENT_HANDLE);
+  return !!(me && me.role === 'admin');
+}
+
+async function getCloudTeamApi() {
+  if (cloudTeamApi) return cloudTeamApi;
+  cloudTeamApi = await import('./js/team-cloud.mjs');
+  return cloudTeamApi;
+}
+
+async function getLoggedInUserOrPrompt() {
+  const auth = await import('./js/firebase-auth.mjs');
+  await auth.initFirebase();
+  await auth.waitForInitialAuth();
+  const user = auth.getCurrentUser();
+  if (user) return user;
+  document.getElementById('loginRequiredModal').classList.add('show');
+  return null;
+}
+
+function stopCloudTeamListener() {
+  if (cloudTeamUnsubscribe) {
+    cloudTeamUnsubscribe();
+    cloudTeamUnsubscribe = null;
+  }
+}
+
+function _ensureTeamSettings(team) {
+  if (!team) return {};
+  if (!team.settings) team.settings = {};
+  const s = team.settings;
+  if (!s.rewardVisibility) s.rewardVisibility = 'self';
+  if (!s.assignPermission) s.assignPermission = 'admin_only';
+  if (!Array.isArray(s.assignOwners)) s.assignOwners = [];
+  if (!s.deletePermission) s.deletePermission = 'admin_only';
+  if (!s.revenueBasis) s.revenueBasis = 'deadline';
+  if (!Array.isArray(s.joinRequests)) s.joinRequests = [];
+  return s;
+}
+
+function setTeamSetting(key, value) {
+  const team = _selectedTeam();
+  if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
+  const s = _ensureTeamSettings(team);
+  s[key] = value;
+  save();
+  renderTeam();
+  renderTeamEditControls();
+}
+
+function setTeamRevenueBasis(v) {
+  if (v !== 'shoot' && v !== 'deadline' && v !== 'deadlineNext') return;
+  setTeamSetting('revenueBasis', v);
+  applyAllLocalizations();
+}
+
+function renderTeamEditControls() {
+  const team = _selectedTeam();
+  if (!team) return;
+  const s = _ensureTeamSettings(team);
+  const on = (id, cond) => { const el = document.getElementById(id); if (el) el.classList.toggle('on', !!cond); };
+  on('teamPermRevSelf', s.rewardVisibility === 'self');
+  on('teamPermRevSelfAll', s.rewardVisibility === 'self_plus_total');
+  on('teamPermRevAll', s.rewardVisibility === 'all');
+  on('teamPermAssignAdmin', s.assignPermission === 'admin_only');
+  on('teamPermAssignOwner', s.assignPermission === 'owner_set');
+  on('teamPermDeleteAdmin', s.deletePermission === 'admin_only');
+  on('teamPermDeleteAll', s.deletePermission === 'all_edit');
+
+  on('teamRevBasisShoot2', s.revenueBasis === 'shoot');
+  on('teamRevBasisDeadline2', s.revenueBasis === 'deadline');
+  on('teamRevBasisNext2', s.revenueBasis === 'deadlineNext');
+
+  const owWrap = document.getElementById('teamAssignOwnersWrap');
+  const owList = document.getElementById('teamAssignOwnersList');
+  if (owWrap) owWrap.style.display = (s.assignPermission === 'owner_set') ? '' : 'none';
+  if (owList) {
+    const ms = Array.isArray(team.members) ? team.members : [];
+    const sel = Array.isArray(s.assignOwners) ? s.assignOwners : [];
+    owList.innerHTML = ms.map(m => {
+      const h = String(m.handle || '').trim();
+      if (!h) return '';
+      const checked = sel.includes(h) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 2px;border-top:.5px solid var(--sep);font-weight:900;color:var(--txt2);font-size:12px">
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(h)}</span>
+        <input type="checkbox" data-assign-owner="${esc(h)}" ${checked} />
+      </label>`;
+    }).join('') || `<div style="text-align:center;color:var(--txt3);font-weight:900;font-size:12px;padding:6px 0">${esc(tt('ana_none'))}</div>`;
+    owList.querySelectorAll('[data-assign-owner]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const h = String(cb.dataset.assignOwner || '').trim();
+        if (!h) return;
+        const team2 = _selectedTeam();
+        if (!team2 || !isTeamAdmin(team2)) { toast('管理者のみ操作できます'); return; }
+        const s2 = _ensureTeamSettings(team2);
+        const cur = Array.isArray(s2.assignOwners) ? s2.assignOwners.slice() : [];
+        const want = !!cb.checked;
+        const next = want ? Array.from(new Set([...cur, h])) : cur.filter(x => x !== h);
+        s2.assignOwners = next;
+        save();
+      });
+    });
+  }
+}
+
+async function issueInviteLink() {
+  const team = _selectedTeam();
+  if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
+  try {
+    const user = await getLoggedInUserOrPrompt();
+    if (!user) return;
+    const api = await getCloudTeamApi();
+    const invite = await api.createInvite({ user, teamId: team.id });
+    if (!team.settings) team.settings = {};
+    team.settings.inviteToken = invite.id;
+    team.settings.inviteCode = invite.code;
+    const url = buildTeamInviteUrl(team.id, invite.id);
+    const box = document.getElementById('teamInviteLinkBox');
+    const txt = document.getElementById('teamInviteLinkText');
+    if (box) box.style.display = '';
+    if (txt) txt.textContent = `${invite.code} / ${url}`;
+    shareInviteLink(url);
+  } catch (e) {
+    console.error(e);
+    toast('招待を作成できませんでした');
+  }
+}
+
+function copyInviteLink() {
+  const team = _selectedTeam();
+  const token = team && team.settings ? team.settings.inviteToken : '';
+  if (!token) { toast('先に招待リンクを発行してください'); return; }
+  const url = buildTeamInviteUrl(team.id, token);
+  navigator.clipboard.writeText(url).then(() => toast(tt('toast_copy_ok'))).catch(() => toast(tt('toast_copy_fail')));
+}
+
+function buildTeamInviteUrl(teamId, token) {
+  const base = (location && location.origin ? location.origin : '') + (location && location.pathname ? location.pathname : '');
+  const u = new URL(base, location && location.origin ? location.origin : undefined);
+  u.searchParams.set('team_join', String(teamId || ''));
+  u.searchParams.set('token', String(token || ''));
+  return u.toString();
+}
+
+async function shareInviteLink(url) {
+  const text = `${url}\nこのリンクから参加をリクエストできます\nチーム参加にはGoogleログインが必須です`;
+  try {
+    if (isNativeApp()) {
+      const { Share } = getPlugins();
+      if (!Share) throw new Error('Share not available');
+      await Share.share({ title: '招待リンク', text, dialogTitle: '共有' });
+    } else if (navigator.share) {
+      await navigator.share({ text });
+    } else {
+      await navigator.clipboard.writeText(url);
+    }
+    toast('共有しました');
+  } catch {
+    toast('共有できませんでした');
+  }
+}
+
+function findTeamByInvite(teamId, token) {
+  const ts = _teamsState();
+  const t = (ts.teams || []).find(x => String(x.id) === String(teamId));
+  if (!t || !t.settings || !t.settings.inviteToken) return null;
+  if (String(t.settings.inviteToken) !== String(token)) return null;
+  return t;
+}
+
+function initTeamJoinFromUrl() {
+  try {
+    const params = new URLSearchParams(location.search || '');
+    const teamId = params.get('team_join');
+    const token = params.get('token');
+    if (!teamId || !token) return;
+
+    // show join modal
+    const nm = document.getElementById('teamJoinTeamName');
+    if (nm) nm.textContent = 'チームに参加';
+    showModal('teamJoinModal');
+
+    const cancel = document.getElementById('teamJoinCancel');
+    const req = document.getElementById('teamJoinRequestBtn');
+    if (cancel) cancel.onclick = () => hideModal('teamJoinModal');
+    if (req) req.onclick = async () => {
+      await requestJoinTeam(teamId, token);
+      hideModal('teamJoinModal');
+    };
+  } catch {}
+}
+
+async function requestJoinTeam(teamId, token) {
+  try {
+    const user = await getLoggedInUserOrPrompt();
+    if (!user) return;
+    const api = await getCloudTeamApi();
+    await api.requestJoinTeam({ user, teamId, inviteId: token });
+    toast('参加リクエストを送信しました');
+  } catch (e) {
+    console.error(e);
+    toast('招待リンクが無効です');
+  }
+}
+
+function openTeamEdit() {
+  const team = _selectedTeam();
+  if (!team || !isTeamAdmin(team)) { toast('チーム編集は管理者のみ権限があります'); return; }
+  const ov = document.getElementById('teamEditOv');
+  if (!ov) return;
+  ov.classList.add('show');
+  const body = document.querySelector('#teamEditOv .team-body');
+  if (body) body.scrollTop = 0;
+  const name = document.getElementById('teamEditName');
+  if (name) name.value = team.name || '';
+  renderTeamEditMembers();
+  renderTeamEditControls();
+  const box = document.getElementById('teamInviteLinkBox');
+  const txt = document.getElementById('teamInviteLinkText');
+  const token = team.settings && team.settings.inviteToken ? team.settings.inviteToken : '';
+  if (box) box.style.display = token ? '' : 'none';
+  if (txt) txt.textContent = token || '';
+}
+
+function openTeamReq() {
+  const team = _selectedTeam();
+  if (!team) return;
+  const ov = document.getElementById('teamReqOv');
+  if (!ov) return;
+  ov.classList.add('show');
+  const body = document.querySelector('#teamReqOv .team-body');
+  if (body) body.scrollTop = 0;
+  renderTeamReqList();
+}
+
+function closeTeamReq() {
+  const ov = document.getElementById('teamReqOv');
+  if (ov) ov.classList.remove('show');
+}
+
+function closeTeamEdit() {
+  const ov = document.getElementById('teamEditOv');
+  if (ov) ov.classList.remove('show');
+}
+
+function renderTeamEditMembers() {
+  const team = _selectedTeam();
+  const wrap = document.getElementById('teamEditMembers');
+  if (!wrap || !team) return;
+  const ms = Array.isArray(team.members) ? team.members : [];
+  wrap.innerHTML = ms.map(m => {
+    const h = String(m.handle || '').trim() || '(no id)';
+    const role = (m.role === 'admin') ? '管理者' : 'メンバー';
+    const canKick = isTeamAdmin(team) && h !== CURRENT_HANDLE;
+    return `<div class="team-mem-item">
+      <div class="team-mem-l">
+        <div class="team-mem-h">${esc(h)}</div>
+        <div class="team-mem-r">${esc(role)}</div>
+      </div>
+      ${canKick ? `<button type="button" class="team-kick" data-kick="${esc(h)}">退会</button>` : `<span style="min-width:54px"></span>`}
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-kick]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const h = String(btn.dataset.kick || '').trim();
+      if (!h) return;
+      kickMemberFromSelectedTeam(h);
+    });
+  });
+}
+
+function renderTeamReqList() {
+  const team = _selectedTeam();
+  const wrap = document.getElementById('teamReqList');
+  if (!wrap || !team) return;
+  const s = _ensureTeamSettings(team);
+  const reqs = cloudTeamJoinRequests.length ? cloudTeamJoinRequests.filter(r => r.status === 'pending') : (Array.isArray(s.joinRequests) ? s.joinRequests : []);
+  if (!reqs.length) {
+    wrap.innerHTML = `<div style="text-align:center;color:var(--txt3);font-weight:900;font-size:12px;padding:6px 0">${esc(tt('ana_none'))}</div>`;
+    return;
+  }
+  const can = isTeamAdmin(team);
+  wrap.innerHTML = reqs.map(r => {
+    const h = String(r.handle || r.email || r.uid || '').trim() || '(unknown)';
+    const gname = String(r.googleName || r.displayName || '').trim() || h;
+    return `<div class="team-mem-item">
+      <div class="team-mem-l">
+        <div class="team-mem-h">${esc(gname)}</div>
+        <div class="team-mem-r">${esc(h)}</div>
+      </div>
+      ${can ? `<div style="display:flex;gap:8px;flex-shrink:0">
+        <button type="button" class="team-kick" data-approve="${esc(r.id)}">承認</button>
+        <button type="button" class="team-kick" data-deny="${esc(r.id)}">却下</button>
+      </div>` : `<button type="button" class="team-kick" disabled style="opacity:.45">承認</button>`}
+    </div>`;
+  }).join('');
+
+  if (can) {
+    wrap.querySelectorAll('[data-approve]').forEach(btn => {
+      btn.addEventListener('click', () => approveJoinRequest(btn.dataset.approve));
+    });
+    wrap.querySelectorAll('[data-deny]').forEach(btn => {
+      btn.addEventListener('click', () => denyJoinRequest(btn.dataset.deny));
+    });
+  } else {
+    wrap.querySelectorAll('button[disabled]').forEach(btn => {
+      btn.addEventListener('click', () => toast('管理者のみ対応できます'));
+    });
+  }
+}
+
+async function approveJoinRequest(reqId) {
+  const team = _selectedTeam();
+  if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
+  if (cloudSelectedTeam) {
+    try {
+      const user = await getLoggedInUserOrPrompt();
+      if (!user) return;
+      const api = await getCloudTeamApi();
+      const req = cloudTeamJoinRequests.find(x => String(x.id) === String(reqId));
+      await api.approveJoinRequest({ user, teamId: cloudSelectedTeam.id, requestUid: req?.uid || reqId });
+      toast('承認しました');
+      return;
+    } catch (e) {
+      console.error(e);
+      toast('承認できませんでした');
+      return;
+    }
+  }
+  const s = _ensureTeamSettings(team);
+  const reqs = s.joinRequests || [];
+  const r = reqs.find(x => String(x.id) === String(reqId));
+  if (!r) return;
+  const handle = String(r.handle || '').trim();
+  if (handle) {
+    const ms = Array.isArray(team.members) ? team.members : [];
+    if (!ms.some(m => String(m.handle||'').trim() === handle)) {
+      ms.push({ id: uid(), handle, role:'member', color:'#2F86D9' });
+      team.members = ms;
+      // mirror
+      const legacy = _teamState();
+      legacy.members = Array.isArray(team.members) ? team.members : [];
+    }
+  }
+  s.joinRequests = reqs.filter(x => String(x.id) !== String(reqId));
+  save();
+  renderTeamList();
+  renderTeam();
+  renderTeamReqList();
+  toast('承認しました');
+}
+
+function denyJoinRequest(reqId) {
+  const team = _selectedTeam();
+  if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
+  const s = _ensureTeamSettings(team);
+  const reqs = s.joinRequests || [];
+  s.joinRequests = reqs.filter(x => String(x.id) !== String(reqId));
+  save();
+  renderTeamReqList();
+  toast('却下しました');
+}
+
+async function saveTeamEdits() {
+  const team = _selectedTeam();
+  if (!team || !isTeamAdmin(team)) { toast('管理者のみ編集できます'); return; }
+  const nameEl = document.getElementById('teamEditName');
+  const newName = String(nameEl ? nameEl.value : '').trim();
+  if (!newName) { toast('チーム名を入力してください'); return; }
+  if (cloudSelectedTeam) {
+    try {
+      const user = await getLoggedInUserOrPrompt();
+      if (!user) return;
+      const api = await getCloudTeamApi();
+      await api.updateTeamName({ user, teamId: cloudSelectedTeam.id, name: newName });
+      toast('保存しました');
+      closeTeamEdit();
+      return;
+    } catch (e) {
+      console.error(e);
+      toast('保存できませんでした');
+      return;
+    }
+  }
+  team.name = newName;
+  // mirror to legacy state used by existing UI
+  const legacy = _teamState();
+  legacy.name = newName;
+  save();
+  renderTeamList();
+  renderTeam();
+  toast('保存しました');
+  closeTeamEdit();
+}
+
+function kickMemberFromSelectedTeam(handle) {
+  const team = _selectedTeam();
+  if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
+  const h = String(handle || '').trim();
+  if (!h || h === CURRENT_HANDLE) return;
+  if (!confirm(`${h} を退会させますか？`)) return;
+  const ms = Array.isArray(team.members) ? team.members : [];
+  team.members = ms.filter(m => String(m.handle || '').trim() !== h);
+  // also mirror
+  const legacy = _teamState();
+  legacy.members = Array.isArray(team.members) ? team.members : [];
+  save();
+  renderTeamList();
+  renderTeam();
+  renderTeamEditMembers();
+}
+
+function leaveSelectedTeam() {
+  const team = _selectedTeam();
+  if (!team) return;
+  const ms = Array.isArray(team.members) ? team.members : [];
+  const me = ms.find(m => String(m.handle || '').trim() === CURRENT_HANDLE);
+  if (!me) { toast('退会できません'); return; }
+  if (isTeamAdmin(team)) { toast('管理者は退会できません（解散してください）'); return; }
+  if (!confirm('チームを退会しますか？')) return;
+  team.members = ms.filter(m => String(m.handle || '').trim() !== CURRENT_HANDLE);
+  save();
+  closeTeam();
+  openTeamList();
+}
+
+function dissolveSelectedTeam() {
+  const ts = _teamsState();
+  const team = _selectedTeam();
+  if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
+  if (!confirm('チームを解散しますか？この操作は元に戻せません。')) return;
+  ts.teams = (ts.teams || []).filter(t => t.id !== team.id);
+  ts.selectedTeamId = ts.teams[0] ? ts.teams[0].id : null;
+  save();
+  closeTeam();
+  closeTeamEdit();
+  openTeamList();
+}
+function _teamsState() {
+  if (!S.meta) S.meta = {};
+  if (!S.meta.teamsState) {
+    const legacy = _teamState();
+    const legacyId = legacy && legacy.id ? legacy.id : 't1';
+    S.meta.teamsState = {
+      selectedTeamId: legacyId,
+      teams: [
+        { id: legacyId, name: legacy.name || 'HERACチーム', createdBy: CURRENT_HANDLE, members: Array.isArray(legacy.members) ? legacy.members : [] },
+      ],
+    };
+  }
+  const ts = S.meta.teamsState;
+  if (!Array.isArray(ts.teams)) ts.teams = [];
+  if (!ts.teams.length) {
+    const legacy = _teamState();
+    const legacyId = legacy && legacy.id ? legacy.id : 't1';
+    ts.teams.push({ id: legacyId, name: legacy.name || 'HERACチーム', createdBy: CURRENT_HANDLE, members: Array.isArray(legacy.members) ? legacy.members : [] });
+    ts.selectedTeamId = legacyId;
+  }
+  if (!ts.selectedTeamId && ts.teams[0]) ts.selectedTeamId = ts.teams[0].id;
+  // Migrate stale data: ensure first team has correct createdBy and admin member
+  if (ts.teams[0]) {
+    const t0 = ts.teams[0];
+    if (!t0.createdBy || t0.createdBy === '@you') t0.createdBy = CURRENT_HANDLE;
+    if (Array.isArray(t0.members)) {
+      t0.members = t0.members.map(m => ({
+        ...m,
+        handle: m.handle === '@you' ? CURRENT_HANDLE : m.handle,
+      }));
+      if (!t0.members.find(m => String(m.handle).trim() === CURRENT_HANDLE)) {
+        t0.members.unshift({ id: uid(), handle: CURRENT_HANDLE, role: 'admin', color: '#E04B7B' });
+      } else {
+        const me = t0.members.find(m => String(m.handle).trim() === CURRENT_HANDLE);
+        if (me && me.role !== 'admin') me.role = 'admin';
+      }
+    }
+  }
+  return ts;
+}
+function _selectedTeam() {
+  if (cloudSelectedTeam) return cloudSelectedTeam;
+  const ts = _teamsState();
+  const id = ts.selectedTeamId;
+  return ts.teams.find(x => x.id === id) || ts.teams[0] || null;
+}
+function renderTeamList() {
+  const list = document.getElementById('teamList');
+  if (!list) return;
+  const sourceTeams = cloudTeams.length ? cloudTeams : _teamsState().teams;
+  list.innerHTML = sourceTeams.map(t => {
+    const members = Array.isArray(t.members) ? t.members : [];
+    const isAdmin = t.myRole ? t.myRole === 'admin' : isTeamAdmin(t);
+    return `<button type="button" class="team-row" data-tid="${esc(t.id)}">
+      <div class="left">
+        <div class="name">${esc(t.name || 'チーム')}${isAdmin ? `<span class="team-admin-badge" title="管理者">★</span>` : ''}</div>
+      </div>
+      <div class="right">
+        <div class="cnt">${members.length ? `${members.length}人` : ''}</div>
+        <div style="color:var(--txt3);font-size:20px;line-height:1">›</div>
+      </div>
+    </button>`;
+  }).join('');
+  list.querySelectorAll('.team-row').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tid = btn.dataset.tid;
+      cloudSelectedTeam = sourceTeams.find(t => String(t.id) === String(tid)) || null;
+      if (!cloudSelectedTeam) {
+        const ts2 = _teamsState();
+        ts2.selectedTeamId = tid;
+        save();
+      }
+      closeTeamList();
+      openTeamDetail();
+    });
+  });
+}
+async function openTeam() {
+  try {
+    const m = await import('./js/firebase-auth.mjs');
+    if (!m.hasFirebaseConfig()) {
+      toast(tt('google_login_config_missing'));
+      return;
+    }
+    await m.initFirebase();
+    await m.waitForInitialAuth();
+    if (!m.getCurrentUser()) {
+      document.getElementById('loginReqModalTtl').textContent = tt('login_req_title');
+      document.getElementById('loginReqModalBody').textContent = tt('login_req_body');
+      document.getElementById('loginReqOpenSettings').textContent = tt('login_req_open_settings');
+      document.getElementById('loginReqModalClose').textContent = tt('login_req_close');
+      document.getElementById('loginRequiredModal').classList.add('show');
+      return;
+    }
+  } catch (e) {
+    console.error(e);
+    toast(tt('google_login_error'));
+    return;
+  }
+  openTeamList();
+}
+async function openTeamList() {
+  const user = await getLoggedInUserOrPrompt();
+  if (!user) return;
+  try {
+    const api = await getCloudTeamApi();
+    cloudTeams = await api.listMyTeams({ user });
+    renderTeamList();
+    document.getElementById('teamListOv').classList.add('show');
+  } catch (e) {
+    console.error(e);
+    toast('チーム一覧を読み込めませんでした');
+  }
+}
+function closeTeamList() {
+  const el = document.getElementById('teamListOv');
+  if (el) el.classList.remove('show');
+}
+async function openTeamDetail() {
+  const user = await getLoggedInUserOrPrompt();
+  if (!user) return;
+  if (!cloudSelectedTeam) {
+    const st = _selectedTeam();
+    if (st) {
+      const legacy = _teamState();
+      legacy.name = st.name;
+      legacy.members = Array.isArray(st.members) ? st.members : [];
+      save();
+    }
+    renderTeam();
+    document.getElementById('teamOv').classList.add('show');
+    return;
+  }
+  stopCloudTeamListener();
+  const api = await getCloudTeamApi();
+  cloudTeamUnsubscribe = api.subscribeTeam({
+    teamId: cloudSelectedTeam.id,
+    onChange: (event) => {
+      if (event.type === 'team') cloudSelectedTeam = event.data;
+      if (event.type === 'members') cloudTeamMembers = event.data;
+      if (event.type === 'activity') cloudTeamActivity = event.data;
+      if (event.type === 'joinRequests') cloudTeamJoinRequests = event.data;
+      renderTeam();
+    },
+    onError: (err) => {
+      console.error(err);
+      toast('チーム同期が切断されました');
+    },
+  });
+  renderTeam();
+  document.getElementById('teamOv').classList.add('show');
+}
+function closeTeam() {
+  stopCloudTeamListener();
+  document.getElementById('teamOv').classList.remove('show');
+}
+function setTeamTab(key) {
+  teamTab = key;
+  const btns = [
+    ['members','teamTabMembers','teamPaneMembers'],
+    ['projects','teamTabProjects','teamPaneProjects'],
+    ['analytics','teamTabAnalytics','teamPaneAnalytics'],
+    ['activity','teamTabActivity','teamPaneActivity'],
+  ];
+  btns.forEach(([k, bid, pid]) => {
+    const b = document.getElementById(bid);
+    const p = document.getElementById(pid);
+    if (b) b.classList.toggle('on', teamTab === k);
+    if (p) p.classList.toggle('show', teamTab === k);
+  });
+}
+function _momPctText(curV, prevV) {
+  if (!prevV) return curV ? '+100%' : '+0%';
+  const p = Math.round(((curV - prevV) / prevV) * 100);
+  return (p >= 0 ? `+${p}%` : `${p}%`);
+}
+
+function renderTeamRevenueAnalysis(monthKey) {
+  const curK = String(monthKey);
+  const mt = document.getElementById('teamAnaMonthTitle');
+  if (mt) mt.textContent = formatAnalysisMonthTitle(curK);
+  const ja = getAppLang() === 'ja';
+
+  const map = new Map();
+  let countAll = 0;
+  let countDone = 0;
+  let doneSum = 0;
+  S.accounts.forEach(a => {
+    if (!a.project) return;
+    const mk = projectMonthKey(a);
+    if (String(mk) !== String(monthKey)) return;
+    countAll += 1;
+    const st = a.project.status;
+    if (st === '終了') {
+      countDone += 1;
+      const r = Number(a.project.rewardYen || 0) || 0;
+      doneSum += r;
+      const pls0 = Array.isArray(a.project.platforms) && a.project.platforms.length ? a.project.platforms : ['other'];
+      const pls = normalizePlatformList(pls0);
+      const share = pls.length ? (r / pls.length) : r;
+      pls.forEach(pl => { map.set(pl, (map.get(pl) || 0) + share); });
+    }
+  });
+
+  const list = document.getElementById('teamAnaPlatformList');
+  if (list) {
+    const rows = [...map.entries()].map(([k, v]) => ({ k, v })).sort((a,b)=>b.v-a.v);
+    if (!rows.length) {
+      list.innerHTML = `<div style="text-align:center;color:var(--txt3);font-weight:800;font-size:12px;padding:10px 0">${esc(tt('ana_none'))}</div>`;
+    } else {
+      const totalV = Math.max(1, rows.reduce((m,x)=>m+x.v,0));
+      list.innerHTML = rows.map(x => {
+        const pctShare = Math.round((x.v / totalV) * 100);
+        const pctBar = Math.max(6, pctShare);
+        const name = tt('platform_' + x.k);
+        const col = _platformBrandColor(x.k);
+        return `
+          <div style="display:flex;align-items:center;gap:10px;margin:12px 0">
+            <div style="width:76px;flex-shrink:0;font-weight:1000;font-size:12px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</div>
+            <div style="flex:1;min-width:0;height:12px;border-radius:999px;background:rgba(60,60,67,.10);overflow:hidden">
+              <div style="height:100%;width:${pctBar}%;background:${esc(col)}"></div>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:8px;flex-shrink:0">
+              <span style="font-weight:1000;font-size:12px;color:var(--txt2)">${esc(yen(x.v))}</span>
+              <span style="font-weight:1000;font-size:12px;color:${esc(col)}">${pctShare}%</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  const vAll = document.getElementById('teamAnaKpiAllVal');
+  const vDone = document.getElementById('teamAnaKpiDoneVal');
+  const vAvg = document.getElementById('teamAnaKpiAvgVal');
+  const uAll = document.getElementById('teamAnaKpiAllUnit');
+  const uDone = document.getElementById('teamAnaKpiDoneUnit');
+  if (vAll) vAll.textContent = String(countAll);
+  if (vDone) vDone.textContent = String(countDone);
+  if (vAvg) vAvg.textContent = yen(countDone ? Math.round(doneSum / countDone) : 0);
+  if (uAll) uAll.textContent = ja ? ' 件' : ` ${tt('ana_unit_cases')}`;
+  if (uDone) uDone.textContent = ja ? ' 件' : ` ${tt('ana_unit_cases')}`;
+
+  const prevK = shiftMonthKey(curK, -1);
+  const agg = (k) => {
+    let doneCnt = 0;
+    let doneSumY = 0;
+    let allCnt = 0;
+    S.accounts.forEach(a => {
+      if (!a.project) return;
+      if (projectMonthKey(a) !== k) return;
+      allCnt += 1;
+      if (a.project.status === '終了') {
+        doneCnt += 1;
+        doneSumY += (Number(a.project.rewardYen || 0) || 0);
+      }
+    });
+    return { allCnt, doneCnt, avg: doneCnt ? (doneSumY / doneCnt) : 0 };
+  };
+  const cur = agg(curK);
+  const prev = agg(prevK);
+  const dAll = _momPct(cur.allCnt, prev.allCnt);
+  const dDone = _momPct(cur.doneCnt, prev.doneCnt);
+  const dAvgRaw = (!prev.avg) ? (cur.avg ? null : 0) : Math.round(((cur.avg - prev.avg) / prev.avg) * 100);
+
+  _setKpiBadge(document.getElementById('teamAnaKpiAllBadge'), dAll);
+  _setKpiBadge(document.getElementById('teamAnaKpiDoneBadge'), dDone);
+  _setKpiBadge(document.getElementById('teamAnaKpiAvgBadge'), dAvgRaw);
+
+  drawExpensePie('teamRevExpPie', curK);
+  const legend = document.getElementById('teamAnaExpLegend');
+  if (legend) {
+    const meta = REV_CHART_META.get('teamRevExpPie');
+    const segs = meta && meta.segs ? meta.segs : [];
+    const sum = Math.max(1, segs.reduce((m,s)=>m+(s.amount||0),0));
+    if (!segs.length) {
+      legend.innerHTML = `<div style="text-align:center;color:var(--txt3);font-weight:900;font-size:12px;padding:6px 0">${esc(tt('ana_none'))}</div>`;
+    } else {
+      legend.innerHTML = segs.map(s => {
+        const pct = Math.round(((s.amount||0)/sum)*100);
+        const c = esc(s.color);
+        return `
+          <div class="ana-exp-row">
+            <span style="width:10px;height:10px;border-radius:999px;background:${c};display:inline-block;flex-shrink:0"></span>
+            <div style="font-weight:900;font-size:12px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(s.name)}</div>
+            <span style="font-weight:1000;font-size:12px;color:var(--txt2);flex-shrink:0">${esc(yen(s.amount))}</span>
+            <span class="ana-exp-pct" style="color:${c}">${pct}%</span>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  if (renderTeamRevenueAnalysis._lastK !== curK) { anaTrendShift = 0; anaTrendPanPx = 0; }
+  renderTeamRevenueAnalysis._lastK = curK;
+  drawAnalysisTrendChart('teamAnaTrendChart', curK);
+}
+
+function renderTeamRevenue() {
+  const wrap = document.getElementById('teamRevMonth');
+  if (!wrap) return;
+
+  const bM = document.getElementById('teamRevTabMonth');
+  const bY = document.getElementById('teamRevTabYear');
+  if (bM) bM.classList.toggle('on', teamRevTab === 'month');
+  if (bY) bY.classList.toggle('on', teamRevTab === 'year');
+  const nav = document.getElementById('teamRevMonthNav');
+  if (nav) nav.style.display = teamRevTab === 'month' ? '' : 'none';
+
+  const revCard = document.getElementById('teamRevCard');
+  if (revCard) revCard.style.display = teamRevTab === 'month' ? '' : 'none';
+  const monthWrap = document.getElementById('teamRevMonthWrap');
+  if (monthWrap) monthWrap.style.display = teamRevTab === 'month' ? '' : 'none';
+  const graphWrap = document.getElementById('teamRevGraphWrap');
+  if (graphWrap) graphWrap.style.display = teamRevTab === 'year' ? '' : 'none';
+
+  const k = teamRevMonthKey || monthKeyFromDate(new Date());
+  teamRevMonthKey = k;
+  const moTxt = formatAnalysisMonthTitle(String(k)).replace(' ▾','');
+  document.getElementById('teamRevMonth').textContent = moTxt;
+
+  const budgets = getRevenueBudgets();
+  const budget = Number(budgets[k] || 0) || 0;
+  const { confirmed, expected, expExpected, expConfirmed } = sumForMonth(k);
+  const profit = confirmed - expConfirmed;
+
+  const bEl = document.getElementById('teamRevBudget');
+  if (bEl) bEl.value = budget ? String(budget) : '';
+  const t1 = document.getElementById('teamRevExpected'); if (t1) t1.textContent = yen(expected);
+  const t2 = document.getElementById('teamRevConfirmed'); if (t2) t2.textContent = yen(confirmed);
+  const t3 = document.getElementById('teamRevExpExpected'); if (t3) t3.textContent = yen(expExpected);
+  const t4 = document.getElementById('teamRevExpConfirmed'); if (t4) t4.textContent = yen(expConfirmed);
+  const t5 = document.getElementById('teamRevProfit'); if (t5) t5.textContent = yen(profit);
+
+  if (teamRevTab === 'year') {
+    renderTeamRevenueAnalysis(teamRevMonthKey || monthKeyFromDate(new Date()));
+  }
+}
+function _teamAggMonth(mk) {
+  let sales = 0;
+  let projects = 0;
+  let done = 0;
+  S.accounts.forEach(a => {
+    if (!a.project) return;
+    if (projectMonthKey(a) !== mk) return;
+    projects += 1;
+    if (a.project.status === '終了') {
+      done += 1;
+      sales += (Number(a.project.rewardYen || 0) || 0);
+    }
+  });
+  const newDm = S.accounts.filter(a => a.newDM).length;
+  return { sales, projects, done, newDm };
+}
+function renderTeam() {
+  const T = cloudSelectedTeam || _teamState();
+  if (cloudTeamMembers.length) T.members = cloudTeamMembers.map((m) => ({
+    id: m.uid || m.id,
+    handle: m.displayName || m.email || 'メンバー',
+    role: m.role || 'member',
+    color: '#2F86D9',
+  }));
+  if (cloudTeamActivity.length) T.activities = cloudTeamActivity.map((a) => ({
+    handle: a.actorName || 'メンバー',
+    color: '#2F86D9',
+    text: a.text || '',
+    time: '',
+  }));
+  const k = revMonthKey || monthKeyFromDate(new Date());
+  const prevK = shiftMonthKey(k, -1);
+  const cur = _teamAggMonth(k);
+  const prev = _teamAggMonth(prevK);
+
+  // team icon letter
+  const icEl = document.getElementById('teamIc');
+  if (icEl) icEl.textContent = String(T.name || 'T').charAt(0).toUpperCase();
+
+  // team name + badge (preserve badge)
+  const nameEl = document.getElementById('teamName');
+  if (nameEl) nameEl.innerHTML = esc(T.name) + ' <span class="team-badge" id="teamRoleBadge">管理者</span>';
+  const mc = document.getElementById('teamMembersCnt');
+  if (mc) mc.textContent = String(T.members.length || 0);
+
+  // join request dot
+  const st = _selectedTeam();
+  const dot = document.getElementById('teamReqDot');
+  if (dot && st) {
+    const s2 = _ensureTeamSettings(st);
+    const pendingReqs = cloudTeamJoinRequests.length
+      ? cloudTeamJoinRequests.filter(r => r.status === 'pending').length
+      : ((s2.joinRequests && s2.joinRequests.length) || 0);
+    dot.style.display = pendingReqs ? '' : 'none';
+  }
+
+  // edit button visibility (admin only)
+  // 編集ボタンは常に表示（権限が無ければ押した時に案内）
+  const editBtn = document.getElementById('teamEditBtn');
+  if (editBtn) editBtn.style.display = '';
+
+  // KPI sales
+  const s = document.getElementById('teamKpiSales');
+  if (s) s.textContent = yen(cur.sales);
+  const sp = document.getElementById('teamKpiSalesMom');
+  if (sp) {
+    const pct = _momPctText(cur.sales, prev.sales);
+    sp.className = pct.startsWith('-') ? 'down' : 'up';
+    sp.textContent = pct;
+  }
+  // KPI conversations
+  const pr = document.getElementById('teamKpiProjects');
+  if (pr) pr.textContent = String(cur.projects);
+  const prm = document.getElementById('teamKpiProjectsMom');
+  if (prm) {
+    const pct = _momPctText(cur.projects, prev.projects);
+    prm.className = pct.startsWith('-') ? 'down' : 'up';
+    prm.textContent = pct;
+  }
+  // KPI new DM / done
+  const nd = document.getElementById('teamKpiNewDm');
+  if (nd) nd.textContent = String(cur.newDm);
+  const dn = document.getElementById('teamKpiDone');
+  if (dn) dn.textContent = String(cur.done);
+
+  // mode
+  // member list
+  const list = document.getElementById('teamMemberList');
+  if (list) {
+    const defCols = ['#E04B7B','#2F86D9','#22B8C7','#4CAF50','#FF9500','#5C6BC0'];
+    const byHandle = new Map();
+    (T.members || []).forEach((m, idx) => {
+      const h = String(m.handle || '').trim();
+      if (!h) return;
+      const prev = byHandle.get(h);
+      if (!prev) { byHandle.set(h, { ...m, _idx: idx }); return; }
+      // merge duplicates (prefer admin, keep non-null numbers)
+      const merged = { ...prev, ...m, _idx: Math.min(prev._idx, idx) };
+      if (prev.role === 'admin' || m.role === 'admin') merged.role = 'admin';
+      if (prev.color) merged.color = prev.color;
+      if (prev.sales != null) merged.sales = prev.sales;
+      if (prev.cases != null) merged.cases = prev.cases;
+      if (prev.done != null) merged.done = prev.done;
+      byHandle.set(h, merged);
+    });
+    const uniqMembers = [...byHandle.values()].sort((a,b)=> (a._idx||0) - (b._idx||0));
+    list.innerHTML = uniqMembers.map((m, idx) => {
+      const c = m.color || defCols[idx % defCols.length];
+      const initial = String(m.handle || '').replace(/^@/,'').slice(0,1).toUpperCase() || 'M';
+      const role = m.role === 'admin' ? 'admin' : 'member';
+      const roleLbl = role === 'admin' ? '管理者' : 'メンバー';
+      const sales = m.sales != null ? m.sales : (idx === 0 ? cur.sales : 0);
+      const prog  = m.cases != null ? m.cases : (idx === 0 ? cur.projects : 0);
+      const done  = m.done != null ? m.done : (idx === 0 ? cur.done : 0);
+      const team2 = _selectedTeam();
+      const s = team2 ? _ensureTeamSettings(team2) : { assignOwners: [] };
+      const hasAssign = Array.isArray(s.assignOwners) && s.assignOwners.includes(String(m.handle || '').trim());
+      const isAdmin = role === 'admin';
+      const badges = [
+        isAdmin ? `<span class="m-badge admin">管理者</span>` : '',
+        (!isAdmin && hasAssign) ? `<span class="m-badge assign">割り振り権限</span>` : '',
+        (!isAdmin && !hasAssign) ? `<span class="m-badge member">メンバー</span>` : '',
+      ].filter(Boolean).join('');
+      return `<div class="m-row2">
+        <div class="m-left">
+          <div class="m-av2" style="background:${esc(c)}">
+            ${isAdmin ? `<span class="m-crown" aria-hidden="true">👑</span>` : ``}
+            ${esc(initial)}
+          </div>
+          <div style="min-width:0">
+            <div class="m-name2">${esc(m.handle || '')}</div>
+            <div class="m-badges">${badges}</div>
+          </div>
+        </div>
+        <div class="m-num">${esc(yen(sales))}</div>
+        <div class="m-num">${esc(prog)}件</div>
+        <div class="m-num">${esc(done)}件</div>
+        <button type="button" class="m-pen" aria-label="編集" data-medit="${esc(m.id || idx)}">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('[data-medit]').forEach(btn => {
+      btn.addEventListener('click', () => toast('準備中'));
+    });
+  }
+
+  // status cards
+  const stNew  = S.accounts.filter(a => a.project && a.project.status === '相談中').length;
+  const stProg = S.accounts.filter(a => a.project && (a.project.status === '決定済み' || a.project.status === '保留中')).length;
+  const stDone = cur.done;
+  const prevNew  = S.accounts.filter(a => a.project && a.project.status === '相談中').length;
+  const el1 = document.getElementById('teamStNewVal');  if (el1) el1.textContent = `${stNew}件`;
+  const el2 = document.getElementById('teamStProgVal'); if (el2) el2.textContent = `${stProg}件`;
+  const el3 = document.getElementById('teamStDoneVal'); if (el3) el3.textContent = `${stDone}件`;
+  const sub1 = document.getElementById('teamStNewSub');  if (sub1) sub1.textContent = '前月比 -30%';
+  const sub2 = document.getElementById('teamStProgSub'); if (sub2) sub2.textContent = `案件総数 ${stNew + stProg + stDone}件`;
+
+  // activity
+  const act = document.getElementById('teamActivityDays');
+  if (act) {
+    const activities = T.activities || [];
+    if (!activities.length) {
+      act.innerHTML = `<div style="text-align:center;color:var(--txt3);font-weight:900;font-size:12px;padding:12px 0">${esc(tt('ana_none'))}</div>`;
+    } else {
+      const defCols2 = ['#2F86D9','#E04B7B','#4CAF50','#FF9500'];
+      const pad2 = (n) => String(n).padStart(2,'0');
+      const dateKeyFromDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+      const parseTimeToDaysAgo = (timeText) => {
+        const t = String(timeText || '').trim();
+        if (!t) return 0;
+        if (t.includes('分前') || t.includes('時間前')) return 0;
+        if (t === '昨日') return 1;
+        if (t === '1日前') return 1;
+        const m = t.match(/^(\d+)日前$/);
+        if (m) return Math.max(0, Number(m[1]) || 0);
+        return 0;
+      };
+      const formatJaMDW = (d) => {
+        const md = `${d.getMonth()+1}月${d.getDate()}日`;
+        const wd = ['日','月','火','水','木','金','土'][d.getDay()];
+        return `${md}（${wd}）`;
+      };
+      const now = new Date();
+      const maxItems = 200;
+      const items = activities.slice(0, maxItems).map((it) => {
+        const daysAgo = parseTimeToDaysAgo(it.time);
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        d.setDate(d.getDate() - daysAgo);
+        const dk = it.dateKey || dateKeyFromDate(d);
+        return { ...it, _dateKey: dk, _dateLabel: formatJaMDW(new Date(dk + 'T00:00:00')) };
+      });
+      const grouped = {};
+      items.forEach((it) => {
+        const dk = it._dateKey || dateKeyFromDate(now);
+        if (!grouped[dk]) grouped[dk] = { label: it._dateLabel || dk, items: [] };
+        grouped[dk].items.push(it);
+      });
+      const keys = Object.keys(grouped).sort((a,b) => String(b).localeCompare(String(a)));
+      act.innerHTML = keys.map((dk) => {
+        const g = grouped[dk];
+        const rows = g.items.map((it, idx) => {
+          const c = it.color || defCols2[idx % defCols2.length];
+          const initial = String(it.handle || '').replace(/^@/,'').slice(0,1).toUpperCase() || '?';
+          return `<div class="team-act-row">
+            <div class="team-act-ic" style="background:${esc(c)}">${esc(initial)}</div>
+            <div class="team-act-t">${esc(it.handle)} ${esc(it.text)}</div>
+            <div class="team-act-ts">${esc(it.time || '')}</div>
+          </div>`;
+        }).join('');
+        return `
+          <div class="team-day">
+            <button type="button" class="team-day-row">
+              <span class="team-day-left">
+                <svg class="team-day-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M12 7v6l3 2"></path>
+                </svg>
+                <span class="team-day-txt">${esc(g.label || dk)}</span>
+              </span>
+              <span class="team-day-chev" aria-hidden="true">›</span>
+            </button>
+          </div>
+          <div class="team-day-items">${rows}</div>
+        `;
+      }).join('');
+    }
+  }
+
+  // team revenue (tab: analytics)
+  if (document.getElementById('teamRevMonth')) {
+    renderTeamRevenue();
+  }
+
+  setTeamTab(teamTab);
+}
+
+function _setTeamSettingsPane(key) {
+  const home = document.getElementById('teamSettingsHome');
+  const rb = document.getElementById('teamSettingsRevBasis');
+  if (!home || !rb) return;
+  home.style.display = key === 'home' ? '' : 'none';
+  rb.style.display = key === 'revBasis' ? '' : 'none';
+  applyChromeStatic();
+}
+function yen(n) { return formatYen(n || 0) || '¥0'; }
+function sumForMonth(k) {
+  let confirmed = 0;
+  let expected = 0;
+  let expConfirmed = 0;
+  let expExpected = 0;
+  S.accounts.forEach(a => {
+    if (!a.project) return;
+    if (projectMonthKey(a) !== k) return;
+    const p = a.project;
+    const r = Number(p.rewardYen || 0) || 0;
+    // 想定報酬額 = 決定済 + 終了
+    if (p.status === '決定済み' || p.status === '終了') expected += r;
+    // 確定報酬金額 = 終了
+    if (p.status === '終了') confirmed += r;
+    const e = expenseSumYen(p);
+    // 想定経費額 = 決定済 + 終了
+    if (p.status === '決定済み' || p.status === '終了') expExpected += e;
+    // 確定経費額 = 終了
+    if (p.status === '終了') expConfirmed += e;
+  });
+  return { confirmed, expected, expExpected, expConfirmed };
+}
+function _chartPickIndex(canvasId, clientX) {
+  const meta = REV_CHART_META.get(canvasId);
+  const cvs = document.getElementById(canvasId);
+  if (!meta || !cvs) return -1;
+  const rect = cvs.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const n = meta.keys.length || 0;
+  if (!n) return -1;
+  let best = 0, bestD = Infinity;
+  for (let i=0;i<n;i++) {
+    const cx = meta.startX + i*(meta.barW+meta.gap) + meta.barW/2;
+    const d = Math.abs(cx - x);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+function _bindChartTap(canvasId, fmt) {
+  const cvs = document.getElementById(canvasId);
+  if (!cvs || cvs._tapBound) return;
+  cvs._tapBound = true;
+  const onTap = (ev) => {
+    const t = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+    const idx = _chartPickIndex(canvasId, t.clientX);
+    const meta = REV_CHART_META.get(canvasId);
+    if (!meta || idx < 0) return;
+    toast(fmt(meta, idx));
+  };
+  cvs.addEventListener('click', onTap);
+  cvs.addEventListener('touchend', onTap, { passive:true });
+}
+
+function drawRevenueChart(canvasId, monthKeys, mode) {
+  const cvs = document.getElementById(canvasId);
+  if (!cvs) return;
+  const parentW = cvs.parentElement ? cvs.parentElement.clientWidth : 320;
+  const cssW = Math.max(280, parentW - 28);
+  const cssH = 210;
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  cvs.style.width = cssW + 'px';
+  cvs.style.height = cssH + 'px';
+  cvs.width = Math.floor(cssW * dpr);
+  cvs.height = Math.floor(cssH * dpr);
+  const ctx = cvs.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const budgets = getRevenueBudgets();
+  const vals = monthKeys.map(k => {
+    const s = sumForMonth(k);
+    const b = Number(budgets[k] || 0) || 0;
+    return { k, confirmed: s.confirmed, expected: s.expected, budget: b, profit: (s.confirmed - s.expConfirmed) };
+  });
+  const maxV = Math.max(1, ...vals.map(v => (mode === 'profit') ? Math.max(0, v.profit) : Math.max(v.confirmed, v.expected, v.budget)));
+  const pad = 14;
+  const w = cssW, h = cssH;
+  const plotH = h - pad*2 - 18;
+  const barW = Math.max(18, Math.floor((w - pad*2) / (vals.length*1.6)));
+  const gap = Math.max(10, Math.floor(barW*0.6));
+  const startX = pad + Math.max(0, Math.floor((w - pad*2 - (vals.length*barW + (vals.length-1)*gap))/2));
+  // background grid
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = 'transparent';
+  ctx.strokeStyle = 'rgba(60,60,67,.18)';
+  ctx.lineWidth = 1;
+  for (let i=0;i<3;i++){
+    const y = pad + (plotH/2)*i;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w-pad, y); ctx.stroke();
+  }
+  // bars + lines
+  ctx.lineWidth = 2;
+  const COL_CONF = cssVar('--rev-confirmed', '#C35A77');
+  const COL_GOAL = cssVar('--rev-goal', '#3B82B8');
+  const COL_PROF = cssVar('--rev-profit', 'rgba(76,175,80,.72)');
+  const COL_EXP  = cssVar('--rev-exp-line', 'rgba(60,60,67,.50)');
+  let prevGoal = null;
+  let prevExp  = null;
+  vals.forEach((v, idx) => {
+    const x = startX + idx*(barW+gap);
+    if (mode === 'profit') {
+      const bh = Math.round((Math.max(0, v.profit)/maxV)*plotH);
+      const y = pad + plotH - bh;
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = COL_PROF;
+      ctx.fillRect(x, y, barW, bh);
+    } else {
+      const bh = Math.round((v.confirmed/maxV)*plotH);
+      const y = pad + plotH - bh;
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = COL_CONF; // confirmed
+      ctx.fillRect(x, y, barW, bh);
+    }
+    const px = x + barW/2;
+    if (mode !== 'profit') {
+      // goal line
+      ctx.strokeStyle = COL_GOAL;
+      const by = pad + plotH - Math.round((v.budget/maxV)*plotH);
+      if (prevGoal) { ctx.beginPath(); ctx.moveTo(prevGoal.x, prevGoal.y); ctx.lineTo(px, by); ctx.stroke(); }
+      prevGoal = { x:px, y:by };
+      // expected dotted line
+      ctx.save();
+      ctx.setLineDash([4,3]);
+      ctx.strokeStyle = COL_EXP;
+      const ey = pad + plotH - Math.round((v.expected/maxV)*plotH);
+      if (prevExp) { ctx.beginPath(); ctx.moveTo(prevExp.x, prevExp.y); ctx.lineTo(px, ey); ctx.stroke(); }
+      prevExp = { x:px, y:ey };
+      ctx.restore();
+    }
+    // x label
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(60,60,67,.55)';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(v.k).slice(5), px, pad + plotH + 16);
+  });
+
+  REV_CHART_META.set(canvasId, { keys: vals.map(v => v.k), series: vals, mode, startX, barW, gap });
+}
+
+// (pipeline chart removed; replaced by analysis blocks)
+
+function drawExpensePie(canvasId, yearStr) {
+  const cvs = document.getElementById(canvasId);
+  if (!cvs) return;
+  const parentW = cvs.parentElement ? cvs.parentElement.clientWidth : 320;
+  const cssW = Math.max(240, parentW);
+  const cssH = 132;
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  cvs.style.width = cssW + 'px';
+  cvs.style.height = cssH + 'px';
+  cvs.width = Math.floor(cssW * dpr);
+  cvs.height = Math.floor(cssH * dpr);
+  const ctx = cvs.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const items = new Map();
+  const isMonth = String(yearStr).length === 7; // 'YYYY-MM'
+  S.accounts.forEach(a => {
+    if (!a.project) return;
+    const mk = projectMonthKey(a);
+    if (isMonth) {
+      if (String(mk) !== String(yearStr)) return;
+    } else {
+      if (!String(mk).startsWith(yearStr + '-')) return;
+    }
+    const ex = Array.isArray(a.project.expenses) ? a.project.expenses : [];
+    ex.forEach(e => {
+      const name = String(e?.name || '').trim() || 'その他';
+      const amt = Number(e?.amountYen || 0) || 0;
+      items.set(name, (items.get(name) || 0) + amt);
+    });
+  });
+
+  let arr = [...items.entries()].map(([name, amount]) => ({ name, amount }))
+    .filter(x => x.amount > 0)
+    .sort((a,b)=>b.amount-a.amount);
+  const top = arr.slice(0, 6);
+  const rest = arr.slice(6).reduce((m,x)=>m+x.amount,0);
+  if (rest > 0) top.push({ name:'その他', amount:rest });
+  arr = top;
+
+  ctx.clearRect(0,0,cssW,cssH);
+  if (!arr.length) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(60,60,67,.55)';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText(tt('ana_none'), cssW/2, cssH/2);
+    return;
+  }
+
+  const total = arr.reduce((m,x)=>m+x.amount,0) || 1;
+  // match reference: donut centered within left panel (more left)
+  const cx = cssW * 0.38;
+  const cy = cssH/2 + 4;
+  const r = Math.min(cssW, cssH) * 0.41;
+  const palette = [
+    cssVar('--rev-goal', '#3B82B8'),
+    '#4CAF50',
+    '#F77737',
+    cssVar('--rev-confirmed', '#C35A77'),
+    '#5C6BC0',
+    cssVar('--rev-trend-line', '#26C6DA'),
+    '#FF5722'
+  ];
+  let a0 = -Math.PI/2;
+  const segs = [];
+  arr.forEach((x,i) => {
+    const ang = (x.amount/total) * Math.PI*2;
+    const a1 = a0 + ang;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, a0, a1);
+    ctx.closePath();
+    ctx.fillStyle = palette[i % palette.length];
+    ctx.globalAlpha = 0.92;
+    ctx.fill();
+    segs.push({ name:x.name, amount:x.amount, a0, a1, color: ctx.fillStyle });
+    a0 = a1;
+  });
+  ctx.globalAlpha = 1;
+  // donut hole
+  ctx.beginPath();
+  ctx.arc(cx, cy, r*0.55, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,255,.92)';
+  ctx.fill();
+  // center text
+  ctx.fillStyle = 'rgba(60,60,67,.85)';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(tt('ana_exp_total_lbl'), cx, cy-2);
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText(yen(total), cx, cy+15);
+
+  REV_CHART_META.set(canvasId, { mode:'pie', segs, cx, cy, r });
+  const bind = (ev) => {
+    const t = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+    const rect = cvs.getBoundingClientRect();
+    const x = t.clientX - rect.left;
+    const y = t.clientY - rect.top;
+    const dx = x - cx;
+    const dy = y - cy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < r*0.55 || dist > r) return;
+    let ang = Math.atan2(dy, dx);
+    if (ang < -Math.PI/2) ang += Math.PI*2;
+    // normalize to start at -PI/2
+    if (ang < -Math.PI/2) ang += Math.PI*2;
+    const meta = REV_CHART_META.get(canvasId);
+    if (!meta) return;
+    const a = ang;
+    const seg = meta.segs.find(s => a >= s.a0 && a <= s.a1);
+    if (seg) toast(`${yearStr} ${seg.name} ${yen(seg.amount)}`);
+  };
+  if (!cvs._pieBound) {
+    cvs._pieBound = true;
+    cvs.addEventListener('click', bind);
+    cvs.addEventListener('touchend', bind, { passive:true });
+  }
+}
+
+function _platformBrandColor(pl) {
+  if (pl === 'instagram') return cssVar('--pl-instagram', '#C35A77');
+  if (pl === 'tiktok') return cssVar('--pl-tiktok', '#2AA6B7');
+  if (pl === 'youtube') return cssVar('--pl-youtube', '#D05B5B');
+  return cssVar('--pl-other', '#5B7FAE');
+}
+
+function normalizePlatformKey(v) {
+  const s = String(v || '').trim();
+  const k = s.toLowerCase();
+  if (k === 'instagram' || k === 'ig' || k === 'insta') return 'instagram';
+  if (k === 'tiktok' || k === 'tt') return 'tiktok';
+  if (k === 'youtube' || k === 'you tube' || k === 'yt') return 'youtube';
+  if (k === 'other' || k === 'others' || s === 'その他') return 'other';
+  // legacy labels
+  if (s === 'Instagram') return 'instagram';
+  if (s === 'TikTok') return 'tiktok';
+  if (s === 'YouTube' || s === 'Youtube') return 'youtube';
+  return 'other';
+}
+
+function normalizePlatformList(arr) {
+  const a = Array.isArray(arr) ? arr : [];
+  const out = [];
+  a.forEach(x => {
+    const k = normalizePlatformKey(x);
+    if (k && !out.includes(k)) out.push(k);
+  });
+  return out;
+}
+
+function _momPct(curV, prevV) {
+  if (!prevV) return curV ? null : 0;
+  return Math.round(((curV - prevV) / prevV) * 100);
+}
+
+function _momArrow(n) {
+  if (n === null || n === undefined || isNaN(n)) return '→';
+  if (n < 0) return '↓';
+  return '↑';
+}
+
+function _momBadgeStyle(n) {
+  if (n === null || n === undefined || isNaN(n)) return { bg:'rgba(60,60,67,.10)', fg:'rgba(60,60,67,.72)' };
+  if (n < 0) return { bg:'rgba(255,59,48,.14)', fg:'rgba(200,0,0,.95)' };
+  return { bg:'rgba(52,199,89,.16)', fg:'rgba(52,160,72,.98)' };
+}
+
+function _setKpiBadge(badgeEl, n) {
+  if (!badgeEl) return;
+  const p = (n === null || n === undefined || isNaN(n)) ? '—' : `${n > 0 ? '+' : ''}${n}%`;
+  badgeEl.style.display = '';
+  badgeEl.textContent = `${_momArrow(n)} ${p}`;
+  const st = _momBadgeStyle(n);
+  badgeEl.style.background = st.bg;
+  badgeEl.style.color = st.fg;
+}
+
+function _pickNiceMaxY(v) {
+  const caps = [5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 60000, 80000, 100000, 120000, 150000, 200000, 300000, 500000];
+  for (let i = 0; i < caps.length; i++) {
+    if (v <= caps[i]) return caps[i];
+  }
+  const step = 10 ** Math.max(3, Math.floor(Math.log10(v)));
+  return Math.ceil(v / step) * step;
+}
+
+function _pickNiceMaxCount(v) {
+  const caps = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50];
+  for (let i = 0; i < caps.length; i++) {
+    if (v <= caps[i]) return caps[i];
+  }
+  return Math.ceil(v / 5) * 5;
+}
+
+let anaTrendShift = 0; // 0 = end at selected month, negative = go back
+let anaTrendPanPx = 0; // finger-follow offset in px
+function _analysisTrendPickIndex(meta, clientX) {
+  if (!meta) return -1;
+  const cvs = document.getElementById('anaTrendChart');
+  if (!cvs) return -1;
+  const rect = cvs.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const n = (meta.keys && meta.keys.length) ? meta.keys.length : 0;
+  if (!n) return -1;
+  let best = 0, bestD = Infinity;
+  for (let i=0;i<n;i++) {
+    const cx = meta.startX + i*(meta.barW+meta.gap) + meta.barW/2 + (meta.panPx || 0);
+    const d = Math.abs(cx - x);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+function drawAnalysisTrendChart(canvasId, focusMonthKey) {
+  const cvs = document.getElementById(canvasId);
+  if (!cvs) return;
+  const parentW = cvs.parentElement ? cvs.parentElement.clientWidth : 320;
+  const cssW = Math.max(280, parentW - 8);
+  const cssH = 232;
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  cvs.style.width = cssW + 'px';
+  cvs.style.height = cssH + 'px';
+  cvs.width = Math.floor(cssW * dpr);
+  cvs.height = Math.floor(cssH * dpr);
+  const ctx = cvs.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const focus = parseMonthKey(focusMonthKey);
+  const end = new Date(focus.getFullYear(), focus.getMonth() + anaTrendShift, 1);
+  const keys = [];
+  for (let i = -11; i <= 0; i++) {
+    const d = new Date(end.getFullYear(), end.getMonth() + i, 1);
+    keys.push(monthKeyFromDate(d));
+  }
+
+  const vals = keys.map((k) => {
+    let confirmed = 0;
+    let allCnt = 0;
+    S.accounts.forEach(a => {
+      if (!a.project) return;
+      if (projectMonthKey(a) !== k) return;
+      allCnt += 1;
+      const p = a.project;
+      const r = Number(p.rewardYen || 0) || 0;
+      if (p.status === '終了') confirmed += r;
+    });
+    return { k, confirmed, allCnt };
+  });
+
+  const maxY = _pickNiceMaxY(Math.max(1, ...vals.map(v => v.confirmed)));
+  const maxC = _pickNiceMaxCount(Math.max(1, ...vals.map(v => v.allCnt)));
+
+  const padL = 40, padR = 40, padT = 34, padB = 28;
+  const w = cssW, h = cssH;
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+  const n = vals.length;
+  const gap = 10;
+  const barW = Math.max(14, Math.floor((plotW - gap * (n - 1)) / n));
+  const span = n * barW + (n - 1) * gap;
+  const startX = padL + Math.max(0, Math.floor((plotW - span) / 2));
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(60,60,67,.14)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {
+    const y = padT + (plotH / 3) * i;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+  }
+
+  // left axis (¥)
+  ctx.fillStyle = 'rgba(60,60,67,.45)';
+  ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 3; i++) {
+    const t = Math.round((maxY * (3 - i)) / 3);
+    const y = padT + (plotH / 3) * i + 3;
+    ctx.fillText(String(t), padL - 6, y);
+  }
+  ctx.fillStyle = 'rgba(60,60,67,.38)';
+  ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(tt('ana_axis_yen'), padL - 2, padT - 8);
+
+  // right axis (count)
+  ctx.textAlign = 'left';
+  ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = 'rgba(60,60,67,.45)';
+  for (let i = 0; i <= 3; i++) {
+    const t = Math.round((maxC * (3 - i)) / 3);
+    const y = padT + (plotH / 3) * i + 3;
+    ctx.fillText(String(t), w - padR + 6, y);
+  }
+  ctx.fillStyle = 'rgba(60,60,67,.38)';
+  ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(tt('ana_axis_count'), w - 8, padT - 8);
+  ctx.textAlign = 'left';
+
+  const COL_CONF = cssVar('--rev-confirmed', '#C35A77');
+  const COL_LINE = cssVar('--rev-trend-line', '#26C6DA');
+  // bars (confirmed reward)
+  vals.forEach((v, idx) => {
+    const x = startX + idx * (barW + gap) + anaTrendPanPx;
+    const bh = Math.round((v.confirmed / maxY) * plotH);
+    const y = padT + plotH - bh;
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = COL_CONF;
+    ctx.fillRect(x, y, barW, bh);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(60,60,67,.55)';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    const mo = Number(String(v.k).slice(5, 7)) || 1;
+    const lx = getAppLang() === 'en'
+      ? new Date(2000, mo - 1, 1).toLocaleString('en-US', { month: 'short' })
+      : `${mo}月`;
+    ctx.fillText(lx, x + barW / 2, padT + plotH + 16);
+  });
+
+  // line (case count)
+  ctx.lineWidth = 2;
+  const lineCol = COL_LINE;
+  ctx.strokeStyle = lineCol;
+  ctx.beginPath();
+  vals.forEach((v, idx) => {
+    const x = startX + idx * (barW + gap) + barW / 2 + anaTrendPanPx;
+    const y = padT + plotH - Math.round((v.allCnt / maxC) * plotH);
+    if (idx === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = lineCol;
+  vals.forEach((v, idx) => {
+    const x = startX + idx * (barW + gap) + barW / 2 + anaTrendPanPx;
+    const y = padT + plotH - Math.round((v.allCnt / maxC) * plotH);
+    ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // legend
+  ctx.textAlign = 'left';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+  const lx0 = padL;
+  const ly0 = 12;
+  ctx.fillStyle = '#E1306C';
+  ctx.fillRect(lx0, ly0, 10, 10);
+  ctx.fillStyle = 'rgba(60,60,67,.78)';
+  ctx.fillText(tt('ana_legend_confirmed'), lx0 + 14, ly0 + 9);
+  const lx1 = lx0 + 128;
+  ctx.strokeStyle = lineCol;
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(lx1, ly0 + 5); ctx.lineTo(lx1 + 12, ly0 + 5); ctx.stroke();
+  ctx.fillStyle = lineCol;
+  ctx.beginPath(); ctx.arc(lx1 + 6, ly0 + 5, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(60,60,67,.78)';
+  ctx.fillText(tt('ana_legend_cases'), lx1 + 16, ly0 + 9);
+
+  REV_CHART_META.set(canvasId, { mode:'analysisTrend', keys: vals.map(v => v.k), vals, startX, barW, gap, padT, plotH, maxY, maxC, panPx: anaTrendPanPx });
+
+  // swipe/drag to scroll older months
+  if (!cvs._trendDragBound) {
+    cvs._trendDragBound = true;
+    let startX0 = 0;
+    let active = false;
+    let axisLocked = false;
+    let lockDir = 0; // 0 unknown, 1 horizontal, 2 vertical
+    const onDown = (ev) => {
+      const t = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+      startX0 = t.clientX;
+      axisLocked = false;
+      lockDir = 0;
+      active = true;
+    };
+    const onMove = (ev) => {
+      if (!active) return;
+      const t = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+      const dx = t.clientX - startX0;
+      const meta = REV_CHART_META.get(canvasId);
+      const step = meta ? (meta.barW + meta.gap) : 28;
+      startX0 = t.clientX;
+      anaTrendPanPx += dx;
+
+      // keep panPx bounded; convert overflow into month shift (keeps continuous follow)
+      const moved = Math.trunc(anaTrendPanPx / step);
+      if (moved !== 0) {
+        // drag left (dx<0) => panPx negative => moved negative => shift older (negative)
+        anaTrendShift -= moved;
+        anaTrendShift = Math.min(0, Math.max(-240, anaTrendShift));
+        anaTrendPanPx -= moved * step;
+      }
+      drawAnalysisTrendChart(canvasId, focusMonthKey);
+    };
+    const onUp = (ev) => {
+      if (!active) return;
+      active = false;
+      // snap to nearest month after release
+      const meta = REV_CHART_META.get(canvasId);
+      const step = meta ? (meta.barW + meta.gap) : 28;
+      if (Math.abs(anaTrendPanPx) > step * 0.35) {
+        const moved = Math.round(anaTrendPanPx / step);
+        anaTrendShift -= moved;
+        anaTrendShift = Math.min(0, Math.max(-240, anaTrendShift));
+      }
+      anaTrendPanPx = 0;
+      drawAnalysisTrendChart(canvasId, focusMonthKey);
+    };
+    cvs.addEventListener('mousedown', onDown);
+    cvs.addEventListener('mousemove', onMove);
+    cvs.addEventListener('mouseup', onUp);
+    cvs.addEventListener('touchstart', onDown, { passive:true });
+    cvs.addEventListener('touchmove', onMove, { passive:true });
+    cvs.addEventListener('touchend', onUp, { passive:true });
+  }
+
+  // tap to show values
+  if (!cvs._trendTapBound) {
+    cvs._trendTapBound = true;
+    const onTap = (ev) => {
+      const t = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+      const meta = REV_CHART_META.get(canvasId);
+      if (!meta || !meta.vals || !meta.keys) return;
+      const idx = _analysisTrendPickIndex(meta, t.clientX);
+      if (idx < 0) return;
+      const v = meta.vals[idx];
+      const mk = meta.keys[idx];
+      if (!v || !mk) return;
+      toast(`${mk}　${tt('ana_legend_confirmed')} ${yen(v.confirmed)} / ${tt('ana_legend_cases')} ${v.allCnt}${tt('ana_unit_cases') ? tt('ana_unit_cases') : ''}`);
+    };
+    cvs.addEventListener('click', onTap);
+    cvs.addEventListener('touchend', onTap, { passive:true });
+  }
+}
+
+function renderRevenueAnalysis(monthKey) {
+  const curK = String(monthKey);
+  const mt = document.getElementById('anaMonthTitle');
+  if (mt) mt.textContent = formatAnalysisMonthTitle(curK);
+  const ja = getAppLang() === 'ja';
+
+  // platform revenue (closed only, monthly) + closed counts per platform
+  const map = new Map();
+  let countAll = 0;
+  let countDone = 0;
+  let doneSum = 0;
+  S.accounts.forEach(a => {
+    if (!a.project) return;
+    const mk = projectMonthKey(a);
+    if (String(mk) !== String(monthKey)) return;
+    countAll += 1;
+    const st = a.project.status;
+    if (st === '終了') {
+      countDone += 1;
+      const r = Number(a.project.rewardYen || 0) || 0;
+      doneSum += r;
+      const pls0 = Array.isArray(a.project.platforms) && a.project.platforms.length ? a.project.platforms : ['other'];
+      const pls = normalizePlatformList(pls0);
+      const share = pls.length ? (r / pls.length) : r;
+      pls.forEach(pl => {
+        map.set(pl, (map.get(pl) || 0) + share);
+      });
+    }
+  });
+
+  const list = document.getElementById('anaPlatformList');
+  if (list) {
+    const rows = [...map.entries()].map(([k, v]) => ({ k, v })).sort((a,b)=>b.v-a.v);
+    if (!rows.length) {
+      list.innerHTML = `<div style="text-align:center;color:var(--txt3);font-weight:800;font-size:12px;padding:10px 0">${esc(tt('ana_none'))}</div>`;
+    } else {
+      const totalV = Math.max(1, rows.reduce((m,x)=>m+x.v,0));
+      list.innerHTML = rows.map(x => {
+        const pctShare = Math.round((x.v / totalV) * 100);
+        const pctBar = Math.max(6, pctShare);
+        const name = tt('platform_' + x.k);
+        const col = _platformBrandColor(x.k);
+        return `
+          <div style="display:flex;align-items:center;gap:10px;margin:12px 0">
+            <div style="width:76px;flex-shrink:0;font-weight:1000;font-size:12px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</div>
+            <div style="flex:1;min-width:0;height:12px;border-radius:999px;background:rgba(60,60,67,.10);overflow:hidden">
+              <div style="height:100%;width:${pctBar}%;background:${esc(col)}"></div>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:8px;flex-shrink:0">
+              <span style="font-weight:1000;font-size:12px;color:var(--txt2)">${esc(yen(x.v))}</span>
+              <span style="font-weight:1000;font-size:12px;color:${esc(col)}">${pctShare}%</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  const vAll = document.getElementById('anaKpiAllVal');
+  const vDone = document.getElementById('anaKpiDoneVal');
+  const vAvg = document.getElementById('anaKpiAvgVal');
+  const uAll = document.getElementById('anaKpiAllUnit');
+  const uDone = document.getElementById('anaKpiDoneUnit');
+  if (vAll) vAll.textContent = String(countAll);
+  if (vDone) vDone.textContent = String(countDone);
+  if (vAvg) vAvg.textContent = yen(countDone ? Math.round(doneSum / countDone) : 0);
+  if (uAll) uAll.textContent = ja ? ' 件' : ` ${tt('ana_unit_cases')}`;
+  if (uDone) uDone.textContent = ja ? ' 件' : ` ${tt('ana_unit_cases')}`;
+
+  // MoM deltas (based on selected month)
+  const prevK = shiftMonthKey(curK, -1);
+  const agg = (k) => {
+    let doneCnt = 0;
+    let doneSumY = 0;
+    let allCnt = 0;
+    S.accounts.forEach(a => {
+      if (!a.project) return;
+      if (projectMonthKey(a) !== k) return;
+      allCnt += 1;
+      if (a.project.status === '終了') {
+        doneCnt += 1;
+        doneSumY += (Number(a.project.rewardYen || 0) || 0);
+      }
+    });
+    return { allCnt, doneCnt, avg: doneCnt ? (doneSumY / doneCnt) : 0 };
+  };
+  const cur = agg(curK);
+  const prev = agg(prevK);
+  const dAll = _momPct(cur.allCnt, prev.allCnt);
+  const dDone = _momPct(cur.doneCnt, prev.doneCnt);
+  const dAvgRaw = (!prev.avg) ? (cur.avg ? null : 0) : Math.round(((cur.avg - prev.avg) / prev.avg) * 100);
+
+  _setKpiBadge(document.getElementById('anaKpiAllBadge'), dAll);
+  _setKpiBadge(document.getElementById('anaKpiDoneBadge'), dDone);
+  _setKpiBadge(document.getElementById('anaKpiAvgBadge'), dAvgRaw);
+
+  // monthly expense breakdown
+  drawExpensePie('revExpPie', curK);
+  const legend = document.getElementById('anaExpLegend');
+  if (legend) {
+    const meta = REV_CHART_META.get('revExpPie');
+    const segs = meta && meta.segs ? meta.segs : [];
+    const sum = Math.max(1, segs.reduce((m,s)=>m+(s.amount||0),0));
+    if (!segs.length) {
+      legend.innerHTML = `<div style="text-align:center;color:var(--txt3);font-weight:900;font-size:12px;padding:6px 0">${esc(tt('ana_none'))}</div>`;
+    } else {
+      legend.innerHTML = segs.map(s => {
+        const pct = Math.round(((s.amount||0)/sum)*100);
+        const c = esc(s.color);
+        return `
+          <div class="ana-exp-row">
+            <span style="width:10px;height:10px;border-radius:999px;background:${c};display:inline-block;flex-shrink:0"></span>
+            <div style="font-weight:900;font-size:12px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(s.name)}</div>
+            <span style="font-weight:1000;font-size:12px;color:var(--txt2);flex-shrink:0">${esc(yen(s.amount))}</span>
+            <span class="ana-exp-pct" style="color:${c}">${pct}%</span>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // reset trend window when month changes
+  if (renderRevenueAnalysis._lastK !== curK) { anaTrendShift = 0; anaTrendPanPx = 0; }
+  renderRevenueAnalysis._lastK = curK;
+  drawAnalysisTrendChart('anaTrendChart', curK);
+}
+function renderRevenue() {
+  // tabs
+  const bM = document.getElementById('revTabMonth');
+  const bY = document.getElementById('revTabYear');
+  if (bM) bM.classList.toggle('on', revTab === 'month');
+  if (bY) bY.classList.toggle('on', revTab === 'year');
+  const nav = document.getElementById('revMonthNav');
+  if (nav) nav.style.display = revTab === 'month' ? '' : 'none';
+
+  const revCard = document.getElementById('revCard');
+  if (revCard) revCard.style.display = revTab === 'month' ? '' : 'none';
+
+  document.getElementById('revMonthWrap').style.display = revTab === 'month' ? '' : 'none';
+  document.getElementById('revGraphWrap').style.display = revTab === 'year' ? '' : 'none';
+
+  const k = revMonthKey || monthKeyFromDate(new Date());
+  revMonthKey = k;
+  document.getElementById('revMonth').textContent = k;
+  const budgets = getRevenueBudgets();
+  const budget = Number(budgets[k] || 0) || 0;
+  const { confirmed, expected, expExpected, expConfirmed } = sumForMonth(k);
+  const remain = budget - confirmed;
+  const profit = confirmed - expConfirmed;
+  document.getElementById('revBudget').value = budget ? String(budget) : '';
+  document.getElementById('revExpected').textContent = yen(expected);
+  document.getElementById('revConfirmed').textContent = yen(confirmed);
+  document.getElementById('revExpExpected').textContent = yen(expExpected);
+  document.getElementById('revExpConfirmed').textContent = yen(expConfirmed);
+  document.getElementById('revProfit').textContent = yen(profit);
+
+  const y = String(k).slice(0,4);
+  if (revTab === 'month') {
+    // 年間推移グラフは削除
+  } else {
+    renderRevenueAnalysis(revMonthKey || monthKeyFromDate(new Date()));
+  }
 }
 
 function copyField(inputId) {
@@ -3448,10 +6984,18 @@ async function init() {
   initSearch();
   initUrlAutoFill();
   initDMAnalyze();
+  initTeamJoinFromUrl();
   renderTree();
   renderMain();
   document.documentElement.lang = getAppLang() === 'en' ? 'en' : 'ja';
   applyAllLocalizations();
+
+  import('./js/firebase-auth.mjs')
+    .then((m) => {
+      m.subscribeAuth(() => updateGoogleAuthUi(m));
+      return m.initFirebase().then(() => updateGoogleAuthUi(m)).catch(() => updateGoogleAuthUi(m));
+    })
+    .catch(() => {});
 
   // iOSアプリ（Capacitor）ではService Workerキャッシュが更新不具合の原因になりやすいので無効化
   if ('serviceWorker' in navigator) {

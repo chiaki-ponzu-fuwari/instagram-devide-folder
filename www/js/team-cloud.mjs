@@ -177,6 +177,9 @@ export function subscribeTeam({ teamId, onChange, onError }) {
     unsubscribers.push(onSnapshot(collection(db, 'teams', teamId, 'activity'), (snap) => {
       onChange({ type: 'activity', data: snap.docs.map((d) => ({ id: d.id, ...d.data() })) });
     }, onError));
+    unsubscribers.push(onSnapshot(collection(db, 'teams', teamId, 'joinRequests'), (snap) => {
+      onChange({ type: 'joinRequests', data: snap.docs.map((d) => ({ id: d.id, ...d.data() })) });
+    }, onError));
   }).catch(onError);
 
   return () => {
