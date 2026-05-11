@@ -16,11 +16,13 @@
       projectId: 'splitmate-6a06d',
       storageBucket: 'splitmate-6a06d.firebasestorage.app',
       messagingSenderId: '1020392751551',
-      appId: '1:1020392751551:web:REPLACE_WITH_WEB_APP_ID_FROM_FIREBASE_CONSOLE'
+      appId: '1:1020392751551:web:REPLACE_WITH_WEB_APP_ID_FROM_FIREBASE_CONSOLE',
+      googleWebClientId: 'REPLACE_WITH_WEB_CLIENT_ID_FROM_FIREBASE_CONSOLE'
     };
     (function () {
       var c = window.DM_FIREBASE_CONFIG;
       if (c && typeof c.appId === 'string' && /REPLACE|placeholder/i.test(c.appId)) delete c.appId;
+      if (c && typeof c.googleWebClientId === 'string' && /REPLACE|placeholder/i.test(c.googleWebClientId)) delete c.googleWebClientId;
     })();
   </script>
   <link rel="manifest" href="manifest.json">
@@ -89,8 +91,6 @@
       overflow-x: hidden;
       overscroll-behavior: none;
       background: var(--bg); color: var(--txt);
-      /* 日本語グリフが欠けて「?」になるのを防ぐ（iOSで入りやすいフォントを優先） */
-      font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo', sans-serif;
       -webkit-text-size-adjust: 100%;
       -webkit-tap-highlight-color: transparent;
       user-select: none; -webkit-user-select: none;
@@ -2397,7 +2397,7 @@
   </div>
 </div>
 
-<script src="i18n.js?v=7"></script>
+<script src="i18n.js?v=7" charset="UTF-8"></script>
 <script>
 'use strict';
 
@@ -3894,7 +3894,15 @@ function initModals() {
 
   const googleAuthRow = document.getElementById('settingsGoogleAuthRow');
   if (googleAuthRow) {
+    let googleAuthBusy = false;
     const goGoogleAuth = async () => {
+      if (googleAuthBusy) return;
+      googleAuthBusy = true;
+      const sub = document.getElementById('settingsGoogleAuthSub');
+      const previousSubText = sub ? sub.textContent : '';
+      if (sub) sub.textContent = tt('google_login_progress');
+      toast(tt('google_login_progress'));
+      console.log('[auth] Google auth row tapped');
       try {
         const m = await import('./js/firebase-auth.mjs');
         if (!m.hasFirebaseConfig()) {
@@ -3914,8 +3922,12 @@ function initModals() {
           updateGoogleAuthUi(m);
         }
       } catch (e) {
-        console.error(e);
-        toast(tt('google_login_error'));
+        const msg = e && e.message ? String(e.message) : '';
+        console.error('[auth] Google sign-in failed:', msg || e);
+        toast(msg.includes('DM_FIREBASE_CONFIG') ? tt('google_login_config_missing') : tt('google_login_error'));
+        if (sub) sub.textContent = previousSubText;
+      } finally {
+        googleAuthBusy = false;
       }
     };
     googleAuthRow.addEventListener('click', goGoogleAuth);

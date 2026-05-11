@@ -6,6 +6,7 @@ import {
   signInWithRedirect,
   getRedirectResult,
   signInWithPopup,
+  signInWithCredential,
   signOut,
   onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
@@ -28,6 +29,12 @@ export function hasFirebaseConfig() {
   return !!(c && c.apiKey && c.projectId);
 }
 
+function googleWebClientId() {
+  const c = firebaseConfig();
+  const id = c && typeof c.googleWebClientId === 'string' ? c.googleWebClientId.trim() : '';
+  return id && !/REPLACE|placeholder/i.test(id) ? id : '';
+}
+
 function isNative() {
   try {
     const C = window.Capacitor;
@@ -45,10 +52,12 @@ export async function initFirebaseCore() {
     app = apps.length ? apps[0] : initializeApp(firebaseConfig());
     auth = getAuth(app);
     db = getFirestore(app);
-    try {
-      await getRedirectResult(auth);
-    } catch {
-      // Redirect result can fail after cancelled login. Keep app usable.
+    if (!isNative()) {
+      try {
+        await getRedirectResult(auth);
+      } catch {
+        // Redirect result can fail after cancelled login. Keep app usable.
+      }
     }
     return { app, auth, db };
   })();
@@ -85,8 +94,20 @@ export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   if (isNative()) {
-    await signInWithRedirect(core.auth, provider);
-    return;
+    const plugin = window.Capacitor?.Plugins?.GoogleSignIn;
+    console.log('[auth] native GoogleSignIn plugin:', plugin ? 'available' : 'missing');
+    if (plugin?.initialize && plugin?.signIn) {
+      const clientId = googleWebClientId();
+      if (!clientId) throw new Error('DM_FIREBASE_CONFIG.googleWebClientId missing');
+      await plugin.initialize({ clientId });
+      const result = await plugin.signIn();
+      const idToken = result?.idToken;
+      if (!idToken) throw new Error('Google sign-in did not return an ID token');
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(core.auth, credential);
+      return;
+    }
+    throw new Error('GoogleSignIn native plugin missing');
   }
   try {
     await signInWithPopup(core.auth, provider);
@@ -97,6 +118,11 @@ export async function signInWithGoogle() {
 
 export async function signOutGoogle() {
   const core = await getFirebaseCore();
+  try {
+    await window.Capacitor?.Plugins?.GoogleSignIn?.signOut?.();
+  } catch {
+    // Firebase sign-out below is the source of truth for app state.
+  }
   await signOut(core.auth);
 }
 
