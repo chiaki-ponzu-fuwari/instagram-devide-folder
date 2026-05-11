@@ -4,7 +4,6 @@ import {
   initializeAuth,
   browserLocalPersistence,
   browserSessionPersistence,
-  browserPopupRedirectResolver,
   getAuth,
   GoogleAuthProvider,
   signInWithRedirect,
@@ -68,7 +67,6 @@ export async function initFirebaseCore() {
     try {
       auth = initializeAuth(app, {
         persistence: [browserLocalPersistence, browserSessionPersistence],
-        popupRedirectResolver: browserPopupRedirectResolver,
       });
     } catch {
       auth = getAuth(app);
