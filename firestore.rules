@@ -1,0 +1,87 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function memberDoc(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid));
+    }
+
+    function isApprovedMember(teamId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+        && memberDoc(teamId).data.status == 'active';
+    }
+
+    function isAdmin(teamId) {
+      return isApprovedMember(teamId) && memberDoc(teamId).data.role == 'admin';
+    }
+
+    match /users/{uid} {
+      allow read, write: if isSelf(uid);
+    }
+
+    match /teams/{teamId} {
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.deletedAt == null;
+      allow read: if signedIn() && request.auth.uid in resource.data.memberUids;
+      allow update: if isAdmin(teamId);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isApprovedMember(teamId);
+        allow create: if isAdmin(teamId)
+          || (signedIn()
+            && uid == request.auth.uid
+            && get(/databases/$(database)/documents/teams/$(teamId)).data.createdBy == request.auth.uid
+            && request.resource.data.role == 'admin'
+            && request.resource.data.status == 'active'
+            && request.resource.data.uid == request.auth.uid);
+        allow update: if isAdmin(teamId) || isSelf(uid);
+        allow delete: if false;
+      }
+
+      match /folders/{folderId} {
+        allow read, create, update: if isApprovedMember(teamId);
+        allow delete: if false;
+      }
+
+      match /accounts/{accountId} {
+        allow read, create, update: if isApprovedMember(teamId);
+        allow delete: if false;
+      }
+
+      match /templates/{templateId} {
+        allow read, create, update: if isApprovedMember(teamId);
+        allow delete: if false;
+      }
+
+      match /activity/{activityId} {
+        allow read: if isApprovedMember(teamId);
+        allow create: if isApprovedMember(teamId);
+        allow update, delete: if false;
+      }
+
+      match /invites/{inviteId} {
+        allow read: if signedIn();
+        allow create, update: if isAdmin(teamId);
+        allow delete: if false;
+      }
+
+      match /joinRequests/{requestId} {
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow read: if isAdmin(teamId) || (signedIn() && resource.data.uid == request.auth.uid);
+        allow update: if isAdmin(teamId);
+        allow delete: if false;
+      }
+    }
+  }
+}
