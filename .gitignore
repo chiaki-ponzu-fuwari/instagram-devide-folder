@@ -1,2 +1,5 @@
 node_modules/
 .DS_Store
+
+# Firebase iOS config (contains API keys; keep local-only)
+ios/App/App/GoogleService-Info.plist
