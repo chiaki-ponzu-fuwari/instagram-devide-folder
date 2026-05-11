@@ -18,11 +18,12 @@
       messagingSenderId: '533885644660',
       appId: '1:533885644660:web:baa8119005c648aec3c621',
       measurementId: 'G-RJ78F2Q6RF',
-      googleWebClientId: 'REPLACE_WITH_WEB_CLIENT_ID_FROM_FIREBASE_CONSOLE'
+      googleClientId: '533885644660-5utkou93pqoek6eej051t4m4sg0sm1af.apps.googleusercontent.com'
     };
     (function () {
       var c = window.DM_FIREBASE_CONFIG;
       if (c && typeof c.appId === 'string' && /REPLACE|placeholder/i.test(c.appId)) delete c.appId;
+      if (c && typeof c.googleClientId === 'string' && /REPLACE|placeholder/i.test(c.googleClientId)) delete c.googleClientId;
       if (c && typeof c.googleWebClientId === 'string' && /REPLACE|placeholder/i.test(c.googleWebClientId)) delete c.googleWebClientId;
     })();
   </script>

@@ -29,9 +29,11 @@ export function hasFirebaseConfig() {
   return !!(c && c.apiKey && c.projectId);
 }
 
-function googleWebClientId() {
+function googleClientId() {
   const c = firebaseConfig();
-  const id = c && typeof c.googleWebClientId === 'string' ? c.googleWebClientId.trim() : '';
+  const id = c && typeof c.googleClientId === 'string'
+    ? c.googleClientId.trim()
+    : (c && typeof c.googleWebClientId === 'string' ? c.googleWebClientId.trim() : '');
   return id && !/REPLACE|placeholder/i.test(id) ? id : '';
 }
 
@@ -97,8 +99,8 @@ export async function signInWithGoogle() {
     const plugin = window.Capacitor?.Plugins?.GoogleSignIn;
     console.log('[auth] native GoogleSignIn plugin:', plugin ? 'available' : 'missing');
     if (plugin?.initialize && plugin?.signIn) {
-      const clientId = googleWebClientId();
-      if (!clientId) throw new Error('DM_FIREBASE_CONFIG.googleWebClientId missing');
+      const clientId = googleClientId();
+      if (!clientId) throw new Error('DM_FIREBASE_CONFIG.googleClientId missing');
       await plugin.initialize({ clientId });
       const result = await plugin.signIn();
       const idToken = result?.idToken;
