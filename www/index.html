@@ -1651,6 +1651,8 @@
           <div class="tmpl-btns">
             <button class="tmpl-btn tmpl-copy" id="backupExportBtn">⬇︎ データを書き出す</button>
             <button class="tmpl-btn tmpl-edit" id="backupCopyBtn">⎘ JSONをコピー</button>
+            <button class="tmpl-btn tmpl-copy" id="backupCloudSaveBtn">クラウドへ保存</button>
+            <button class="tmpl-btn tmpl-edit" id="backupCloudLoadBtn">クラウドから復元</button>
           </div>
         </div>
       </div>
@@ -3945,6 +3947,45 @@ function initModals() {
   document.getElementById('backupCopyBtn').addEventListener('click', () => {
     const json = getBackupJSON();
     navigator.clipboard.writeText(json).then(() => toast(tt('toast_json_copied'))).catch(() => toast(tt('toast_copy_fail')));
+  });
+
+  const cloudSaveBtn = document.getElementById('backupCloudSaveBtn');
+  if (cloudSaveBtn) cloudSaveBtn.addEventListener('click', async () => {
+    try {
+      const auth = await import('./js/firebase-auth.mjs');
+      const backup = await import('./js/personal-cloud-backup.mjs');
+      await auth.initFirebase();
+      await auth.waitForInitialAuth();
+      const user = auth.getCurrentUser();
+      if (!user) { toast(tt('login_req_title')); return; }
+      await backup.savePersonalBackup({ user, data: JSON.parse(getBackupJSON()) });
+      toast(tt('toast_cloud_backup_ok'));
+    } catch (e) {
+      console.error(e);
+      toast(tt('toast_cloud_backup_fail'));
+    }
+  });
+
+  const cloudLoadBtn = document.getElementById('backupCloudLoadBtn');
+  if (cloudLoadBtn) cloudLoadBtn.addEventListener('click', async () => {
+    try {
+      const auth = await import('./js/firebase-auth.mjs');
+      const backup = await import('./js/personal-cloud-backup.mjs');
+      await auth.initFirebase();
+      await auth.waitForInitialAuth();
+      const user = auth.getCurrentUser();
+      if (!user) { toast(tt('login_req_title')); return; }
+      const data = await backup.loadPersonalBackup({ user });
+      if (!data) { toast(tt('toast_cloud_restore_empty')); return; }
+      if (!validateBackupObject(data)) { toast(tt('toast_backup_bad')); return; }
+      showAS(tt('restore_pick'), [
+        { label: tt('restore_overwrite'), fn:() => { S.folders=data.folders; S.accounts=data.accounts; S.templates=data.templates||[]; S.meta=data.meta||{}; save(); toast(tt('toast_cloud_restore_ok')); } },
+        { label: tt('restore_merge'), fn:() => { mergeBackupObject(data); toast(tt('toast_merged')); } },
+      ]);
+    } catch (e) {
+      console.error(e);
+      toast(tt('toast_cloud_restore_fail'));
+    }
   });
 
   // Project platforms (multi-select)
