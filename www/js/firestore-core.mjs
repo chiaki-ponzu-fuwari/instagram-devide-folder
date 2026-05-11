@@ -1,6 +1,10 @@
 /* global window */
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {
+  initializeAuth,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  browserPopupRedirectResolver,
   getAuth,
   GoogleAuthProvider,
   signInWithRedirect,
@@ -44,13 +48,31 @@ function isNative() {
   }
 }
 
+function withTimeout(promise, label, ms = 15000) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    timeout,
+  ]);
+}
+
 export async function initFirebaseCore() {
   if (!hasFirebaseConfig()) throw new Error('DM_FIREBASE_CONFIG missing');
   if (initPromise) return initPromise;
   initPromise = (async () => {
     const apps = getApps();
     app = apps.length ? apps[0] : initializeApp(firebaseConfig());
-    auth = getAuth(app);
+    try {
+      auth = initializeAuth(app, {
+        persistence: [browserLocalPersistence, browserSessionPersistence],
+        popupRedirectResolver: browserPopupRedirectResolver,
+      });
+    } catch {
+      auth = getAuth(app);
+    }
     db = getFirestore(app);
     if (!isNative()) {
       try {
@@ -100,11 +122,15 @@ export async function signInWithGoogle() {
       const clientId = googleWebClientId();
       if (!clientId) throw new Error('DM_FIREBASE_CONFIG.googleWebClientId missing');
       await plugin.initialize({ clientId });
+      console.log('[auth] GoogleSignIn initialized');
       const result = await plugin.signIn();
+      console.log('[auth] GoogleSignIn result received:', !!result, result?.email || '', result?.userId || '');
       const idToken = result?.idToken;
       if (!idToken) throw new Error('Google sign-in did not return an ID token');
       const credential = GoogleAuthProvider.credential(idToken);
-      await signInWithCredential(core.auth, credential);
+      console.log('[auth] signing into Firebase with Google credential');
+      await withTimeout(signInWithCredential(core.auth, credential), 'Firebase sign-in');
+      console.log('[auth] Firebase sign-in completed:', core.auth.currentUser?.email || core.auth.currentUser?.uid || '');
       return;
     }
     throw new Error('GoogleSignIn native plugin missing');
