@@ -5,6 +5,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   getAuth,
+  browserPopupRedirectResolver,
   GoogleAuthProvider,
   OAuthProvider,
   signInWithRedirect,
@@ -23,6 +24,7 @@ let app;
 let auth;
 let db;
 let initPromise;
+const LAST_LOGIN_PROVIDER_KEY = 'dm:lastLoginProvider';
 
 export function firebaseConfig() {
   return typeof window !== 'undefined' ? window.DM_FIREBASE_CONFIG : null;
@@ -78,23 +80,39 @@ async function sha256Hex(value) {
     .join('');
 }
 
+function setLastLoginProvider(providerId) {
+  try {
+    if (providerId) {
+      window.localStorage?.setItem(LAST_LOGIN_PROVIDER_KEY, providerId);
+    } else {
+      window.localStorage?.removeItem(LAST_LOGIN_PROVIDER_KEY);
+    }
+  } catch {}
+}
+
+export function getLastLoginProvider() {
+  try {
+    return window.localStorage?.getItem(LAST_LOGIN_PROVIDER_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
 export async function initFirebaseCore() {
   if (!hasFirebaseConfig()) throw new Error('DM_FIREBASE_CONFIG missing');
   if (initPromise) return initPromise;
   initPromise = (async () => {
     const apps = getApps();
     app = apps.length ? apps[0] : initializeApp(firebaseConfig());
-    try {
-      auth = initializeAuth(app, {
-        persistence: [browserLocalPersistence, browserSessionPersistence],
-      });
-    } catch {
-      auth = getAuth(app);
-    }
+    auth = isNative()
+      ? initializeAuth(app, {
+          persistence: [browserLocalPersistence, browserSessionPersistence],
+        })
+      : getAuth(app);
     db = getFirestore(app);
     if (!isNative()) {
       try {
-        await getRedirectResult(auth);
+        await getRedirectResult(auth, browserPopupRedirectResolver);
       } catch {
         // Redirect result can fail after cancelled login. Keep app usable.
       }
@@ -111,12 +129,22 @@ export async function getFirebaseCore() {
 
 export async function waitForInitialAuth() {
   const core = await getFirebaseCore();
+  if (typeof core.auth?.authStateReady === 'function') {
+    try {
+      await core.auth.authStateReady();
+      return core.auth.currentUser ?? null;
+    } catch {}
+  }
   return new Promise((resolve) => {
     const unsub = onAuthStateChanged(core.auth, (user) => {
       unsub();
       resolve(user);
     });
   });
+}
+
+export async function waitForAuthReady() {
+  return waitForInitialAuth();
 }
 
 export function getCurrentUser() {
@@ -133,7 +161,14 @@ export async function signInWithGoogle() {
   const core = await getFirebaseCore();
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
-  if (isNative()) {
+  const native = isNative();
+  console.log('[auth-core] google sign-in start', {
+    native,
+    authDomain: core.auth?.config?.authDomain || '',
+    appName: core.auth?.name || '',
+    href: typeof location !== 'undefined' ? location.href : '',
+  });
+  if (native) {
     const plugin = window.Capacitor?.Plugins?.GoogleSignIn;
     if (plugin?.initialize && plugin?.signIn) {
       const clientId = googleWebClientId();
@@ -144,14 +179,32 @@ export async function signInWithGoogle() {
       if (!idToken) throw new Error('Google sign-in did not return an ID token');
       const credential = GoogleAuthProvider.credential(idToken);
       await withTimeout(signInWithCredential(core.auth, credential), 'Firebase sign-in');
+      setLastLoginProvider('google.com');
       return;
     }
     throw new Error('GoogleSignIn native plugin missing');
   }
   try {
-    await signInWithPopup(core.auth, provider);
-  } catch {
-    await signInWithRedirect(core.auth, provider);
+    console.log('[auth-core] google popup attempt');
+    await signInWithPopup(core.auth, provider, browserPopupRedirectResolver);
+    console.log('[auth-core] google popup success');
+    setLastLoginProvider('google.com');
+  } catch (e) {
+    const code = String(e?.code || '');
+    console.error('[auth-core] google popup failed', code, e?.message || e);
+    if (
+      code === 'auth/popup-blocked'
+      || code === 'auth/popup-closed-by-user'
+      || code === 'auth/cancelled-popup-request'
+      || code === 'auth/argument-error'
+      || code === 'auth/operation-not-supported-in-this-environment'
+    ) {
+      console.log('[auth-core] google redirect fallback');
+      setLastLoginProvider('google.com');
+      await signInWithRedirect(core.auth, provider, browserPopupRedirectResolver);
+      return;
+    }
+    throw e;
   }
 }
 
@@ -178,6 +231,7 @@ export async function signInWithApple() {
   const provider = new OAuthProvider('apple.com');
   const credential = provider.credential({ idToken: identityToken, rawNonce });
   await withTimeout(signInWithCredential(core.auth, credential), 'Firebase Apple sign-in');
+  setLastLoginProvider('apple.com');
 }
 
 export async function signOutGoogle() {
@@ -193,6 +247,12 @@ export async function signOutGoogle() {
 export async function signOutCurrentUser() {
   const core = await getFirebaseCore();
   await signOut(core.auth);
+  setLastLoginProvider('');
 }
 
 export { serverTimestamp };
+
+export {
+  getLoginUiState,
+  shouldOpenLogoutSheet,
+} from './auth-state.mjs';
