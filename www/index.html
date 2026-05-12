@@ -545,6 +545,20 @@
     .settings-item-ttl { flex:1; font-size:15px; font-weight:700; }
     .settings-item-sub { font-size:12px; color:var(--txt3); font-weight:700; }
     .settings-item-chev { color:var(--txt3); font-size:18px; }
+    .settings-item-badge {
+      margin-left:auto;
+      padding:3px 8px;
+      border-radius:999px;
+      border:.5px solid var(--sep);
+      background:var(--fill);
+      color:var(--txt3);
+      font-size:11px;
+      font-weight:800;
+      line-height:1.15;
+      letter-spacing:0;
+      white-space:nowrap;
+      flex-shrink:0;
+    }
     .settings-login-choices {
       display:flex;
       flex-direction:column;
@@ -1643,9 +1657,11 @@
           <div class="settings-login-choices" id="settingsLoginChoices" hidden>
             <div class="settings-login-choice" id="settingsGoogleLoginRow" role="button" tabindex="0">
               <span class="settings-item-ttl" id="settingsGoogleLoginTtl">Googleログイン</span>
+              <span class="settings-item-badge" id="settingsGoogleLoginBadge" hidden>ログイン中</span>
             </div>
             <div class="settings-login-choice" id="settingsAppleLoginRow" role="button" tabindex="0">
               <span class="settings-item-ttl" id="settingsAppleLoginTtl">Apple IDログイン</span>
+              <span class="settings-item-badge" id="settingsAppleLoginBadge" hidden>ログイン中</span>
             </div>
           </div>
         </div>
@@ -3867,12 +3883,27 @@ function updateLoginUi(mod) {
   const choices = document.getElementById('settingsLoginChoices');
   const gTtl = document.getElementById('settingsGoogleLoginTtl');
   const aTtl = document.getElementById('settingsAppleLoginTtl');
+  const gBadge = document.getElementById('settingsGoogleLoginBadge');
+  const aBadge = document.getElementById('settingsAppleLoginBadge');
+  const user = authMod?.getCurrentUser?.() || null;
+  const lastProvider = authMod?.getLastLoginProvider?.() || '';
+  const providerIds = new Set(
+    Array.isArray(user?.providerData)
+      ? user.providerData.map((p) => (p && p.providerId && p.providerId !== 'firebase' ? p.providerId : '')).filter(Boolean)
+      : []
+  );
+  const activeGoogle = lastProvider === 'google.com' || (providerIds.size === 1 && providerIds.has('google.com'));
+  const activeApple = lastProvider === 'apple.com' || (providerIds.size === 1 && providerIds.has('apple.com'));
   if (loginTtl) loginTtl.textContent = tt('settings_login');
   if (loginRow) loginRow.setAttribute('aria-expanded', settingsLoginOpen ? 'true' : 'false');
   if (loginChev) loginChev.textContent = settingsLoginOpen ? '⌄' : '›';
   if (choices) choices.hidden = !settingsLoginOpen;
   if (gTtl) gTtl.textContent = tt('settings_google_login');
   if (aTtl) aTtl.textContent = tt('settings_apple_login');
+  if (gBadge) gBadge.textContent = tt('settings_login_signed_in');
+  if (aBadge) aBadge.textContent = tt('settings_login_signed_in');
+  if (gBadge) gBadge.hidden = !activeGoogle;
+  if (aBadge) aBadge.hidden = !activeApple;
 }
 
 function updateGoogleAuthUi(mod) {
@@ -5325,6 +5356,9 @@ function stopCloudTeamListener() {
     cloudTeamUnsubscribe();
     cloudTeamUnsubscribe = null;
   }
+  cloudTeamMembers = [];
+  cloudTeamActivity = [];
+  cloudTeamJoinRequests = [];
 }
 
 function _ensureTeamSettings(team) {
@@ -5872,9 +5906,13 @@ async function openTeamDetail() {
     return;
   }
   stopCloudTeamListener();
+  cloudTeamMembers = [];
+  cloudTeamActivity = [];
+  cloudTeamJoinRequests = [];
   const api = await getCloudTeamApi();
   cloudTeamUnsubscribe = api.subscribeTeam({
     teamId: cloudSelectedTeam.id,
+    includeJoinRequests: isTeamAdmin(cloudSelectedTeam),
     onChange: (event) => {
       if (event.type === 'team') cloudSelectedTeam = event.data;
       if (event.type === 'members') cloudTeamMembers = event.data;

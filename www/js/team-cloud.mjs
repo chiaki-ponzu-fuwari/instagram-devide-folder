@@ -168,7 +168,7 @@ export async function updateTeamName({ user, teamId, name }) {
   });
 }
 
-export function subscribeTeam({ teamId, onChange, onError }) {
+export function subscribeTeam({ teamId, includeJoinRequests = false, onChange, onError }) {
   const unsubscribers = [];
   let closed = false;
   getFirebaseCore().then(({ db }) => {
@@ -182,9 +182,11 @@ export function subscribeTeam({ teamId, onChange, onError }) {
     unsubscribers.push(onSnapshot(collection(db, 'teams', teamId, 'activity'), (snap) => {
       onChange({ type: 'activity', data: snap.docs.map((d) => ({ id: d.id, ...d.data() })) });
     }, onError));
-    unsubscribers.push(onSnapshot(collection(db, 'teams', teamId, 'joinRequests'), (snap) => {
-      onChange({ type: 'joinRequests', data: snap.docs.map((d) => ({ id: d.id, ...d.data() })) });
-    }, onError));
+    if (includeJoinRequests) {
+      unsubscribers.push(onSnapshot(collection(db, 'teams', teamId, 'joinRequests'), (snap) => {
+        onChange({ type: 'joinRequests', data: snap.docs.map((d) => ({ id: d.id, ...d.data() })) });
+      }, onError));
+    }
   }).catch(onError);
 
   return () => {
