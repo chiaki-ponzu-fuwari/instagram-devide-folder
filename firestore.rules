@@ -10,18 +10,30 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function memberPath(teamId, uid) {
+      return /databases/$(database)/documents/teams/$(teamId)/members/$(uid);
+    }
+
     function memberDoc(teamId) {
-      return get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid));
+      return get(memberPath(teamId, request.auth.uid));
     }
 
     function isApprovedMember(teamId) {
       return signedIn()
-        && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+        && exists(memberPath(teamId, request.auth.uid))
         && memberDoc(teamId).data.status == 'active';
     }
 
     function isAdmin(teamId) {
       return isApprovedMember(teamId) && memberDoc(teamId).data.role == 'admin';
+    }
+
+    function isSafeSelfMemberUpdate() {
+      return request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.editScope == resource.data.editScope
+        && request.resource.data.rewardScope == resource.data.rewardScope;
     }
 
     match /users/{uid} {
@@ -32,7 +44,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.deletedAt == null;
-      allow read: if signedIn() && request.auth.uid in resource.data.memberUids;
+      allow read: if isApprovedMember(teamId);
       allow update: if isAdmin(teamId);
       allow delete: if false;
 
@@ -42,10 +54,10 @@ service cloud.firestore {
           || (signedIn()
             && uid == request.auth.uid
             && get(/databases/$(database)/documents/teams/$(teamId)).data.createdBy == request.auth.uid
+            && request.resource.data.uid == request.auth.uid
             && request.resource.data.role == 'admin'
-            && request.resource.data.status == 'active'
-            && request.resource.data.uid == request.auth.uid);
-        allow update: if isAdmin(teamId) || isSelf(uid);
+            && request.resource.data.status == 'active');
+        allow update: if isAdmin(teamId) || (isSelf(uid) && isSafeSelfMemberUpdate());
         allow delete: if false;
       }
 
@@ -65,19 +77,19 @@ service cloud.firestore {
       }
 
       match /activity/{activityId} {
-        allow read: if isApprovedMember(teamId);
-        allow create: if isApprovedMember(teamId);
+        allow read, create: if isApprovedMember(teamId);
         allow update, delete: if false;
       }
 
       match /invites/{inviteId} {
-        allow read: if signedIn();
-        allow create, update: if isAdmin(teamId);
+        allow read, create, update: if isAdmin(teamId);
         allow delete: if false;
       }
 
       match /joinRequests/{requestId} {
-        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.status == 'pending';
         allow read: if isAdmin(teamId) || (signedIn() && resource.data.uid == request.auth.uid);
         allow update: if isAdmin(teamId);
         allow delete: if false;
