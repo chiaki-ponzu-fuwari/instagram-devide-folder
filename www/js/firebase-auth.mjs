@@ -7,4 +7,5 @@ export {
   signInWithGoogle,
   signInWithApple,
   signOutGoogle,
+  signOutCurrentUser,
 } from './firestore-core.mjs';

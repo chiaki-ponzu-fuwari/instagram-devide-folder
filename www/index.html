@@ -122,8 +122,21 @@
       .hdr { background:rgba(28,28,30,.88); }
     }
     .hdr-title {
-      flex:1; font-size:20px; font-weight:700; text-align:center;
+      flex:0 1 auto;
+      font-size:20px; font-weight:700; text-align:center;
       overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .hdr-side {
+      flex:1 1 0;
+      display:flex; align-items:center;
+      min-width:0;
+    }
+    .hdr-side.left { justify-content:flex-start; }
+    .hdr-side.right { justify-content:flex-end; gap:4px; }
+    .hdr-side.right .ico-btn { flex-shrink:0; }
+    .hdr-side.left .ico-btn { flex-shrink:0; }
+    .hdr-center {
+      flex:0 0 auto;
     }
     .ico-btn {
       min-width:44px; height:44px; padding:0 6px;
@@ -494,8 +507,16 @@
       background:rgba(255,255,255,.85);
       backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
       border-bottom:.5px solid var(--sep); flex-shrink:0;
+      position:relative;
     }
     @media (prefers-color-scheme:dark) { .settings-hdr { background:rgba(28,28,30,.88); } }
+    .settings-side {
+      flex:1 1 0;
+      display:flex; align-items:center;
+      min-width:0;
+    }
+    .settings-side.left { justify-content:flex-start; }
+    .settings-side.right { justify-content:flex-end; }
     .settings-body {
       flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
       padding:20px 14px 20px;
@@ -537,23 +558,10 @@
       min-height:48px;
       background:rgba(255,255,255,.02);
     }
-    .settings-login-action {
-      display:flex; align-items:center; gap:10px;
-      padding:12px 16px 12px 46px;
-      cursor:pointer;
-      min-height:44px;
-      border-top:.5px solid var(--sep);
-      color:var(--danger, #d74b4b);
-      font-weight:700;
-      background:rgba(255,255,255,.01);
-    }
     @media (prefers-color-scheme:dark) {
       .settings-login-choice { background:rgba(255,255,255,.015); }
-      .settings-login-action { background:rgba(255,255,255,.01); }
     }
-    .settings-login-choice + .settings-login-choice {
-      border-top:.5px solid var(--sep);
-    }
+    .settings-login-choice + .settings-login-choice { border-top:.5px solid var(--sep); }
     .settings-bottom-links {
       flex-shrink:0;
       display:flex; flex-direction:row;
@@ -1348,26 +1356,30 @@
 
   <!-- Header -->
   <header class="hdr">
-    <button class="ico-btn ham" id="hamBtn" aria-label="メニュー">
-      <svg viewBox="0 0 24 24"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/></svg>
-    </button>
+    <div class="hdr-side left">
+      <button class="ico-btn ham" id="hamBtn" aria-label="メニュー">
+        <svg viewBox="0 0 24 24"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/></svg>
+      </button>
+    </div>
     <h1 class="hdr-title" id="hdrTitle">DM管理</h1>
-    <button class="ico-btn" id="moneyBtn" aria-label="収益">
-      <!-- coin with Yen mark -->
-      <svg viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M7.8 7.1l4.2 4.9 4.2-4.9"/>
-        <path d="M12 12v5.8"/>
-        <path d="M9 12.9h6"/>
-        <path d="M9.6 14.8h4.9"/>
-      </svg>
-    </button>
-    <button class="ico-btn" id="schedBtn" aria-label="スケジュール">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-    </button>
-    <button class="ico-btn" id="settingsBtn" aria-label="設定">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
+    <div class="hdr-side right">
+      <button class="ico-btn" id="moneyBtn" aria-label="収益">
+        <!-- coin with Yen mark -->
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M7.8 7.1l4.2 4.9 4.2-4.9"/>
+          <path d="M12 12v5.8"/>
+          <path d="M9 12.9h6"/>
+          <path d="M9.6 14.8h4.9"/>
+        </svg>
+      </button>
+      <button class="ico-btn" id="schedBtn" aria-label="スケジュール">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </button>
+      <button class="ico-btn" id="settingsBtn" aria-label="設定">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
   </header>
 
   <!-- Body -->
@@ -1607,13 +1619,17 @@
 <!-- Settings View -->
 <div class="settings-ov" id="settingsOv">
   <div class="settings-hdr">
-    <button class="ico-btn" id="settingsClose" aria-label="閉じる">
-      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
-    </button>
+    <div class="settings-side left">
+      <button class="ico-btn" id="settingsClose" aria-label="閉じる">
+        <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+    </div>
     <span class="hdr-title" id="settingsHdrTitle">設定</span>
-    <div class="settings-lang" id="settingsLangSwitch" role="group" aria-label="表示言語">
-      <button type="button" class="settings-lang-btn" data-set-lang="ja" id="langBtnJa">JA</button>
-      <button type="button" class="settings-lang-btn" data-set-lang="en" id="langBtnEn">EN</button>
+    <div class="settings-side right">
+      <div class="settings-lang" id="settingsLangSwitch" role="group" aria-label="表示言語">
+        <button type="button" class="settings-lang-btn" data-set-lang="ja" id="langBtnJa">JA</button>
+        <button type="button" class="settings-lang-btn" data-set-lang="en" id="langBtnEn">EN</button>
+      </div>
     </div>
   </div>
   <div class="settings-body">
@@ -1622,20 +1638,15 @@
         <div class="settings-item">
           <div class="settings-item-row" id="settingsLoginRow" role="button" tabindex="0" aria-expanded="false">
             <span class="settings-item-ttl" id="settingsLoginTtl">ログイン</span>
-            <span class="settings-item-sub" id="settingsLoginSub">ログインする</span>
             <span class="settings-item-chev" id="settingsLoginChev">›</span>
           </div>
           <div class="settings-login-choices" id="settingsLoginChoices" hidden>
             <div class="settings-login-choice" id="settingsGoogleLoginRow" role="button" tabindex="0">
               <span class="settings-item-ttl" id="settingsGoogleLoginTtl">Googleログイン</span>
-              <span class="settings-item-sub" id="settingsGoogleLoginSub">ログインする</span>
             </div>
-            <div class="settings-login-action" id="settingsGoogleLogoutRow" role="button" tabindex="0" hidden>ログアウトする</div>
             <div class="settings-login-choice" id="settingsAppleLoginRow" role="button" tabindex="0">
-              <span class="settings-item-ttl" id="settingsAppleLoginTtl">アップルログイン</span>
-              <span class="settings-item-sub" id="settingsAppleLoginSub">ログインする</span>
+              <span class="settings-item-ttl" id="settingsAppleLoginTtl">Apple IDログイン</span>
             </div>
-            <div class="settings-login-action" id="settingsAppleLogoutRow" role="button" tabindex="0" hidden>ログアウトする</div>
           </div>
         </div>
         <div class="settings-item">
@@ -2582,7 +2593,6 @@ function applyLegalPanels() {
 
 let settingsPanelKey = 'home';
 let settingsLoginOpen = false;
-let settingsLogoutProvider = null;
 let firebaseAuthMod = null;
 
 function updateLangSwitcher() {
@@ -2617,17 +2627,11 @@ function applyChromeStatic() {
   document.getElementById('settingsGoRevenueTtl').textContent = tt('settings_revenue');
   document.getElementById('settingsGoRevenueSub').textContent = tt('settings_revenue_sub');
   const loginTtl = document.getElementById('settingsLoginTtl');
-  const loginSub = document.getElementById('settingsLoginSub');
   const googleLoginTtl = document.getElementById('settingsGoogleLoginTtl');
-  const googleLoginSub = document.getElementById('settingsGoogleLoginSub');
   const appleLoginTtl = document.getElementById('settingsAppleLoginTtl');
-  const appleLoginSub = document.getElementById('settingsAppleLoginSub');
   if (loginTtl) loginTtl.textContent = tt('settings_login');
-  if (loginSub) loginSub.textContent = tt('settings_login_signed_out');
   if (googleLoginTtl) googleLoginTtl.textContent = tt('settings_google_login');
-  if (googleLoginSub) googleLoginSub.textContent = tt('settings_login_signed_out');
   if (appleLoginTtl) appleLoginTtl.textContent = tt('settings_apple_login');
-  if (appleLoginSub) appleLoginSub.textContent = tt('settings_login_signed_out');
   updateLoginUi();
   const b1 = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-title');
   const b1b = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-body');
@@ -3859,33 +3863,16 @@ function updateLoginUi(mod) {
   const authMod = mod || firebaseAuthMod;
   const loginRow = document.getElementById('settingsLoginRow');
   const loginTtl = document.getElementById('settingsLoginTtl');
-  const loginSub = document.getElementById('settingsLoginSub');
   const loginChev = document.getElementById('settingsLoginChev');
   const choices = document.getElementById('settingsLoginChoices');
   const gTtl = document.getElementById('settingsGoogleLoginTtl');
-  const gSub = document.getElementById('settingsGoogleLoginSub');
-  const gLogout = document.getElementById('settingsGoogleLogoutRow');
   const aTtl = document.getElementById('settingsAppleLoginTtl');
-  const aSub = document.getElementById('settingsAppleLoginSub');
-  const aLogout = document.getElementById('settingsAppleLogoutRow');
-  const u = authMod && typeof authMod.getCurrentUser === 'function' ? authMod.getCurrentUser() : null;
-  const providerId = u?.providerData?.find?.(p => p && p.providerId && p.providerId !== 'firebase')?.providerId || '';
-  const googleSignedIn = providerId === 'google.com';
-  const appleSignedIn = providerId === 'apple.com';
-  const signedIn = !!u;
   if (loginTtl) loginTtl.textContent = tt('settings_login');
-  if (loginSub) loginSub.textContent = signedIn ? tt('settings_login_signed_in') : tt('settings_login_signed_out');
   if (loginRow) loginRow.setAttribute('aria-expanded', settingsLoginOpen ? 'true' : 'false');
   if (loginChev) loginChev.textContent = settingsLoginOpen ? '⌄' : '›';
   if (choices) choices.hidden = !settingsLoginOpen;
   if (gTtl) gTtl.textContent = tt('settings_google_login');
-  if (gSub) gSub.textContent = googleSignedIn ? tt('settings_login_signed_in') : tt('settings_login_signed_out');
-  if (gLogout) gLogout.textContent = tt('settings_login_action_logout');
-  if (gLogout) gLogout.hidden = !(googleSignedIn && settingsLogoutProvider === 'google');
   if (aTtl) aTtl.textContent = tt('settings_apple_login');
-  if (aSub) aSub.textContent = appleSignedIn ? tt('settings_login_signed_in') : tt('settings_login_signed_out');
-  if (aLogout) aLogout.textContent = tt('settings_login_action_logout');
-  if (aLogout) aLogout.hidden = !(appleSignedIn && settingsLogoutProvider === 'apple');
 }
 
 function updateGoogleAuthUi(mod) {
@@ -3894,18 +3881,12 @@ function updateGoogleAuthUi(mod) {
 
 function setLoginSectionOpen(open) {
   settingsLoginOpen = !!open;
-  if (!settingsLoginOpen) settingsLogoutProvider = null;
   const loginRow = document.getElementById('settingsLoginRow');
   const loginChev = document.getElementById('settingsLoginChev');
   const choices = document.getElementById('settingsLoginChoices');
   if (loginRow) loginRow.setAttribute('aria-expanded', settingsLoginOpen ? 'true' : 'false');
   if (loginChev) loginChev.textContent = settingsLoginOpen ? '⌄' : '›';
   if (choices) choices.hidden = !settingsLoginOpen;
-}
-
-function setLogoutProvider(provider) {
-  settingsLogoutProvider = provider;
-  updateLoginUi();
 }
 
 function initModals() {
@@ -3989,8 +3970,6 @@ function initModals() {
   const loginRow = document.getElementById('settingsLoginRow');
   const googleLoginRow = document.getElementById('settingsGoogleLoginRow');
   const appleLoginRow = document.getElementById('settingsAppleLoginRow');
-  const googleLogoutRow = document.getElementById('settingsGoogleLogoutRow');
-  const appleLogoutRow = document.getElementById('settingsAppleLogoutRow');
   let loginBusy = false;
   const runGoogleLogin = async () => {
     if (loginBusy) return;
@@ -4010,7 +3989,6 @@ function initModals() {
       await m.signInWithGoogle();
       await m.waitForInitialAuth();
       if (m.getCurrentUser()) toast(tt('google_login_ok'));
-      setLogoutProvider(null);
       updateLoginUi(m);
     } catch (e) {
       const msg = e && e.message ? String(e.message) : '';
@@ -4040,7 +4018,6 @@ function initModals() {
       await m.signInWithApple();
       await m.waitForInitialAuth();
       if (m.getCurrentUser()) toast(tt('apple_login_ok'));
-      setLogoutProvider(null);
       updateLoginUi(m);
     } catch (e) {
       const msg = e && e.message ? String(e.message) : '';
@@ -4063,8 +4040,7 @@ function initModals() {
       const m = firebaseAuthMod || await import('./js/firebase-auth.mjs');
       firebaseAuthMod = m;
       await m.initFirebase();
-      await m.signOutGoogle();
-      setLogoutProvider(null);
+      await m.signOutCurrentUser();
       updateLoginUi(m);
       toast(tt('google_logout_ok'));
     } catch (e) {
@@ -4087,10 +4063,11 @@ function initModals() {
     googleLoginRow.addEventListener('click', () => {
       const providerId = firebaseAuthMod?.getCurrentUser?.()?.providerData?.find?.(p => p && p.providerId && p.providerId !== 'firebase')?.providerId || '';
       if (providerId === 'google.com') {
-        setLogoutProvider(settingsLogoutProvider === 'google' ? null : 'google');
+        showAS(tt('settings_google_login'), [
+          { label: tt('settings_login_action_logout'), danger: true, fn: signOutCurrent },
+        ]);
         return;
       }
-      setLogoutProvider(null);
       runGoogleLogin();
     });
     googleLoginRow.addEventListener('keydown', (e) => {
@@ -4100,38 +4077,21 @@ function initModals() {
       }
     });
   }
-  if (googleLogoutRow) {
-    googleLogoutRow.addEventListener('click', signOutCurrent);
-    googleLogoutRow.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        signOutCurrent();
-      }
-    });
-  }
   if (appleLoginRow) {
     appleLoginRow.addEventListener('click', () => {
       const providerId = firebaseAuthMod?.getCurrentUser?.()?.providerData?.find?.(p => p && p.providerId && p.providerId !== 'firebase')?.providerId || '';
       if (providerId === 'apple.com') {
-        setLogoutProvider(settingsLogoutProvider === 'apple' ? null : 'apple');
+        showAS(tt('settings_apple_login'), [
+          { label: tt('settings_login_action_logout'), danger: true, fn: signOutCurrent },
+        ]);
         return;
       }
-      setLogoutProvider(null);
       runAppleLogin();
     });
     appleLoginRow.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         appleLoginRow.click();
-      }
-    });
-  }
-  if (appleLogoutRow) {
-    appleLogoutRow.addEventListener('click', signOutCurrent);
-    appleLogoutRow.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        signOutCurrent();
       }
     });
   }

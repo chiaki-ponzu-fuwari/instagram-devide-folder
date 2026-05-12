@@ -187,6 +187,11 @@ export async function signOutGoogle() {
   } catch {
     // Firebase sign-out below is the source of truth for app state.
   }
+  await signOutCurrentUser();
+}
+
+export async function signOutCurrentUser() {
+  const core = await getFirebaseCore();
   await signOut(core.auth);
 }
 

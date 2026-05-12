@@ -1,0 +1,15 @@
+{
+	"appId": "com.chiaki.dmmanager",
+	"appName": "DM管理",
+	"webDir": "www",
+	"ios": {
+		"scrollEnabled": false
+	},
+	"packageClassList": [
+		"SignInWithApple",
+		"FilesystemPlugin",
+		"SharePlugin",
+		"FilePickerPlugin",
+		"GoogleSignInPlugin"
+	]
+}
