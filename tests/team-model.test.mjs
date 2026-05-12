@@ -10,6 +10,7 @@ import {
   resolveRewardVisibility,
   canUseTeamRecord,
   buildActivityText,
+  currentUserLabel,
 } from '../www/js/team-model.mjs';
 
 test('normalizeMemberRecord fills defaults for a new admin', () => {
@@ -49,6 +50,10 @@ test('resolveRewardVisibility returns the admin-controlled scope', () => {
   assert.equal(resolveRewardVisibility({ rewardVisibility: 'admin_only' }), 'admin_only');
   assert.equal(resolveRewardVisibility({ rewardVisibility: 'all_members' }), 'all_members');
   assert.equal(resolveRewardVisibility({ rewardVisibility: 'selected_members' }), 'selected_members');
+  assert.equal(resolveRewardVisibility({ rewardVisibility: 'all' }), 'all_members');
+  assert.equal(resolveRewardVisibility({ rewardVisibility: 'self' }), 'admin_only');
+  assert.equal(resolveRewardVisibility({ rewardVisibility: 'self_plus_total' }), 'admin_only');
+  assert.equal(resolveRewardVisibility({ rewardVisibility: 'unexpected-value' }), 'admin_only');
 });
 
 test('normalizeTeamRecord keeps safe fields and fills metadata', () => {
@@ -78,4 +83,13 @@ test('buildActivityText creates a short Japanese message', () => {
     buildActivityText({ actorName: '山田', action: 'createTeam', targetName: 'HERAC' }),
     '山田さんがチーム「HERAC」を作成しました',
   );
+  assert.equal(
+    buildActivityText({ actorName: '', action: 'somethingElse', targetName: '' }),
+    'メンバーさんが「データ」を変更しました',
+  );
+});
+
+test('currentUserLabel falls back cleanly', () => {
+  assert.equal(currentUserLabel({ displayName: '  ' , email: 'chiaki@example.com' }), 'chiaki@example.com');
+  assert.equal(currentUserLabel({ displayName: '  ' , email: '  ' }), 'メンバー');
 });

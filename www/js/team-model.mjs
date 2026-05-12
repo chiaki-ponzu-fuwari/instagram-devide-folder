@@ -4,7 +4,7 @@ export function cleanString(value, fallback = '') {
 }
 
 export function normalizeMemberRecord(input, ctx) {
-  const now = Number(ctx?.now || Date.now());
+  const now = Number(ctx?.now || 0);
   const uid = cleanString(input?.uid, cleanString(ctx?.uid));
   const role = cleanString(input?.role, 'member');
   const status = cleanString(input?.status, 'pending');
@@ -67,7 +67,8 @@ export function resolveRewardVisibility(team) {
   if (value === 'selected_members') return 'selected_members';
   if (value === 'all_members') return 'all_members';
   if (value === 'all') return 'all_members';
-  if (value === 'self' || value === 'self_plus_total' || value === 'admin_only') return 'admin_only';
+  if (value === 'self' || value === 'self_plus_total') return 'admin_only';
+  if (value === 'admin_only') return 'admin_only';
   return 'admin_only';
 }
 
