@@ -6,6 +6,7 @@ import {
   browserSessionPersistence,
   getAuth,
   GoogleAuthProvider,
+  OAuthProvider,
   signInWithRedirect,
   getRedirectResult,
   signInWithPopup,
@@ -56,6 +57,25 @@ function withTimeout(promise, label, ms = 15000) {
     promise.finally(() => clearTimeout(timer)),
     timeout,
   ]);
+}
+
+function randomNonce(length = 32) {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+  const bytes = new Uint8Array(length);
+  window.crypto.getRandomValues(bytes);
+  let result = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    result += chars[bytes[i] % chars.length];
+  }
+  return result;
+}
+
+async function sha256Hex(value) {
+  const data = new TextEncoder().encode(value);
+  const hash = await window.crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export async function initFirebaseCore() {
@@ -115,20 +135,15 @@ export async function signInWithGoogle() {
   provider.setCustomParameters({ prompt: 'select_account' });
   if (isNative()) {
     const plugin = window.Capacitor?.Plugins?.GoogleSignIn;
-    console.log('[auth] native GoogleSignIn plugin:', plugin ? 'available' : 'missing');
     if (plugin?.initialize && plugin?.signIn) {
       const clientId = googleWebClientId();
       if (!clientId) throw new Error('DM_FIREBASE_CONFIG.googleWebClientId missing');
       await plugin.initialize({ clientId });
-      console.log('[auth] GoogleSignIn initialized');
       const result = await plugin.signIn();
-      console.log('[auth] GoogleSignIn result received:', !!result, result?.email || '', result?.userId || '');
       const idToken = result?.idToken;
       if (!idToken) throw new Error('Google sign-in did not return an ID token');
       const credential = GoogleAuthProvider.credential(idToken);
-      console.log('[auth] signing into Firebase with Google credential');
       await withTimeout(signInWithCredential(core.auth, credential), 'Firebase sign-in');
-      console.log('[auth] Firebase sign-in completed:', core.auth.currentUser?.email || core.auth.currentUser?.uid || '');
       return;
     }
     throw new Error('GoogleSignIn native plugin missing');
@@ -138,6 +153,31 @@ export async function signInWithGoogle() {
   } catch {
     await signInWithRedirect(core.auth, provider);
   }
+}
+
+export async function signInWithApple() {
+  const core = await getFirebaseCore();
+  if (!isNative()) {
+    throw new Error('Apple sign-in is available on iPhone only');
+  }
+  const plugin = window.Capacitor?.Plugins?.SignInWithApple;
+  if (!plugin?.authorize) {
+    throw new Error('SignInWithApple native plugin missing');
+  }
+  const rawNonce = randomNonce();
+  const hashedNonce = await sha256Hex(rawNonce);
+  const result = await plugin.authorize({
+    clientId: 'com.chiaki.dmmanager',
+    redirectURI: 'https://localhost/login',
+    scopes: 'email name',
+    state: String(Date.now()),
+    nonce: hashedNonce,
+  });
+  const identityToken = result?.response?.identityToken;
+  if (!identityToken) throw new Error('Apple sign-in did not return an identity token');
+  const provider = new OAuthProvider('apple.com');
+  const credential = provider.credential({ idToken: identityToken, rawNonce });
+  await withTimeout(signInWithCredential(core.auth, credential), 'Firebase Apple sign-in');
 }
 
 export async function signOutGoogle() {

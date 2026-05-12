@@ -5,5 +5,6 @@ export {
   getCurrentUser,
   subscribeAuth,
   signInWithGoogle,
+  signInWithApple,
   signOutGoogle,
 } from './firestore-core.mjs';

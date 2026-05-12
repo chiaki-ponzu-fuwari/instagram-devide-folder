@@ -524,6 +524,25 @@
     .settings-item-ttl { flex:1; font-size:15px; font-weight:700; }
     .settings-item-sub { font-size:12px; color:var(--txt3); font-weight:700; }
     .settings-item-chev { color:var(--txt3); font-size:18px; }
+    .settings-login-choices {
+      display:flex;
+      flex-direction:column;
+      border-top:.5px solid var(--sep);
+    }
+    .settings-login-choices[hidden] { display:none; }
+    .settings-login-choice {
+      display:flex; align-items:center; gap:10px;
+      padding:12px 16px 12px 30px;
+      cursor:pointer;
+      min-height:48px;
+      background:rgba(255,255,255,.02);
+    }
+    @media (prefers-color-scheme:dark) {
+      .settings-login-choice { background:rgba(255,255,255,.015); }
+    }
+    .settings-login-choice + .settings-login-choice {
+      border-top:.5px solid var(--sep);
+    }
     .settings-bottom-links {
       flex-shrink:0;
       display:flex; flex-direction:row;
@@ -1590,10 +1609,20 @@
     <div class="settings-pane show" id="paneSettingsHome">
       <div class="settings-menu">
         <div class="settings-item">
-          <div class="settings-item-row" id="settingsGoogleAuthRow" role="button" tabindex="0">
-            <span class="settings-item-ttl" id="settingsGoogleAuthTtl">Googleアカウントでログイン</span>
-            <span class="settings-item-sub" id="settingsGoogleAuthSub">—</span>
-            <span class="settings-item-chev">›</span>
+          <div class="settings-item-row" id="settingsLoginRow" role="button" tabindex="0" aria-expanded="false">
+            <span class="settings-item-ttl" id="settingsLoginTtl">ログイン</span>
+            <span class="settings-item-sub" id="settingsLoginSub">未ログイン</span>
+            <span class="settings-item-chev" id="settingsLoginChev">›</span>
+          </div>
+          <div class="settings-login-choices" id="settingsLoginChoices" hidden>
+            <div class="settings-login-choice" id="settingsGoogleLoginRow" role="button" tabindex="0">
+              <span class="settings-item-ttl" id="settingsGoogleLoginTtl">Googleログイン</span>
+              <span class="settings-item-sub" id="settingsGoogleLoginSub">—</span>
+            </div>
+            <div class="settings-login-choice" id="settingsAppleLoginRow" role="button" tabindex="0">
+              <span class="settings-item-ttl" id="settingsAppleLoginTtl">アップルログイン</span>
+              <span class="settings-item-sub" id="settingsAppleLoginSub">—</span>
+            </div>
           </div>
         </div>
         <div class="settings-item">
@@ -1743,7 +1772,7 @@
         <p><strong>HERAC LLC</strong>（以下「当社」）は、当社が提供するアプリ「<strong>DM管理</strong>」（以下「本アプリ」）における利用者情報の取扱いについて、本ポリシーのとおり定めます。本アプリを利用することで、本ポリシーに同意したものとみなします。</p>
 
         <h3>1. 収集する情報</h3>
-        <p><strong>1.1 ログイン時に取得される情報</strong><br>本アプリは、個人利用ではログインなしでも利用できます。チーム機能やクラウドバックアップを利用する場合、Googleログインを使用します。ログイン時には、Firebase Authenticationを通じてユーザー識別子、メールアドレス、表示名等を取得する場合があります。</p>
+        <p><strong>1.1 ログイン時に取得される情報</strong><br>本アプリは、個人利用ではログインなしでも利用できます。チーム機能やクラウドバックアップを利用する場合、Google または Apple でログインします。ログイン時には、Firebase Authenticationを通じてユーザー識別子、メールアドレス、表示名等を取得する場合があります。</p>
         <p><strong>1.2 利用者が入力する情報</strong><br>利用者が本アプリに入力・登録する情報として、例えば次のものが端末内に保存されます。</p>
         <ul>
           <li>フォルダ名、DM相手（アカウント）に関する情報</li>
@@ -1889,10 +1918,10 @@
 <div class="modal-ov" id="loginRequiredModal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-ttl" id="loginReqModalTtl">Googleログインが必要です</div>
+    <div class="modal-ttl" id="loginReqModalTtl">ログインが必要です</div>
     <div class="modal-body">
       <p id="loginReqModalBody" style="font-size:15px;line-height:1.55;color:var(--txt2);font-weight:700;margin:0">
-        チーム管理には Google アカウントでのログインが必要です。設定からログインしてください。
+        チーム管理にはログインが必要です。設定から Google か Apple でログインしてください。
       </p>
     </div>
     <div class="modal-actions">
@@ -2539,6 +2568,8 @@ function applyLegalPanels() {
 }
 
 let settingsPanelKey = 'home';
+let settingsLoginOpen = false;
+let firebaseAuthMod = null;
 
 function updateLangSwitcher() {
   const ja = document.getElementById('langBtnJa');
@@ -2571,6 +2602,19 @@ function applyChromeStatic() {
   document.getElementById('settingsGoData').querySelector('.settings-item-sub').textContent = tt('settings_data_sub');
   document.getElementById('settingsGoRevenueTtl').textContent = tt('settings_revenue');
   document.getElementById('settingsGoRevenueSub').textContent = tt('settings_revenue_sub');
+  const loginTtl = document.getElementById('settingsLoginTtl');
+  const loginSub = document.getElementById('settingsLoginSub');
+  const googleLoginTtl = document.getElementById('settingsGoogleLoginTtl');
+  const googleLoginSub = document.getElementById('settingsGoogleLoginSub');
+  const appleLoginTtl = document.getElementById('settingsAppleLoginTtl');
+  const appleLoginSub = document.getElementById('settingsAppleLoginSub');
+  if (loginTtl) loginTtl.textContent = tt('settings_login');
+  if (loginSub) loginSub.textContent = tt('settings_login_signed_out');
+  if (googleLoginTtl) googleLoginTtl.textContent = tt('settings_google_login');
+  if (googleLoginSub) googleLoginSub.textContent = tt('settings_google_login_desc');
+  if (appleLoginTtl) appleLoginTtl.textContent = tt('settings_apple_login');
+  if (appleLoginSub) appleLoginSub.textContent = tt('settings_apple_login_desc');
+  updateLoginUi();
   const b1 = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-title');
   const b1b = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-body');
   if (b1) b1.textContent = tt('backup_create');
@@ -2695,10 +2739,6 @@ function applyChromeStatic() {
   const tin = document.getElementById('teamInviteBtnT');
   if (tin) tin.textContent = tt('team_invite');
 
-  const gTtl = document.getElementById('settingsGoogleAuthTtl');
-  const gSub = document.getElementById('settingsGoogleAuthSub');
-  if (gTtl) gTtl.textContent = tt('settings_google_login');
-  if (gSub) gSub.textContent = tt('settings_google_out');
   const lrT = document.getElementById('loginReqModalTtl');
   const lrB = document.getElementById('loginReqModalBody');
   const lrO = document.getElementById('loginReqOpenSettings');
@@ -2802,7 +2842,7 @@ function applyAllLocalizations() {
 
   import('./js/firebase-auth.mjs')
     .then((m) => {
-      updateGoogleAuthUi(m);
+      updateLoginUi(m);
     })
     .catch(() => {});
 }
@@ -3801,18 +3841,42 @@ function hideModal(id) {
   }
 }
 
+function updateLoginUi(mod) {
+  const authMod = mod || firebaseAuthMod;
+  const loginRow = document.getElementById('settingsLoginRow');
+  const loginTtl = document.getElementById('settingsLoginTtl');
+  const loginSub = document.getElementById('settingsLoginSub');
+  const loginChev = document.getElementById('settingsLoginChev');
+  const choices = document.getElementById('settingsLoginChoices');
+  const gTtl = document.getElementById('settingsGoogleLoginTtl');
+  const gSub = document.getElementById('settingsGoogleLoginSub');
+  const aTtl = document.getElementById('settingsAppleLoginTtl');
+  const aSub = document.getElementById('settingsAppleLoginSub');
+  const u = authMod && typeof authMod.getCurrentUser === 'function' ? authMod.getCurrentUser() : null;
+  const signedIn = !!u;
+  if (loginTtl) loginTtl.textContent = tt('settings_login');
+  if (loginSub) loginSub.textContent = signedIn ? tt('settings_login_signed_in') : tt('settings_login_signed_out');
+  if (loginRow) loginRow.setAttribute('aria-expanded', settingsLoginOpen ? 'true' : 'false');
+  if (loginChev) loginChev.textContent = settingsLoginOpen ? '⌄' : '›';
+  if (choices) choices.hidden = !settingsLoginOpen;
+  if (gTtl) gTtl.textContent = tt('settings_google_login');
+  if (gSub) gSub.textContent = tt('settings_google_login_desc');
+  if (aTtl) aTtl.textContent = tt('settings_apple_login');
+  if (aSub) aSub.textContent = tt('settings_apple_login_desc');
+}
+
 function updateGoogleAuthUi(mod) {
-  const ttl = document.getElementById('settingsGoogleAuthTtl');
-  const sub = document.getElementById('settingsGoogleAuthSub');
-  if (!ttl || !sub) return;
-  const u = mod && typeof mod.getCurrentUser === 'function' ? mod.getCurrentUser() : null;
-  if (u) {
-    ttl.textContent = tt('settings_google_login');
-    sub.textContent = tt('google_login_ok');
-  } else {
-    ttl.textContent = tt('settings_google_login');
-    sub.textContent = tt('settings_google_out');
-  }
+  updateLoginUi(mod);
+}
+
+function setLoginSectionOpen(open) {
+  settingsLoginOpen = !!open;
+  const loginRow = document.getElementById('settingsLoginRow');
+  const loginChev = document.getElementById('settingsLoginChev');
+  const choices = document.getElementById('settingsLoginChoices');
+  if (loginRow) loginRow.setAttribute('aria-expanded', settingsLoginOpen ? 'true' : 'false');
+  if (loginChev) loginChev.textContent = settingsLoginOpen ? '⌄' : '›';
+  if (choices) choices.hidden = !settingsLoginOpen;
 }
 
 function initModals() {
@@ -3893,49 +3957,96 @@ function initModals() {
   document.getElementById('settingsGoData').addEventListener('click', () => setSettingsTab('data'));
   document.getElementById('settingsGoRevenue').addEventListener('click', () => setSettingsTab('revenue'));
 
-  const googleAuthRow = document.getElementById('settingsGoogleAuthRow');
-  if (googleAuthRow) {
-    let googleAuthBusy = false;
-    const goGoogleAuth = async () => {
-      if (googleAuthBusy) return;
-      googleAuthBusy = true;
-      const sub = document.getElementById('settingsGoogleAuthSub');
-      const previousSubText = sub ? sub.textContent : '';
-      if (sub) sub.textContent = tt('google_login_progress');
-      toast(tt('google_login_progress'));
-      console.log('[auth] Google auth row tapped');
-      try {
-        const m = await import('./js/firebase-auth.mjs');
-        if (!m.hasFirebaseConfig()) {
-          toast(tt('google_login_config_missing'));
-          return;
-        }
-        await m.initFirebase();
-        if (m.getCurrentUser()) {
-          if (!confirm(tt('google_logout_confirm'))) return;
-          await m.signOutGoogle();
-          toast(tt('google_logout_ok'));
-          updateGoogleAuthUi(m);
-        } else {
-          await m.signInWithGoogle();
-          await m.waitForInitialAuth();
-          if (m.getCurrentUser()) toast(tt('google_login_ok'));
-          updateGoogleAuthUi(m);
-        }
-      } catch (e) {
-        const msg = e && e.message ? String(e.message) : '';
-        console.error('[auth] Google sign-in failed:', msg || e);
-        toast(msg.includes('DM_FIREBASE_CONFIG') ? tt('google_login_config_missing') : tt('google_login_error'));
-        if (sub) sub.textContent = previousSubText;
-      } finally {
-        googleAuthBusy = false;
+  const loginRow = document.getElementById('settingsLoginRow');
+  const googleLoginRow = document.getElementById('settingsGoogleLoginRow');
+  const appleLoginRow = document.getElementById('settingsAppleLoginRow');
+  let loginBusy = false;
+  const runGoogleLogin = async () => {
+    if (loginBusy) return;
+    loginBusy = true;
+    const sub = document.getElementById('settingsGoogleLoginSub');
+    const previousSubText = sub ? sub.textContent : '';
+    if (sub) sub.textContent = tt('google_login_progress');
+    toast(tt('google_login_progress'));
+    try {
+      const m = await import('./js/firebase-auth.mjs');
+      firebaseAuthMod = m;
+      if (!m.hasFirebaseConfig()) {
+        toast(tt('google_login_config_missing'));
+        return;
       }
-    };
-    googleAuthRow.addEventListener('click', goGoogleAuth);
-    googleAuthRow.addEventListener('keydown', (e) => {
+      await m.initFirebase();
+      await m.signInWithGoogle();
+      await m.waitForInitialAuth();
+      if (m.getCurrentUser()) toast(tt('google_login_ok'));
+      updateLoginUi(m);
+    } catch (e) {
+      const msg = e && e.message ? String(e.message) : '';
+      console.error('[auth] Google sign-in failed:', msg || e);
+      toast(msg.includes('DM_FIREBASE_CONFIG') ? tt('google_login_config_missing') : tt('google_login_error'));
+      if (sub) sub.textContent = previousSubText;
+    } finally {
+      loginBusy = false;
+      updateLoginUi();
+    }
+  };
+  const runAppleLogin = async () => {
+    if (loginBusy) return;
+    loginBusy = true;
+    const sub = document.getElementById('settingsAppleLoginSub');
+    const previousSubText = sub ? sub.textContent : '';
+    if (sub) sub.textContent = tt('apple_login_progress');
+    toast(tt('apple_login_progress'));
+    try {
+      const m = await import('./js/firebase-auth.mjs');
+      firebaseAuthMod = m;
+      if (!m.hasFirebaseConfig()) {
+        toast(tt('google_login_config_missing'));
+        return;
+      }
+      await m.initFirebase();
+      await m.signInWithApple();
+      await m.waitForInitialAuth();
+      if (m.getCurrentUser()) toast(tt('apple_login_ok'));
+      updateLoginUi(m);
+    } catch (e) {
+      const msg = e && e.message ? String(e.message) : '';
+      console.error('[auth] Apple sign-in failed:', msg || e);
+      toast(msg.includes('iPhone only') ? tt('apple_login_unavailable') : tt('apple_login_error'));
+      if (sub) sub.textContent = previousSubText;
+    } finally {
+      loginBusy = false;
+      updateLoginUi();
+    }
+  };
+  const toggleLoginSection = () => {
+    setLoginSectionOpen(!settingsLoginOpen);
+    updateLoginUi();
+  };
+  if (loginRow) {
+    loginRow.addEventListener('click', toggleLoginSection);
+    loginRow.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        goGoogleAuth();
+        toggleLoginSection();
+      }
+    });
+  }
+  if (googleLoginRow) {
+    googleLoginRow.addEventListener('click', runGoogleLogin);
+    googleLoginRow.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        runGoogleLogin();
+      }
+    });
+  }
+  if (appleLoginRow) {
+    appleLoginRow.addEventListener('click', runAppleLogin);
+    appleLoginRow.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        runAppleLogin();
       }
     });
   }
@@ -4541,6 +4652,7 @@ let _tmplPrevSettingsScrollTop = 0;
 function openSettings() {
   renderTemplates();
   setSettingsTab('home');
+  setLoginSectionOpen(false);
   updateLangSwitcher();
   document.getElementById('settingsOv').classList.add('show');
 }
@@ -7047,8 +7159,9 @@ async function init() {
 
   import('./js/firebase-auth.mjs')
     .then((m) => {
-      m.subscribeAuth(() => updateGoogleAuthUi(m));
-      return m.initFirebase().then(() => updateGoogleAuthUi(m)).catch(() => updateGoogleAuthUi(m));
+      firebaseAuthMod = m;
+      m.subscribeAuth(() => updateLoginUi(m));
+      return m.initFirebase().then(() => updateLoginUi(m)).catch(() => updateLoginUi(m));
     })
     .catch(() => {});
 

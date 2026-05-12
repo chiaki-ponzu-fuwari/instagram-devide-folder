@@ -1,4 +1,5 @@
 import UIKit
+import AuthenticationServices
 import Capacitor
 
 @UIApplicationMain
@@ -46,4 +47,95 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+@objc(SignInWithApple)
+public class SignInWithApple: CAPPlugin, CAPBridgedPlugin, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    public let identifier = "SignInWithApple"
+    public let jsName = "SignInWithApple"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise),
+    ]
+
+    private let callbackIdKey = "com.chiaki.dmmanager.signinwithapple.callbackId"
+
+    @objc public func authorize(_ call: CAPPluginCall) {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = requestedScopes(from: call)
+        request.state = call.getString("state")
+        request.nonce = call.getString("nonce")
+
+        UserDefaults.standard.setValue(call.callbackId, forKey: callbackIdKey)
+        self.bridge?.saveCall(call)
+
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        controller.performRequests()
+    }
+
+    private func requestedScopes(from call: CAPPluginCall) -> [ASAuthorization.Scope]? {
+        var scopes: [ASAuthorization.Scope] = []
+        if let scopesStr = call.getString("scopes") {
+            if scopesStr.contains("name") {
+                scopes.append(.fullName)
+            }
+            if scopesStr.contains("email") {
+                scopes.append(.email)
+            }
+        }
+        return scopes.isEmpty ? nil : scopes
+    }
+
+    private func jsonValue(_ value: String?) -> Any {
+        value ?? NSNull()
+    }
+
+    public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        if let window = bridge?.viewController?.view.window {
+            return window
+        }
+        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
+           let window = scene.windows.first(where: { $0.isKeyWindow }) {
+            return window
+        }
+        return ASPresentationAnchor()
+    }
+
+    public func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else { return }
+        let defaults = UserDefaults.standard
+        let id = defaults.string(forKey: callbackIdKey) ?? ""
+        guard let call = bridge?.savedCall(withID: id) else { return }
+
+        let identityToken = appleIDCredential.identityToken.flatMap { String(data: $0, encoding: .utf8) }
+        let authorizationCode = appleIDCredential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+        guard let identityToken, let authorizationCode else {
+            call.reject("Unable to read Apple identity token")
+            bridge?.releaseCall(call)
+            return
+        }
+
+        let result: [String: Any] = [
+            "response": [
+                "user": appleIDCredential.user,
+                "email": jsonValue(appleIDCredential.email),
+                "givenName": jsonValue(appleIDCredential.fullName?.givenName),
+                "familyName": jsonValue(appleIDCredential.fullName?.familyName),
+                "identityToken": identityToken,
+                "authorizationCode": authorizationCode
+            ]
+        ]
+
+        call.resolve(result)
+        bridge?.releaseCall(call)
+    }
+
+    public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        let defaults = UserDefaults.standard
+        let id = defaults.string(forKey: callbackIdKey) ?? ""
+        guard let call = bridge?.savedCall(withID: id) else { return }
+        call.reject(error.localizedDescription)
+        bridge?.releaseCall(call)
+    }
 }
