@@ -537,8 +537,19 @@
       min-height:48px;
       background:rgba(255,255,255,.02);
     }
+    .settings-login-action {
+      display:flex; align-items:center; gap:10px;
+      padding:12px 16px 12px 46px;
+      cursor:pointer;
+      min-height:44px;
+      border-top:.5px solid var(--sep);
+      color:var(--danger, #d74b4b);
+      font-weight:700;
+      background:rgba(255,255,255,.01);
+    }
     @media (prefers-color-scheme:dark) {
       .settings-login-choice { background:rgba(255,255,255,.015); }
+      .settings-login-action { background:rgba(255,255,255,.01); }
     }
     .settings-login-choice + .settings-login-choice {
       border-top:.5px solid var(--sep);
@@ -1611,18 +1622,20 @@
         <div class="settings-item">
           <div class="settings-item-row" id="settingsLoginRow" role="button" tabindex="0" aria-expanded="false">
             <span class="settings-item-ttl" id="settingsLoginTtl">ログイン</span>
-            <span class="settings-item-sub" id="settingsLoginSub">未ログイン</span>
+            <span class="settings-item-sub" id="settingsLoginSub">ログインする</span>
             <span class="settings-item-chev" id="settingsLoginChev">›</span>
           </div>
           <div class="settings-login-choices" id="settingsLoginChoices" hidden>
             <div class="settings-login-choice" id="settingsGoogleLoginRow" role="button" tabindex="0">
               <span class="settings-item-ttl" id="settingsGoogleLoginTtl">Googleログイン</span>
-              <span class="settings-item-sub" id="settingsGoogleLoginSub">—</span>
+              <span class="settings-item-sub" id="settingsGoogleLoginSub">ログインする</span>
             </div>
+            <div class="settings-login-action" id="settingsGoogleLogoutRow" role="button" tabindex="0" hidden>ログアウトする</div>
             <div class="settings-login-choice" id="settingsAppleLoginRow" role="button" tabindex="0">
               <span class="settings-item-ttl" id="settingsAppleLoginTtl">アップルログイン</span>
-              <span class="settings-item-sub" id="settingsAppleLoginSub">—</span>
+              <span class="settings-item-sub" id="settingsAppleLoginSub">ログインする</span>
             </div>
+            <div class="settings-login-action" id="settingsAppleLogoutRow" role="button" tabindex="0" hidden>ログアウトする</div>
           </div>
         </div>
         <div class="settings-item">
@@ -2569,6 +2582,7 @@ function applyLegalPanels() {
 
 let settingsPanelKey = 'home';
 let settingsLoginOpen = false;
+let settingsLogoutProvider = null;
 let firebaseAuthMod = null;
 
 function updateLangSwitcher() {
@@ -2611,9 +2625,9 @@ function applyChromeStatic() {
   if (loginTtl) loginTtl.textContent = tt('settings_login');
   if (loginSub) loginSub.textContent = tt('settings_login_signed_out');
   if (googleLoginTtl) googleLoginTtl.textContent = tt('settings_google_login');
-  if (googleLoginSub) googleLoginSub.textContent = tt('settings_google_login_desc');
+  if (googleLoginSub) googleLoginSub.textContent = tt('settings_login_signed_out');
   if (appleLoginTtl) appleLoginTtl.textContent = tt('settings_apple_login');
-  if (appleLoginSub) appleLoginSub.textContent = tt('settings_apple_login_desc');
+  if (appleLoginSub) appleLoginSub.textContent = tt('settings_login_signed_out');
   updateLoginUi();
   const b1 = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-title');
   const b1b = document.querySelector('#paneData .tmpl-card:nth-of-type(1) .tmpl-body');
@@ -3850,9 +3864,14 @@ function updateLoginUi(mod) {
   const choices = document.getElementById('settingsLoginChoices');
   const gTtl = document.getElementById('settingsGoogleLoginTtl');
   const gSub = document.getElementById('settingsGoogleLoginSub');
+  const gLogout = document.getElementById('settingsGoogleLogoutRow');
   const aTtl = document.getElementById('settingsAppleLoginTtl');
   const aSub = document.getElementById('settingsAppleLoginSub');
+  const aLogout = document.getElementById('settingsAppleLogoutRow');
   const u = authMod && typeof authMod.getCurrentUser === 'function' ? authMod.getCurrentUser() : null;
+  const providerId = u?.providerData?.find?.(p => p && p.providerId && p.providerId !== 'firebase')?.providerId || '';
+  const googleSignedIn = providerId === 'google.com';
+  const appleSignedIn = providerId === 'apple.com';
   const signedIn = !!u;
   if (loginTtl) loginTtl.textContent = tt('settings_login');
   if (loginSub) loginSub.textContent = signedIn ? tt('settings_login_signed_in') : tt('settings_login_signed_out');
@@ -3860,9 +3879,13 @@ function updateLoginUi(mod) {
   if (loginChev) loginChev.textContent = settingsLoginOpen ? '⌄' : '›';
   if (choices) choices.hidden = !settingsLoginOpen;
   if (gTtl) gTtl.textContent = tt('settings_google_login');
-  if (gSub) gSub.textContent = tt('settings_google_login_desc');
+  if (gSub) gSub.textContent = googleSignedIn ? tt('settings_login_signed_in') : tt('settings_login_signed_out');
+  if (gLogout) gLogout.textContent = tt('settings_login_action_logout');
+  if (gLogout) gLogout.hidden = !(googleSignedIn && settingsLogoutProvider === 'google');
   if (aTtl) aTtl.textContent = tt('settings_apple_login');
-  if (aSub) aSub.textContent = tt('settings_apple_login_desc');
+  if (aSub) aSub.textContent = appleSignedIn ? tt('settings_login_signed_in') : tt('settings_login_signed_out');
+  if (aLogout) aLogout.textContent = tt('settings_login_action_logout');
+  if (aLogout) aLogout.hidden = !(appleSignedIn && settingsLogoutProvider === 'apple');
 }
 
 function updateGoogleAuthUi(mod) {
@@ -3871,12 +3894,18 @@ function updateGoogleAuthUi(mod) {
 
 function setLoginSectionOpen(open) {
   settingsLoginOpen = !!open;
+  if (!settingsLoginOpen) settingsLogoutProvider = null;
   const loginRow = document.getElementById('settingsLoginRow');
   const loginChev = document.getElementById('settingsLoginChev');
   const choices = document.getElementById('settingsLoginChoices');
   if (loginRow) loginRow.setAttribute('aria-expanded', settingsLoginOpen ? 'true' : 'false');
   if (loginChev) loginChev.textContent = settingsLoginOpen ? '⌄' : '›';
   if (choices) choices.hidden = !settingsLoginOpen;
+}
+
+function setLogoutProvider(provider) {
+  settingsLogoutProvider = provider;
+  updateLoginUi();
 }
 
 function initModals() {
@@ -3960,6 +3989,8 @@ function initModals() {
   const loginRow = document.getElementById('settingsLoginRow');
   const googleLoginRow = document.getElementById('settingsGoogleLoginRow');
   const appleLoginRow = document.getElementById('settingsAppleLoginRow');
+  const googleLogoutRow = document.getElementById('settingsGoogleLogoutRow');
+  const appleLogoutRow = document.getElementById('settingsAppleLogoutRow');
   let loginBusy = false;
   const runGoogleLogin = async () => {
     if (loginBusy) return;
@@ -3979,6 +4010,7 @@ function initModals() {
       await m.signInWithGoogle();
       await m.waitForInitialAuth();
       if (m.getCurrentUser()) toast(tt('google_login_ok'));
+      setLogoutProvider(null);
       updateLoginUi(m);
     } catch (e) {
       const msg = e && e.message ? String(e.message) : '';
@@ -4008,6 +4040,7 @@ function initModals() {
       await m.signInWithApple();
       await m.waitForInitialAuth();
       if (m.getCurrentUser()) toast(tt('apple_login_ok'));
+      setLogoutProvider(null);
       updateLoginUi(m);
     } catch (e) {
       const msg = e && e.message ? String(e.message) : '';
@@ -4023,6 +4056,24 @@ function initModals() {
     setLoginSectionOpen(!settingsLoginOpen);
     updateLoginUi();
   };
+  const signOutCurrent = async () => {
+    if (loginBusy) return;
+    loginBusy = true;
+    try {
+      const m = firebaseAuthMod || await import('./js/firebase-auth.mjs');
+      firebaseAuthMod = m;
+      await m.initFirebase();
+      await m.signOutGoogle();
+      setLogoutProvider(null);
+      updateLoginUi(m);
+      toast(tt('google_logout_ok'));
+    } catch (e) {
+      console.error('[auth] sign-out failed:', e && e.message ? e.message : e);
+    } finally {
+      loginBusy = false;
+      updateLoginUi();
+    }
+  };
   if (loginRow) {
     loginRow.addEventListener('click', toggleLoginSection);
     loginRow.addEventListener('keydown', (e) => {
@@ -4033,20 +4084,54 @@ function initModals() {
     });
   }
   if (googleLoginRow) {
-    googleLoginRow.addEventListener('click', runGoogleLogin);
+    googleLoginRow.addEventListener('click', () => {
+      const providerId = firebaseAuthMod?.getCurrentUser?.()?.providerData?.find?.(p => p && p.providerId && p.providerId !== 'firebase')?.providerId || '';
+      if (providerId === 'google.com') {
+        setLogoutProvider(settingsLogoutProvider === 'google' ? null : 'google');
+        return;
+      }
+      setLogoutProvider(null);
+      runGoogleLogin();
+    });
     googleLoginRow.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        runGoogleLogin();
+        googleLoginRow.click();
+      }
+    });
+  }
+  if (googleLogoutRow) {
+    googleLogoutRow.addEventListener('click', signOutCurrent);
+    googleLogoutRow.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        signOutCurrent();
       }
     });
   }
   if (appleLoginRow) {
-    appleLoginRow.addEventListener('click', runAppleLogin);
+    appleLoginRow.addEventListener('click', () => {
+      const providerId = firebaseAuthMod?.getCurrentUser?.()?.providerData?.find?.(p => p && p.providerId && p.providerId !== 'firebase')?.providerId || '';
+      if (providerId === 'apple.com') {
+        setLogoutProvider(settingsLogoutProvider === 'apple' ? null : 'apple');
+        return;
+      }
+      setLogoutProvider(null);
+      runAppleLogin();
+    });
     appleLoginRow.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        runAppleLogin();
+        appleLoginRow.click();
+      }
+    });
+  }
+  if (appleLogoutRow) {
+    appleLogoutRow.addEventListener('click', signOutCurrent);
+    appleLogoutRow.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        signOutCurrent();
       }
     });
   }
