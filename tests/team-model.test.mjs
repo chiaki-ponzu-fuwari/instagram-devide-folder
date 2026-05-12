@@ -1,10 +1,55 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  normalizeMemberRecord,
   normalizeTeamRecord,
+  isActiveMember,
+  isTeamAdmin,
+  canReadTeam,
+  canApproveJoinRequest,
+  resolveRewardVisibility,
   canUseTeamRecord,
   buildActivityText,
 } from '../www/js/team-model.mjs';
+
+test('normalizeMemberRecord fills defaults for a new admin', () => {
+  const now = 1778493600000;
+  const rec = normalizeMemberRecord({
+    uid: 'u1',
+    role: 'admin',
+    status: 'active',
+    displayName: '  Chiaki  ',
+  }, { uid: 'u1', now });
+
+  assert.equal(rec.uid, 'u1');
+  assert.equal(rec.role, 'admin');
+  assert.equal(rec.status, 'active');
+  assert.equal(rec.displayName, 'Chiaki');
+  assert.equal(rec.joinedAt, now);
+  assert.equal(rec.updatedAt, now);
+});
+
+test('permission helpers distinguish active members from pending users', () => {
+  const admin = { uid: 'u1', role: 'admin', status: 'active' };
+  const member = { uid: 'u2', role: 'member', status: 'active' };
+  const pending = { uid: 'u3', role: 'member', status: 'pending' };
+
+  assert.equal(isActiveMember(admin), true);
+  assert.equal(isTeamAdmin(admin), true);
+  assert.equal(isActiveMember(member), true);
+  assert.equal(isTeamAdmin(member), false);
+  assert.equal(isActiveMember(pending), false);
+  assert.equal(canReadTeam(member), true);
+  assert.equal(canReadTeam(pending), false);
+  assert.equal(canApproveJoinRequest(admin), true);
+  assert.equal(canApproveJoinRequest(member), false);
+});
+
+test('resolveRewardVisibility returns the admin-controlled scope', () => {
+  assert.equal(resolveRewardVisibility({ rewardVisibility: 'admin_only' }), 'admin_only');
+  assert.equal(resolveRewardVisibility({ rewardVisibility: 'all_members' }), 'all_members');
+  assert.equal(resolveRewardVisibility({ rewardVisibility: 'selected_members' }), 'selected_members');
+});
 
 test('normalizeTeamRecord keeps safe fields and fills metadata', () => {
   const now = 1778493600000;
