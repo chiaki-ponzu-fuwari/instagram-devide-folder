@@ -5277,38 +5277,19 @@ function _teamState() {
     S.meta.team = {
       name: 'HERACチーム',
       mode: 'all',
-      members: [
-        { id:'m1', handle:'@vivian', role:'admin',  color:'#E04B7B', sales:130000, cases:3 },
-        { id:'m2', handle:'@jjbjb',  role:'member', color:'#2F86D9', sales:90000,  cases:3 },
-        { id:'m3', handle:'@jjbjb',  role:'member', color:'#22B8C7', sales:15000,  cases:2 },
-        { id:'m4', handle:'@ninni',  role:'member', color:'#4CAF50', sales:50000,  cases:2 },
-        { id:'m5', handle:'@snen',   role:'member', color:'#E04B7B', sales:50000,  cases:2 },
-      ],
-      activities: [
-        { handle:'@jjbjb', color:'#2F86D9', text:'さんが案件"YouTubeタイアップ"を、完了しました', time:'3分前' },
-        { handle:'@vivke', color:'#E04B7B', text:'さんが新品PRの案件が、未対応に追加されました', time:'15分前' },
-        { handle:'@vivke', color:'#E04B7B', text:'さんがチームに参加しました', time:'1日前' },
-      ],
+      members: [],
+      activities: [],
     };
   }
   if (!Array.isArray(S.meta.team.members)) S.meta.team.members = [];
-  if (!S.meta.team.members.length) S.meta.team.members.push({ id:'m1', handle:'@vivian', role:'admin', color:'#E04B7B', sales:130000, cases:3 });
+  S.meta.team.members = S.meta.team.members.map((m) => ({
+    ...m,
+    sales: 0,
+    cases: 0,
+    done: 0,
+  }));
   if (!S.meta.team.activities) {
-    S.meta.team.activities = [
-      { handle:'@jjbjb', color:'#2F86D9', text:'さんが案件"YouTubeタイアップ"を、完了しました', time:'3分前' },
-      { handle:'@vivke', color:'#E04B7B', text:'さんが新品PRの案件が、未対応に追加されました', time:'15分前' },
-      { handle:'@vivke', color:'#E04B7B', text:'さんがチームに参加しました', time:'1日前' },
-    ];
-  }
-  // upgrade from single-default @you to demo team
-  if (S.meta.team.members.length === 1 && S.meta.team.members[0].handle === '@you') {
-    S.meta.team.members = [
-      { id:'m1', handle:'@vivian', role:'admin',  color:'#E04B7B', sales:130000, cases:3 },
-      { id:'m2', handle:'@jjbjb',  role:'member', color:'#2F86D9', sales:90000,  cases:3 },
-      { id:'m3', handle:'@jjbjb',  role:'member', color:'#22B8C7', sales:15000,  cases:2 },
-      { id:'m4', handle:'@ninni',  role:'member', color:'#4CAF50', sales:50000,  cases:2 },
-      { id:'m5', handle:'@snen',   role:'member', color:'#E04B7B', sales:50000,  cases:2 },
-    ];
+    S.meta.team.activities = [];
   }
   if (S.meta.team.mode !== 'all' && S.meta.team.mode !== 'assign') S.meta.team.mode = 'all';
   if (!S.meta.team.name) S.meta.team.name = 'HERACチーム';
@@ -6225,9 +6206,9 @@ function renderTeam() {
       const initial = String(m.handle || '').replace(/^@/,'').slice(0,1).toUpperCase() || 'M';
       const role = m.role === 'admin' ? 'admin' : 'member';
       const roleLbl = role === 'admin' ? '管理者' : 'メンバー';
-      const sales = m.sales != null ? m.sales : (idx === 0 ? cur.sales : 0);
-      const prog  = m.cases != null ? m.cases : (idx === 0 ? cur.projects : 0);
-      const done  = m.done != null ? m.done : (idx === 0 ? cur.done : 0);
+      const sales = Number(m.sales || 0) || 0;
+      const prog  = Number(m.cases || 0) || 0;
+      const done  = Number(m.done || 0) || 0;
       const team2 = _selectedTeam();
       const s = team2 ? _ensureTeamSettings(team2) : { assignOwners: [] };
       const hasAssign = Array.isArray(s.assignOwners) && s.assignOwners.includes(String(m.handle || '').trim());
