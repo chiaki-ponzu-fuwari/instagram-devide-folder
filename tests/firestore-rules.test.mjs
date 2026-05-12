@@ -106,6 +106,46 @@ test('approved members can read team docs; pending users and outsiders cannot', 
   }
 });
 
+test('team creation requires a valid reward visibility value', async () => {
+  const env = await createEnv();
+
+  try {
+    const admin = env.authenticatedContext('u1').firestore();
+
+    await assertFails(admin.doc('teams/t2').set({
+      createdBy: 'u1',
+      deletedAt: null,
+      name: 'Team Two',
+    }));
+    await assertSucceeds(admin.doc('teams/t3').set({
+      createdBy: 'u1',
+      deletedAt: null,
+      name: 'Team Three',
+      rewardVisibility: 'admin_only',
+    }));
+    await assertSucceeds(admin.doc('teams/t3/members/u1').set({
+      uid: 'u1',
+      role: 'admin',
+      status: 'active',
+      displayName: 'Creator',
+      updatedBy: 'u1',
+    }));
+    await assertFails(admin.doc('teams/t4').set({
+      createdBy: 'u1',
+      deletedAt: null,
+      name: 'Team Four',
+      rewardVisibility: 'unexpected',
+    }));
+    await assertFails(admin.doc('teams/t5').set({
+      createdBy: 'u1',
+      deletedAt: null,
+      name: 'Team Five',
+    }));
+  } finally {
+    await env.cleanup();
+  }
+});
+
 test('only signed-in users can create join requests', async () => {
   const env = await createEnv();
 
@@ -164,6 +204,52 @@ test('only admins can approve requests and change other member roles', async () 
     const admin = env.authenticatedContext('u1').firestore();
     const member = env.authenticatedContext('u2').firestore();
 
+    await assertSucceeds(member.doc('teams/t1/members/u2').update({
+      uid: 'u2',
+      role: 'member',
+      status: 'active',
+      displayName: 'Renamed Member',
+      editScope: 'shared',
+      rewardScope: 'shared',
+      updatedBy: 'u2',
+    }));
+    await assertFails(member.doc('teams/t1/members/u2').update({
+      uid: 'u2',
+      role: 'member',
+      status: 'blocked',
+      displayName: 'Renamed Member',
+      editScope: 'shared',
+      rewardScope: 'shared',
+      updatedBy: 'u2',
+    }));
+    await assertFails(member.doc('teams/t1/members/u2').update({
+      uid: 'u2',
+      role: 'admin',
+      status: 'active',
+      displayName: 'Renamed Member',
+      editScope: 'shared',
+      rewardScope: 'shared',
+      updatedBy: 'u2',
+    }));
+    await assertFails(member.doc('teams/t1/members/u2').update({
+      uid: 'u2',
+      role: 'member',
+      status: 'blocked',
+      displayName: 'Renamed Member',
+      editScope: 'shared',
+      rewardScope: 'shared',
+      updatedBy: 'u2',
+    }));
+    await assertFails(member.doc('teams/t1/members/u2').update({
+      uid: 'u2',
+      role: 'member',
+      status: 'active',
+      displayName: 'Renamed Member',
+      editScope: 'shared',
+      rewardScope: 'shared',
+      updatedBy: 'u2',
+      extraField: 'nope',
+    }));
     await assertFails(member.doc('teams/t1/joinRequests/r1').update({
       uid: 'u3',
       status: 'active',

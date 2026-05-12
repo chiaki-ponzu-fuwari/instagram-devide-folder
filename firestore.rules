@@ -29,7 +29,18 @@ service cloud.firestore {
     }
 
     function isSafeSelfMemberUpdate() {
-      return request.resource.data.uid == resource.data.uid
+      return request.resource.data.keys().hasOnly([
+        'uid',
+        'role',
+        'status',
+        'displayName',
+        'updatedAt',
+        'updatedBy',
+        'editScope',
+        'rewardScope',
+      ])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.role == resource.data.role
         && request.resource.data.status == resource.data.status
         && request.resource.data.editScope == resource.data.editScope
@@ -43,7 +54,8 @@ service cloud.firestore {
     match /teams/{teamId} {
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.deletedAt == null;
+        && request.resource.data.deletedAt == null
+        && request.resource.data.rewardVisibility in ['admin_only', 'all_members', 'selected_members'];
       allow read: if isApprovedMember(teamId);
       allow update: if isAdmin(teamId);
       allow delete: if false;

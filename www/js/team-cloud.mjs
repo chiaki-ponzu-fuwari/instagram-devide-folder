@@ -50,6 +50,7 @@ export async function createTeam({ user, name }) {
     id: teamDoc.id,
     name,
     createdBy: user.uid,
+    rewardVisibility: 'admin_only',
   }, { uid: user.uid, now });
 
   await setDoc(teamDoc, {
