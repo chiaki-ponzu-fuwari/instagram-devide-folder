@@ -2,9 +2,11 @@ import {
   addDoc,
   collection,
   doc,
+  deleteDoc,
   getDoc,
   getDocs,
   arrayUnion,
+  arrayRemove,
   limit,
   onSnapshot,
   query,
@@ -50,6 +52,10 @@ export async function createTeam({ user, name }) {
     name,
     createdBy: user.uid,
     rewardVisibility: 'admin_only',
+    settings: {
+      memberEmailVisibility: 'admin_only',
+      memberNoteVisibility: 'admin_only',
+    },
   }, { uid: user.uid, now });
 
   await setDoc(teamDoc, {
@@ -163,6 +169,42 @@ export async function updateTeamName({ user, teamId, name }) {
   const { db } = await getFirebaseCore();
   await updateDoc(teamRef(db, teamId), {
     name: String(name || '').trim(),
+    updatedAt: serverTimestamp(),
+    updatedBy: user.uid,
+  });
+}
+
+export async function updateTeamSettings({ user, teamId, settings }) {
+  requireUser(user);
+  const { db } = await getFirebaseCore();
+  await updateDoc(teamRef(db, teamId), {
+    settings: { ...settings },
+    updatedAt: serverTimestamp(),
+    updatedBy: user.uid,
+  });
+}
+
+export async function updateMemberProfile({ user, teamId, profile }) {
+  requireUser(user);
+  const { db } = await getFirebaseCore();
+  await setDoc(memberRef(db, teamId, user.uid), {
+    uid: user.uid,
+    displayName: String(profile?.displayName || '').trim(),
+    email: String(profile?.email || '').trim(),
+    payoutName: String(profile?.payoutName || '').trim(),
+    payoutAccount: String(profile?.payoutAccount || '').trim(),
+    note: String(profile?.note || '').trim(),
+    updatedAt: serverTimestamp(),
+    updatedBy: user.uid,
+  }, { merge: true });
+}
+
+export async function removeTeamMember({ user, teamId, memberId }) {
+  requireUser(user);
+  const { db } = await getFirebaseCore();
+  await deleteDoc(memberRef(db, teamId, memberId));
+  await updateDoc(teamRef(db, teamId), {
+    memberUids: arrayRemove(memberId),
     updatedAt: serverTimestamp(),
     updatedBy: user.uid,
   });

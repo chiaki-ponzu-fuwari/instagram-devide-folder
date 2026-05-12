@@ -34,6 +34,10 @@ service cloud.firestore {
         'role',
         'status',
         'displayName',
+        'email',
+        'payoutName',
+        'payoutAccount',
+        'note',
         'updatedAt',
         'updatedBy',
         'editScope',
@@ -70,7 +74,8 @@ service cloud.firestore {
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'active');
         allow update: if isAdmin(teamId) || (isSelf(uid) && isSafeSelfMemberUpdate());
-        allow delete: if false;
+        allow delete: if isAdmin(teamId)
+          || (isSelf(uid) && resource.data.role != 'admin');
       }
 
       match /folders/{folderId} {

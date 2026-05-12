@@ -209,6 +209,10 @@ test('only admins can approve requests and change other member roles', async () 
       role: 'member',
       status: 'active',
       displayName: 'Renamed Member',
+      email: 'member@example.com',
+      payoutName: 'Member Name',
+      payoutAccount: 'Bank 123',
+      note: 'hello',
       editScope: 'shared',
       rewardScope: 'shared',
       updatedBy: 'u2',
@@ -245,6 +249,10 @@ test('only admins can approve requests and change other member roles', async () 
       role: 'member',
       status: 'active',
       displayName: 'Renamed Member',
+      email: 'member@example.com',
+      payoutName: 'Member Name',
+      payoutAccount: 'Bank 123',
+      note: 'hello',
       editScope: 'shared',
       rewardScope: 'shared',
       updatedBy: 'u2',
@@ -296,5 +304,23 @@ test('approved members can only write inside teams they belong to', async () => 
     await assertFails(outsider.doc('teams/t1/folders/f4').set({ name: 'No access' }));
   } finally {
     await env.cleanup();
+  }
+});
+
+test('admins can remove members and members can leave their own team', async () => {
+  try {
+    const envMember = await createEnv();
+    await seedTeamData(envMember);
+    const member = envMember.authenticatedContext('u2').firestore();
+    await assertSucceeds(member.doc('teams/t1/members/u2').delete());
+    await assertFails(member.doc('teams/t1/members/u1').delete());
+    await envMember.cleanup();
+
+    const envAdmin = await createEnv();
+    await seedTeamData(envAdmin);
+    const admin = envAdmin.authenticatedContext('u1').firestore();
+    await assertSucceeds(admin.doc('teams/t1/members/u2').delete());
+    await envAdmin.cleanup();
+  } finally {
   }
 });

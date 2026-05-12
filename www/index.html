@@ -2153,6 +2153,21 @@
         </div>
       </div>
 
+      <div class="team-edit-title">メンバー公開設定</div>
+      <div class="team-list-card" style="margin-top:0">
+        <div style="font-size:12px;font-weight:1000;color:var(--txt2);margin:2px 2px 8px">メールアドレスの公開範囲</div>
+        <div class="settings-lang" role="group" aria-label="メールアドレスの公開範囲" style="width:100%;margin:0">
+          <button type="button" class="settings-lang-btn" id="teamPermEmailAdmin">管理者のみ</button>
+          <button type="button" class="settings-lang-btn" id="teamPermEmailAll">全員</button>
+        </div>
+        <div style="height:12px"></div>
+        <div style="font-size:12px;font-weight:1000;color:var(--txt2);margin:2px 2px 8px">その他情報の公開範囲</div>
+        <div class="settings-lang" role="group" aria-label="その他情報の公開範囲" style="width:100%;margin:0">
+          <button type="button" class="settings-lang-btn" id="teamPermNoteAdmin">管理者のみ</button>
+          <button type="button" class="settings-lang-btn" id="teamPermNoteAll">全員</button>
+        </div>
+      </div>
+
       <div class="team-edit-title">メンバー</div>
       <div class="team-list-card" style="margin-top:0">
         <div id="teamEditMembers"></div>
@@ -2202,6 +2217,22 @@
       <div class="team-list-card" style="margin-top:0">
         <button type="button" class="team-danger dissolve" id="teamDissolveBtn">チームを解散する</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="team-ov" id="teamMemberOv">
+  <div class="team-hdr">
+    <button class="ico-btn" id="teamMemberClose" aria-label="戻る">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <span class="hdr-title" id="teamMemberHdrTitle">メンバー詳細</span>
+    <button class="team-edit" id="teamMemberSaveBtn" style="display:none;min-width:44px">保存</button>
+  </div>
+  <div class="team-body">
+    <div class="team-list-card" style="margin-top:0">
+      <div id="teamMemberDetailView"></div>
+      <div id="teamMemberDetailEdit" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -4353,8 +4384,12 @@ function initModals() {
       toast('チームを作成できませんでした');
     }
   });
+  const teamListSeeAll = document.querySelector('.team-add');
+  if (teamListSeeAll) teamListSeeAll.addEventListener('click', () => setTeamTab('projects'));
   const teamEditClose = document.getElementById('teamEditClose');
   if (teamEditClose) teamEditClose.addEventListener('click', closeTeamEdit);
+  const teamMemberClose = document.getElementById('teamMemberClose');
+  if (teamMemberClose) teamMemberClose.addEventListener('click', closeTeamMemberDetail);
   const teamReqClose = document.getElementById('teamReqClose');
   if (teamReqClose) teamReqClose.addEventListener('click', closeTeamReq);
   const teamClose = document.getElementById('teamClose');
@@ -4380,7 +4415,7 @@ function initModals() {
     if (el) el.addEventListener('click', () => { setTeamTab(k); });
   });
   const inv = document.getElementById('teamInviteBtn');
-  if (inv) inv.addEventListener('click', () => toast(tt('toast_coming_soon')));
+  if (inv) inv.addEventListener('click', () => issueInviteLink());
   const actDays = document.getElementById('teamActivityDays');
   if (actDays) actDays.addEventListener('click', (e) => {
     const rowBtn = e.target && e.target.closest ? e.target.closest('.team-day-row') : null;
@@ -4401,13 +4436,20 @@ function initModals() {
   if (invLinkBtn) invLinkBtn.addEventListener('click', () => issueInviteLink());
   const invCopy = document.getElementById('teamInviteLinkCopy');
   if (invCopy) invCopy.addEventListener('click', () => copyInviteLink());
-
   const permRevSelf = document.getElementById('teamPermRevSelf');
   const permRevSelfAll = document.getElementById('teamPermRevSelfAll');
   const permRevAll = document.getElementById('teamPermRevAll');
   if (permRevSelf) permRevSelf.addEventListener('click', () => setTeamSetting('rewardVisibility','self'));
   if (permRevSelfAll) permRevSelfAll.addEventListener('click', () => setTeamSetting('rewardVisibility','self_plus_total'));
   if (permRevAll) permRevAll.addEventListener('click', () => setTeamSetting('rewardVisibility','all'));
+  const permEmailAdmin = document.getElementById('teamPermEmailAdmin');
+  const permEmailAll = document.getElementById('teamPermEmailAll');
+  const permNoteAdmin = document.getElementById('teamPermNoteAdmin');
+  const permNoteAll = document.getElementById('teamPermNoteAll');
+  if (permEmailAdmin) permEmailAdmin.addEventListener('click', () => setTeamSetting('memberEmailVisibility','admin_only'));
+  if (permEmailAll) permEmailAll.addEventListener('click', () => setTeamSetting('memberEmailVisibility','all_members'));
+  if (permNoteAdmin) permNoteAdmin.addEventListener('click', () => setTeamSetting('memberNoteVisibility','admin_only'));
+  if (permNoteAll) permNoteAll.addEventListener('click', () => setTeamSetting('memberNoteVisibility','all_members'));
 
   const permAsAdmin = document.getElementById('teamPermAssignAdmin');
   const permAsOwner = document.getElementById('teamPermAssignOwner');
@@ -5305,6 +5347,8 @@ let cloudSelectedTeam = null;
 let cloudTeamMembers = [];
 let cloudTeamActivity = [];
 let cloudTeamJoinRequests = [];
+let cloudMemberDetailId = '';
+let cloudMemberDetailMode = 'view';
 // 仮：ログイン概念がまだ無いので、デモの管理者ハンドルを「自分」として扱う
 const CURRENT_HANDLE = '@vivian';
 function isTeamAdmin(team) {
@@ -5351,18 +5395,185 @@ function _ensureTeamSettings(team) {
   if (!Array.isArray(s.assignOwners)) s.assignOwners = [];
   if (!s.deletePermission) s.deletePermission = 'admin_only';
   if (!s.revenueBasis) s.revenueBasis = 'deadline';
+  if (!s.memberEmailVisibility) s.memberEmailVisibility = 'admin_only';
+  if (!s.memberNoteVisibility) s.memberNoteVisibility = 'admin_only';
   if (!Array.isArray(s.joinRequests)) s.joinRequests = [];
   return s;
 }
 
-function setTeamSetting(key, value) {
+async function setTeamSetting(key, value) {
   const team = _selectedTeam();
   if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
   const s = _ensureTeamSettings(team);
   s[key] = value;
-  save();
+  try {
+    if (cloudSelectedTeam) {
+      const user = await getLoggedInUserOrPrompt();
+      if (!user) return;
+      const api = await getCloudTeamApi();
+      await api.updateTeamSettings({ user, teamId: cloudSelectedTeam.id, settings: s });
+      cloudSelectedTeam.settings = { ...s };
+    } else {
+      save();
+    }
+  } catch (e) {
+    console.error(e);
+    toast('設定を保存できませんでした');
+  }
   renderTeam();
   renderTeamEditControls();
+}
+
+function getCloudMemberById(memberId) {
+  const id = String(memberId || '').trim();
+  if (!id) return null;
+  return (cloudTeamMembers || []).find((m) => String(m.uid || m.id || '') === id) || null;
+}
+
+function resolveMemberName(member) {
+  return String(member?.displayName || member?.handle || member?.email || 'メンバー').trim() || 'メンバー';
+}
+
+function canViewerSeeEmail(viewer, team) {
+  const s = _ensureTeamSettings(team);
+  if (!viewer) return false;
+  if (isTeamAdmin(viewer)) return true;
+  return s.memberEmailVisibility === 'all_members';
+}
+
+function canViewerSeeNote(viewer, team) {
+  const s = _ensureTeamSettings(team);
+  if (!viewer) return false;
+  if (isTeamAdmin(viewer)) return true;
+  return s.memberNoteVisibility === 'all_members';
+}
+
+function renderTeamMemberDetailView(member, viewer, team) {
+  const self = String(viewer?.uid || '') === String(member?.uid || member?.id || '');
+  const emailVisible = self || canViewerSeeEmail(viewer, team);
+  const noteVisible = self || canViewerSeeNote(viewer, team);
+  const payoutVisible = self || isTeamAdmin(viewer);
+  const displayName = resolveMemberName(member);
+  const email = String(member?.email || '').trim();
+  const payoutName = String(member?.payoutName || '').trim();
+  const payoutAccount = String(member?.payoutAccount || '').trim();
+  const note = String(member?.note || '').trim();
+
+  return `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div class="team-ic" style="width:54px;height:54px;font-size:18px">${esc(displayName.slice(0,1).toUpperCase() || 'M')}</div>
+      <div style="min-width:0">
+        <div style="font-size:20px;font-weight:1000;color:var(--txt)">${esc(displayName)}</div>
+        <div style="font-size:12px;font-weight:900;color:var(--txt3)">${esc(member?.role === 'admin' ? '管理者' : 'メンバー')}</div>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>表示名</label>
+      <div class="fi" style="display:flex;align-items:center;background:rgba(0,0,0,.03)">${esc(displayName)}</div>
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>メールアドレス</label>
+      <div class="fi" style="display:flex;align-items:center;background:rgba(0,0,0,.03)">${emailVisible ? esc(email || '未設定') : '非公開'}</div>
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>振込先名義</label>
+      <div class="fi" style="display:flex;align-items:center;background:rgba(0,0,0,.03)">${payoutVisible ? esc(payoutName || '未設定') : '管理者のみ'}</div>
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>振込先情報</label>
+      <div class="fi" style="display:flex;align-items:center;background:rgba(0,0,0,.03)">${payoutVisible ? esc(payoutAccount || '未設定') : '管理者のみ'}</div>
+    </div>
+    <div class="fg" style="margin-bottom:0">
+      <label>その他情報</label>
+      <div class="fi" style="min-height:72px;white-space:pre-wrap;background:rgba(0,0,0,.03)">${noteVisible ? esc(note || '未設定') : '非公開'}</div>
+    </div>
+  `;
+}
+
+function renderTeamMemberDetailEdit(member) {
+  const displayName = resolveMemberName(member);
+  return `
+    <div class="fg" style="margin-bottom:10px">
+      <label>表示名</label>
+      <input type="text" class="fi" id="teamMemberEditDisplayName" value="${esc(displayName)}" placeholder="表示名">
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>メールアドレス</label>
+      <input type="email" class="fi" id="teamMemberEditEmail" value="${esc(member?.email || '')}" placeholder="example@example.com">
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>振込先名義</label>
+      <input type="text" class="fi" id="teamMemberEditPayoutName" value="${esc(member?.payoutName || '')}" placeholder="口座名義">
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>振込先情報</label>
+      <textarea class="fi" id="teamMemberEditPayoutAccount" rows="3" placeholder="銀行名・支店名・口座番号など">${esc(member?.payoutAccount || '')}</textarea>
+    </div>
+    <div class="fg" style="margin-bottom:0">
+      <label>その他情報</label>
+      <textarea class="fi" id="teamMemberEditNote" rows="3" placeholder="連絡メモなど">${esc(member?.note || '')}</textarea>
+    </div>
+  `;
+}
+
+async function openTeamMemberDetail(memberId, fromEdit = false) {
+  const user = await getLoggedInUserOrPrompt();
+  if (!user) return;
+  const team = _selectedTeam();
+  if (!team) return;
+  const member = getCloudMemberById(memberId) || (Array.isArray(team.members) ? team.members.find((m) => String(m.uid || m.id || '') === String(memberId || '')) : null);
+  if (!member) {
+    toast('メンバー情報を読み込めませんでした');
+    return;
+  }
+  cloudMemberDetailId = String(member.uid || member.id || memberId || '');
+  const self = String(user.uid || '') === String(member.uid || member.id || '');
+  cloudMemberDetailMode = fromEdit && self ? 'edit' : 'view';
+  const ov = document.getElementById('teamMemberOv');
+  const ttl = document.getElementById('teamMemberHdrTitle');
+  const save = document.getElementById('teamMemberSaveBtn');
+  const view = document.getElementById('teamMemberDetailView');
+  const edit = document.getElementById('teamMemberDetailEdit');
+  if (ttl) ttl.textContent = cloudMemberDetailMode === 'edit' ? 'メンバー編集' : 'メンバー詳細';
+  if (save) save.style.display = cloudMemberDetailMode === 'edit' ? '' : 'none';
+  if (view) view.style.display = cloudMemberDetailMode === 'edit' ? 'none' : '';
+  if (edit) edit.style.display = cloudMemberDetailMode === 'edit' ? '' : 'none';
+  if (view) view.innerHTML = renderTeamMemberDetailView(member, user, team);
+  if (edit) edit.innerHTML = renderTeamMemberDetailEdit(member);
+  if (save) save.onclick = async () => {
+    if (!self) { toast('自分の情報のみ編集できます'); return; }
+    const api = await getCloudTeamApi();
+    await api.updateMemberProfile({
+      user,
+      teamId: String(team.id || cloudSelectedTeam?.id || ''),
+      profile: {
+        displayName: document.getElementById('teamMemberEditDisplayName')?.value || '',
+        email: document.getElementById('teamMemberEditEmail')?.value || '',
+        payoutName: document.getElementById('teamMemberEditPayoutName')?.value || '',
+        payoutAccount: document.getElementById('teamMemberEditPayoutAccount')?.value || '',
+        note: document.getElementById('teamMemberEditNote')?.value || '',
+      },
+    });
+    cloudTeamMembers = cloudTeamMembers.map((m) => String(m.uid || m.id || '') === cloudMemberDetailId ? {
+      ...m,
+      displayName: document.getElementById('teamMemberEditDisplayName')?.value || '',
+      email: document.getElementById('teamMemberEditEmail')?.value || '',
+      payoutName: document.getElementById('teamMemberEditPayoutName')?.value || '',
+      payoutAccount: document.getElementById('teamMemberEditPayoutAccount')?.value || '',
+      note: document.getElementById('teamMemberEditNote')?.value || '',
+    } : m);
+    renderTeam();
+    await openTeamMemberDetail(cloudMemberDetailId, false);
+    toast('メンバー情報を保存しました');
+  };
+  if (ov) ov.classList.add('show');
+}
+
+function closeTeamMemberDetail() {
+  const ov = document.getElementById('teamMemberOv');
+  if (ov) ov.classList.remove('show');
+  cloudMemberDetailId = '';
+  cloudMemberDetailMode = 'view';
 }
 
 function setTeamRevenueBasis(v) {
@@ -5383,6 +5594,10 @@ function renderTeamEditControls() {
   on('teamPermAssignOwner', s.assignPermission === 'owner_set');
   on('teamPermDeleteAdmin', s.deletePermission === 'admin_only');
   on('teamPermDeleteAll', s.deletePermission === 'all_edit');
+  on('teamPermEmailAdmin', s.memberEmailVisibility === 'admin_only');
+  on('teamPermEmailAll', s.memberEmailVisibility === 'all_members');
+  on('teamPermNoteAdmin', s.memberNoteVisibility === 'admin_only');
+  on('teamPermNoteAll', s.memberNoteVisibility === 'all_members');
 
   on('teamRevBasisShoot2', s.revenueBasis === 'shoot');
   on('teamRevBasisDeadline2', s.revenueBasis === 'deadline');
@@ -5392,27 +5607,30 @@ function renderTeamEditControls() {
   const owList = document.getElementById('teamAssignOwnersList');
   if (owWrap) owWrap.style.display = (s.assignPermission === 'owner_set') ? '' : 'none';
   if (owList) {
-    const ms = Array.isArray(team.members) ? team.members : [];
+    const ms = Array.isArray(cloudTeamMembers) && cloudTeamMembers.length
+      ? cloudTeamMembers
+      : (Array.isArray(team.members) ? team.members : []);
     const sel = Array.isArray(s.assignOwners) ? s.assignOwners : [];
     owList.innerHTML = ms.map(m => {
-      const h = String(m.handle || '').trim();
-      if (!h) return '';
-      const checked = sel.includes(h) ? 'checked' : '';
+      const key = String(m.uid || m.id || m.handle || '').trim();
+      if (!key) return '';
+      const label = resolveMemberName(m);
+      const checked = sel.includes(key) ? 'checked' : '';
       return `<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 2px;border-top:.5px solid var(--sep);font-weight:900;color:var(--txt2);font-size:12px">
-        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(h)}</span>
-        <input type="checkbox" data-assign-owner="${esc(h)}" ${checked} />
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(label)}</span>
+        <input type="checkbox" data-assign-owner="${esc(key)}" ${checked} />
       </label>`;
     }).join('') || `<div style="text-align:center;color:var(--txt3);font-weight:900;font-size:12px;padding:6px 0">${esc(tt('ana_none'))}</div>`;
     owList.querySelectorAll('[data-assign-owner]').forEach(cb => {
       cb.addEventListener('change', () => {
-        const h = String(cb.dataset.assignOwner || '').trim();
-        if (!h) return;
+        const key = String(cb.dataset.assignOwner || '').trim();
+        if (!key) return;
         const team2 = _selectedTeam();
         if (!team2 || !isTeamAdmin(team2)) { toast('管理者のみ操作できます'); return; }
         const s2 = _ensureTeamSettings(team2);
         const cur = Array.isArray(s2.assignOwners) ? s2.assignOwners.slice() : [];
         const want = !!cb.checked;
-        const next = want ? Array.from(new Set([...cur, h])) : cur.filter(x => x !== h);
+        const next = want ? Array.from(new Set([...cur, key])) : cur.filter(x => x !== key);
         s2.assignOwners = next;
         save();
       });
@@ -5431,6 +5649,12 @@ async function issueInviteLink() {
     if (!team.settings) team.settings = {};
     team.settings.inviteToken = invite.id;
     team.settings.inviteCode = invite.code;
+    if (cloudSelectedTeam) {
+      const api = await getCloudTeamApi();
+      await api.updateTeamSettings({ user, teamId: cloudSelectedTeam.id, settings: team.settings });
+    } else {
+      save();
+    }
     const url = buildTeamInviteUrl(team.id, invite.id);
     const box = document.getElementById('teamInviteLinkBox');
     const txt = document.getElementById('teamInviteLinkText');
@@ -5564,24 +5788,26 @@ function renderTeamEditMembers() {
   const team = _selectedTeam();
   const wrap = document.getElementById('teamEditMembers');
   if (!wrap || !team) return;
-  const ms = Array.isArray(team.members) ? team.members : [];
+  const ms = Array.isArray(cloudTeamMembers) && cloudTeamMembers.length
+    ? cloudTeamMembers
+    : (Array.isArray(team.members) ? team.members : []);
   wrap.innerHTML = ms.map(m => {
-    const h = String(m.handle || '').trim() || '(no id)';
+    const h = resolveMemberName(m);
     const role = (m.role === 'admin') ? '管理者' : 'メンバー';
-    const canKick = isTeamAdmin(team) && h !== CURRENT_HANDLE;
+    const canKick = isTeamAdmin(team) && m.role !== 'admin';
     return `<div class="team-mem-item">
       <div class="team-mem-l">
         <div class="team-mem-h">${esc(h)}</div>
         <div class="team-mem-r">${esc(role)}</div>
       </div>
-      ${canKick ? `<button type="button" class="team-kick" data-kick="${esc(h)}">退会</button>` : `<span style="min-width:54px"></span>`}
+      ${canKick ? `<button type="button" class="team-kick" data-kick="${esc(m.uid || m.id || '')}">退会</button>` : `<span style="min-width:54px"></span>`}
     </div>`;
   }).join('');
   wrap.querySelectorAll('[data-kick]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const h = String(btn.dataset.kick || '').trim();
-      if (!h) return;
-      kickMemberFromSelectedTeam(h);
+      const id = String(btn.dataset.kick || '').trim();
+      if (!id) return;
+      kickMemberFromSelectedTeam(id);
     });
   });
 }
@@ -5710,15 +5936,31 @@ async function saveTeamEdits() {
   closeTeamEdit();
 }
 
-function kickMemberFromSelectedTeam(handle) {
+async function kickMemberFromSelectedTeam(memberId) {
   const team = _selectedTeam();
   if (!team || !isTeamAdmin(team)) { toast('管理者のみ操作できます'); return; }
-  const h = String(handle || '').trim();
-  if (!h || h === CURRENT_HANDLE) return;
-  if (!confirm(`${h} を退会させますか？`)) return;
+  const id = String(memberId || '').trim();
+  if (!id) return;
+  if (!confirm('このメンバーをチームから外しますか？')) return;
+  if (cloudSelectedTeam) {
+    try {
+      const user = await getLoggedInUserOrPrompt();
+      if (!user) return;
+      const api = await getCloudTeamApi();
+      await api.removeTeamMember({ user, teamId: cloudSelectedTeam.id, memberId: id });
+      cloudTeamMembers = cloudTeamMembers.filter(m => String(m.uid || m.id || '') !== id);
+      renderTeam();
+      renderTeamEditMembers();
+      toast('退会させました');
+      return;
+    } catch (e) {
+      console.error(e);
+      toast('退会させられませんでした');
+      return;
+    }
+  }
   const ms = Array.isArray(team.members) ? team.members : [];
-  team.members = ms.filter(m => String(m.handle || '').trim() !== h);
-  // also mirror
+  team.members = ms.filter(m => String(m.uid || m.id || '').trim() !== id);
   const legacy = _teamState();
   legacy.members = Array.isArray(team.members) ? team.members : [];
   save();
@@ -5727,16 +5969,30 @@ function kickMemberFromSelectedTeam(handle) {
   renderTeamEditMembers();
 }
 
-function leaveSelectedTeam() {
+async function leaveSelectedTeam() {
   const team = _selectedTeam();
   if (!team) return;
-  const ms = Array.isArray(team.members) ? team.members : [];
-  const me = ms.find(m => String(m.handle || '').trim() === CURRENT_HANDLE);
+  const user = await getLoggedInUserOrPrompt();
+  if (!user) return;
+  const ms = Array.isArray(cloudTeamMembers) && cloudTeamMembers.length ? cloudTeamMembers : (Array.isArray(team.members) ? team.members : []);
+  const me = ms.find(m => String(m.uid || m.id || '') === String(user.uid || ''));
   if (!me) { toast('退会できません'); return; }
-  if (isTeamAdmin(team)) { toast('管理者は退会できません（解散してください）'); return; }
+  if (isTeamAdmin(me)) { toast('管理者は退会できません（解散してください）'); return; }
   if (!confirm('チームを退会しますか？')) return;
-  team.members = ms.filter(m => String(m.handle || '').trim() !== CURRENT_HANDLE);
-  save();
+  if (cloudSelectedTeam) {
+    try {
+      const api = await getCloudTeamApi();
+      await api.removeTeamMember({ user, teamId: cloudSelectedTeam.id, memberId: user.uid });
+      cloudTeamMembers = cloudTeamMembers.filter(m => String(m.uid || m.id || '') !== String(user.uid || ''));
+    } catch (e) {
+      console.error(e);
+      toast('退会できませんでした');
+      return;
+    }
+  } else {
+    team.members = ms.filter(m => String(m.uid || m.id || '') !== String(user.uid || ''));
+    save();
+  }
   closeTeam();
   openTeamList();
 }
@@ -6115,7 +6371,12 @@ function renderTeam() {
   const T = cloudSelectedTeam || _teamState();
   if (cloudTeamMembers.length) T.members = cloudTeamMembers.map((m) => ({
     id: m.uid || m.id,
-    handle: m.displayName || m.email || 'メンバー',
+    uid: m.uid || m.id,
+    displayName: m.displayName || m.email || 'メンバー',
+    email: m.email || '',
+    payoutName: m.payoutName || '',
+    payoutAccount: m.payoutAccount || '',
+    note: m.note || '',
     role: m.role || 'member',
     color: '#2F86D9',
   }));
@@ -6185,25 +6446,18 @@ function renderTeam() {
   const list = document.getElementById('teamMemberList');
   if (list) {
     const defCols = ['#E04B7B','#2F86D9','#22B8C7','#4CAF50','#FF9500','#5C6BC0'];
-    const byHandle = new Map();
+    const uniqMembers = [];
+    const seen = new Set();
     (T.members || []).forEach((m, idx) => {
-      const h = String(m.handle || '').trim();
-      if (!h) return;
-      const prev = byHandle.get(h);
-      if (!prev) { byHandle.set(h, { ...m, _idx: idx }); return; }
-      // merge duplicates (prefer admin, keep non-null numbers)
-      const merged = { ...prev, ...m, _idx: Math.min(prev._idx, idx) };
-      if (prev.role === 'admin' || m.role === 'admin') merged.role = 'admin';
-      if (prev.color) merged.color = prev.color;
-      if (prev.sales != null) merged.sales = prev.sales;
-      if (prev.cases != null) merged.cases = prev.cases;
-      if (prev.done != null) merged.done = prev.done;
-      byHandle.set(h, merged);
+      const key = String(m.uid || m.id || idx);
+      if (seen.has(key)) return;
+      seen.add(key);
+      uniqMembers.push({ ...m, _idx: idx, _key: key });
     });
-    const uniqMembers = [...byHandle.values()].sort((a,b)=> (a._idx||0) - (b._idx||0));
     list.innerHTML = uniqMembers.map((m, idx) => {
       const c = m.color || defCols[idx % defCols.length];
-      const initial = String(m.handle || '').replace(/^@/,'').slice(0,1).toUpperCase() || 'M';
+      const name = String(m.displayName || m.handle || m.email || 'メンバー').trim();
+      const initial = name.replace(/^@/,'').slice(0,1).toUpperCase() || 'M';
       const role = m.role === 'admin' ? 'admin' : 'member';
       const roleLbl = role === 'admin' ? '管理者' : 'メンバー';
       const sales = Number(m.sales || 0) || 0;
@@ -6211,34 +6465,37 @@ function renderTeam() {
       const done  = Number(m.done || 0) || 0;
       const team2 = _selectedTeam();
       const s = team2 ? _ensureTeamSettings(team2) : { assignOwners: [] };
-      const hasAssign = Array.isArray(s.assignOwners) && s.assignOwners.includes(String(m.handle || '').trim());
+      const hasAssign = Array.isArray(s.assignOwners) && s.assignOwners.includes(String(m.displayName || m.handle || m.email || '').trim());
       const isAdmin = role === 'admin';
       const badges = [
         isAdmin ? `<span class="m-badge admin">管理者</span>` : '',
         (!isAdmin && hasAssign) ? `<span class="m-badge assign">割り振り権限</span>` : '',
         (!isAdmin && !hasAssign) ? `<span class="m-badge member">メンバー</span>` : '',
       ].filter(Boolean).join('');
-      return `<div class="m-row2">
-        <div class="m-left">
+      return `<div class="m-row2" data-mid="${esc(m.uid || m.id || m._key || idx)}">
+        <div class="m-left" data-mview="${esc(m.uid || m.id || m._key || idx)}" role="button" tabindex="0">
           <div class="m-av2" style="background:${esc(c)}">
             ${isAdmin ? `<span class="m-crown" aria-hidden="true">👑</span>` : ``}
             ${esc(initial)}
           </div>
           <div style="min-width:0">
-            <div class="m-name2">${esc(m.handle || '')}</div>
+            <div class="m-name2">${esc(name)}</div>
             <div class="m-badges">${badges}</div>
           </div>
         </div>
         <div class="m-num">${esc(yen(sales))}</div>
         <div class="m-num">${esc(prog)}件</div>
         <div class="m-num">${esc(done)}件</div>
-        <button type="button" class="m-pen" aria-label="編集" data-medit="${esc(m.id || idx)}">
+        <button type="button" class="m-pen" aria-label="メンバー詳細" data-medit="${esc(m.uid || m.id || m._key || idx)}">
           <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         </button>
       </div>`;
     }).join('');
+    list.querySelectorAll('[data-mview]').forEach(btn => {
+      btn.addEventListener('click', () => openTeamMemberDetail(btn.dataset.mview));
+    });
     list.querySelectorAll('[data-medit]').forEach(btn => {
-      btn.addEventListener('click', () => toast('準備中'));
+      btn.addEventListener('click', () => openTeamMemberDetail(btn.dataset.medit, true));
     });
   }
 
