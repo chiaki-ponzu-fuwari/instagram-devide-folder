@@ -7,7 +7,6 @@ import {
   arrayUnion,
   limit,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -79,18 +78,23 @@ export async function listMyTeams({ user }) {
   const q = query(
     collection(db, 'teams'),
     where('memberUids', 'array-contains', user.uid),
-    where('deletedAt', '==', null),
-    orderBy('updatedAt', 'desc'),
     limit(50),
   );
   const snaps = await getDocs(q);
   const teams = [];
   for (const teamSnap of snaps.docs) {
+    const teamData = teamSnap.data();
+    if (teamData.deletedAt != null) continue;
     const member = await getDoc(memberRef(db, teamSnap.id, user.uid));
     if (member.exists() && member.data().status === 'active') {
-      teams.push({ id: teamSnap.id, ...teamSnap.data(), myRole: member.data().role || 'member' });
+      teams.push({ id: teamSnap.id, ...teamData, myRole: member.data().role || 'member' });
     }
   }
+  teams.sort((a, b) => {
+    const left = a.updatedAt && typeof a.updatedAt.toMillis === 'function' ? a.updatedAt.toMillis() : 0;
+    const right = b.updatedAt && typeof b.updatedAt.toMillis === 'function' ? b.updatedAt.toMillis() : 0;
+    return right - left;
+  });
   return teams;
 }
 
