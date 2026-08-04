@@ -141,6 +141,7 @@ async function seedReadyTeamData(env) {
     }
     await db.doc('teams/tReady/memberEmails/u1').set({ uid: 'u1', email: 'admin@example.com', updatedAt: 1, updatedBy: 'u1' });
     await db.doc('teams/tReady/memberNotes/u1').set({ uid: 'u1', note: 'private', updatedAt: 1, updatedBy: 'u1' });
+    await db.doc('teams/tReady/payouts/u2').set({ uid: 'u2', payoutName: 'Member Name', updatedAt: 1, updatedBy: 'u2' });
     await db.doc('teams/tReady/projects/p1').set({ id: 'p1', name: 'Public project', assignedUids: ['u2'], updatedAt: 1, updatedBy: 'u1' });
     await db.doc('teams/tReady/projectRewardTotals/p1').set({ projectId: 'p1', rewardYen: 12000, updatedAt: 1, updatedBy: 'u1' });
     await db.doc('teams/tReady/projectRewardShares/p1_u1').set({ projectId: 'p1', uid: 'u1', rewardYen: 9000, updatedAt: 1, updatedBy: 'u1' });
@@ -224,6 +225,53 @@ test('ready settings gate private values and locked members cannot use workspace
     await assertSucceeds(member.doc('teams/tReady/projectRewardShares/p1_u1').get());
     await assertSucceeds(member.doc('teams/tReady/projectRewardTotals/p1').get());
     await assertFails(member.doc('teams/tReady/projectCosts/p1').get());
+  } finally { await env.cleanup(); }
+});
+
+test('missing or unknown settings deny member private and financial reads including self', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const admin = env.authenticatedContext('u1').firestore();
+    const member = env.authenticatedContext('u2').firestore();
+    const selfPrivateRefs = [
+      'teams/tReady/memberEmails/u2',
+      'teams/tReady/memberNotes/u2',
+      'teams/tReady/payouts/u2',
+      'teams/tReady/projectRewardShares/p1_u2',
+    ];
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('teams/tReady/memberEmails/u2').set({ uid: 'u2', email: 'member@example.com', updatedAt: 1, updatedBy: 'u2' });
+      await db.doc('teams/tReady/memberNotes/u2').set({ uid: 'u2', note: 'member private', updatedAt: 1, updatedBy: 'u2' });
+      await db.doc('teams/tReady/settings/main').delete();
+    });
+    for (const path of selfPrivateRefs) await assertFails(member.doc(path).get());
+    await assertSucceeds(admin.doc('teams/tReady/memberEmails/u2').get());
+    await assertSucceeds(admin.doc('teams/tReady/memberNotes/u2').get());
+    await assertSucceeds(admin.doc('teams/tReady/payouts/u2').get());
+    await assertSucceeds(admin.doc('teams/tReady/projectRewardShares/p1_u2').get());
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/tReady/settings/main').set({
+        memberEmailVisibility: 'invalid', memberNoteVisibility: 'self',
+        rewardVisibility: 'self', memberPayoutVisibility: 'self',
+      });
+    });
+    for (const path of selfPrivateRefs) await assertFails(member.doc(path).get());
+  } finally { await env.cleanup(); }
+});
+
+test('project reward share document ID must match its project and member', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const admin = env.authenticatedContext('u1').firestore();
+
+    await assertFails(admin.doc('teams/tReady/projectRewardShares/not-p1_u2').set({
+      projectId: 'p1', uid: 'u2', rewardYen: 3000, updatedAt: 2, updatedBy: 'u1',
+    }));
   } finally { await env.cleanup(); }
 });
 

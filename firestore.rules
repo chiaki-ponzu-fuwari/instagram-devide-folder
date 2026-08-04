@@ -71,15 +71,17 @@ service cloud.firestore {
     function canReadPrivateField(teamId, uid, fieldName) {
       return canManageTeam(teamId)
         || (isMigrationReady(teamId) && isApprovedMember(teamId)
-          && (isSelf(uid) || (hasKnownSettings(teamId)
-            && get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data[fieldName] == 'all_members')));
+          && hasKnownSettings(teamId)
+          && (isSelf(uid)
+            || get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data[fieldName] == 'all_members'));
     }
 
     function canReadReward(teamId, uid) {
       return canManageTeam(teamId)
         || (isMigrationReady(teamId) && isApprovedMember(teamId)
-          && (isSelf(uid) || (hasKnownSettings(teamId)
-            && get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data.rewardVisibility == 'all_members')));
+          && hasKnownSettings(teamId)
+          && (isSelf(uid)
+            || get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data.rewardVisibility == 'all_members'));
     }
 
     function canReadRewardTotal(teamId) {
@@ -147,8 +149,9 @@ service cloud.firestore {
     function canReadPayout(teamId, uid) {
       return canManageTeam(teamId)
         || (isMigrationReady(teamId) && isApprovedMember(teamId)
-          && (isSelf(uid) || (hasKnownSettings(teamId)
-            && get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data.memberPayoutVisibility == 'all_members')));
+          && hasKnownSettings(teamId)
+          && (isSelf(uid)
+            || get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data.memberPayoutVisibility == 'all_members'));
     }
 
     function isProjectActivityAction(action) {
@@ -329,6 +332,7 @@ service cloud.firestore {
       match /projectRewardShares/{shareId} {
         allow read: if canReadReward(teamId, resource.data.uid);
         allow create, update: if canManageTeam(teamId)
+          && shareId == request.resource.data.projectId + '_' + request.resource.data.uid
           && validRewardShare(request.resource.data.projectId, request.resource.data.uid);
         allow delete: if canManageTeam(teamId);
       }
