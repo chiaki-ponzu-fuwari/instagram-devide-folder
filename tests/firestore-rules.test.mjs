@@ -116,6 +116,9 @@ async function seedLegacyTeamData(env) {
     await db.doc('teams/tLegacy/accounts/a1').set({
       id: 'a1', name: 'Legacy account', project: { rewardYen: 12000, costYen: 3000 },
     });
+    await db.doc('teams/tLegacy/projects/p1').set({
+      id: 'p1', name: 'Legacy project', costYen: 3000,
+    });
     await db.doc('teams/tLegacy/settings/main').set({ any: 'legacy' });
     await db.doc('teams/tLegacy/folders/f1').set({ name: 'legacy folder' });
     await db.doc('teams/tLegacy/templates/x1').set({ name: 'legacy template' });
@@ -157,9 +160,14 @@ test('legacy teams fail closed for active members while admins retain migration 
     const admin = env.authenticatedContext('u1').firestore();
     const member = env.authenticatedContext('u2').firestore();
     await assertSucceeds(admin.doc('teams/tLegacy/accounts/a1').get());
+    await assertSucceeds(admin.doc('teams/tLegacy/projects/p1').get());
     await assertSucceeds(member.doc('teams/tLegacy').get());
     await assertFails(member.doc('teams/tLegacy/members/u1').get());
     await assertFails(member.doc('teams/tLegacy/accounts/a1').get());
+    await assertFails(member.doc('teams/tLegacy/projects/p1').get());
+    await assertFails(member.doc('teams/tLegacy/projects/p1').update({
+      name: 'Attempted legacy write', updatedAt: 2, updatedBy: 'u2',
+    }));
     await assertFails(member.doc('teams/tLegacy/settings/main').get());
     await assertFails(member.doc('teams/tLegacy/settings/main').update({ any: 'value' }));
   } finally { await env.cleanup(); }
@@ -271,6 +279,21 @@ test('project reward share document ID must match its project and member', async
 
     await assertFails(admin.doc('teams/tReady/projectRewardShares/not-p1_u2').set({
       projectId: 'p1', uid: 'u2', rewardYen: 3000, updatedAt: 2, updatedBy: 'u1',
+    }));
+  } finally { await env.cleanup(); }
+});
+
+test('public project and account documents reject embedded cost payloads', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const member = env.authenticatedContext('u2').firestore();
+
+    await assertFails(member.doc('teams/tReady/projects/p2').set({
+      id: 'p2', name: 'Cost leak project', costYen: 3000, updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(member.doc('teams/tReady/accounts/a2').set({
+      id: 'a2', name: 'Cost leak account', expenses: 3000, updatedAt: 2, updatedBy: 'u2',
     }));
   } finally { await env.cleanup(); }
 });
