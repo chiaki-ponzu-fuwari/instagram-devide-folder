@@ -10,6 +10,10 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function teamPath(teamId) {
+      return /databases/$(database)/documents/teams/$(teamId);
+    }
+
     function memberPath(teamId, uid) {
       return /databases/$(database)/documents/teams/$(teamId)/members/$(uid);
     }
@@ -24,35 +28,170 @@ service cloud.firestore {
         && memberDoc(teamId).data.status == 'active';
     }
 
+    function isListedMember(teamId) {
+      return signedIn()
+        && exists(teamPath(teamId))
+        && get(teamPath(teamId)).data.memberUids.hasAny([request.auth.uid]);
+    }
+
     function isAdmin(teamId) {
       return isApprovedMember(teamId) && memberDoc(teamId).data.role == 'admin';
     }
 
-    function isSafeSelfMemberUpdate() {
+    function isTeamCreator(teamId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/teams/$(teamId)).data.createdBy == request.auth.uid;
+    }
+
+    function canManageTeam(teamId) {
+      return isAdmin(teamId) || isTeamCreator(teamId);
+    }
+
+    function isMigrationReady(teamId) {
+      return exists(teamPath(teamId))
+        && get(teamPath(teamId)).data.securitySchemaVersion == 2
+        && get(teamPath(teamId)).data.securityMigrationState == 'ready';
+    }
+
+    // Administrators and creators may migrate locked data. Everyone else is
+    // denied workspace access until the v2 migration is explicitly ready.
+    function canReadReadyPublicTeam(teamId) {
+      return canManageTeam(teamId)
+        || (isApprovedMember(teamId) && isMigrationReady(teamId));
+    }
+
+    function hasKnownSettings(teamId) {
+      return exists(/databases/$(database)/documents/teams/$(teamId)/settings/main)
+        && get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data.memberEmailVisibility in ['self', 'all_members', 'admin_only']
+        && get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data.memberNoteVisibility in ['self', 'all_members', 'admin_only']
+        && get(/databases/$(database)/documents/teams/$(teamId)/settings/main).data.rewardVisibility in ['self', 'all_members', 'admin_only'];
+    }
+
+    function validPublicMember(uid) {
       return request.resource.data.keys().hasOnly([
-        'uid',
-        'role',
-        'status',
+          'uid', 'role', 'status', 'displayName', 'photoURL',
+          'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.updatedBy == request.auth.uid;
+    }
+
+    function validPublicProject(projectId) {
+      return request.resource.data.keys().hasOnly([
+          'id', 'name', 'status', 'assignedUids', 'completedAt',
+          'parentProjectId', 'revision', 'tombstone', 'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.id == projectId
+        && request.resource.data.updatedBy == request.auth.uid;
+    }
+
+    function validPublicAccount(accountId) {
+      return request.resource.data.keys().hasOnly([
+          'id', 'name', 'username', 'folderId', 'projectId', 'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.id == accountId
+        && request.resource.data.updatedBy == request.auth.uid;
+    }
+
+    function canReadPayout(teamId, uid) {
+      return isSelf(uid)
+        || canManageTeam(teamId)
+        || (isApprovedMember(teamId)
+          && get(teamPath(teamId)).data.settings.memberPayoutVisibility == 'all_members');
+    }
+
+    function isProjectActivityAction(action) {
+      return action in ['createProject', 'markDelivered', 'markCompleted', 'deleteProject'];
+    }
+
+    function isValidProjectActivity() {
+      return isProjectActivityAction(request.resource.data.action)
+        && request.resource.data.keys().hasOnly([
+          'action', 'text', 'coreText', 'actorUid', 'actorName',
+          'targetName', 'projectId', 'createdAt'
+        ])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorName is string
+        && request.resource.data.actorName.size() > 0
+        && request.resource.data.actorName.size() <= 80
+        && request.resource.data.targetName is string
+        && request.resource.data.targetName.size() > 0
+        && request.resource.data.targetName.size() <= 120
+        && request.resource.data.projectId is string
+        && request.resource.data.projectId.size() > 0
+        && request.resource.data.projectId.size() <= 120
+        && request.resource.data.coreText is string
+        && request.resource.data.coreText.size() <= 240
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 320
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function isValidLegacyActivity(teamId) {
+      return request.resource.data.keys().hasOnly([
+          'action', 'text', 'coreText', 'actorUid', 'actorName',
+          'targetName', 'createdAt'
+        ])
+        && request.resource.data.action in ['createTeam', 'joinTeam', 'leaveTeam', 'removeMember']
+        && request.resource.data.createdAt == request.time
+        && ((request.resource.data.action == 'joinTeam' && canManageTeam(teamId))
+          || (request.resource.data.actorUid == request.auth.uid));
+    }
+
+    function isSafeSelfMemberUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'displayName',
         'email',
         'payoutName',
         'payoutAccount',
+        'payoutBankCode',
+        'payoutBankName',
+        'payoutBranchName',
+        'payoutBranchCode',
+        'payoutAccountType',
+        'payoutAccountNumber',
         'note',
         'updatedAt',
         'updatedBy',
-        'editScope',
-        'rewardScope',
       ])
         && request.resource.data.uid == resource.data.uid
-        && request.resource.data.updatedBy == request.auth.uid
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.status == resource.data.status
-        && request.resource.data.editScope == resource.data.editScope
-        && request.resource.data.rewardScope == resource.data.rewardScope;
+        && request.resource.data.updatedBy == request.auth.uid;
     }
 
     match /users/{uid} {
       allow read, write: if isSelf(uid);
+
+      match /folders/{folderId} {
+        allow read, write: if isSelf(uid);
+      }
+
+      match /accounts/{accountId} {
+        allow read, write: if isSelf(uid);
+      }
+
+      match /projects/{projectId} {
+        allow read, write: if isSelf(uid);
+      }
+
+      match /templates/{templateId} {
+        allow read, write: if isSelf(uid);
+      }
+
+      match /settings/{settingId} {
+        allow read, write: if isSelf(uid);
+      }
+    }
+
+    match /teamInviteCodes/{code} {
+      allow get: if signedIn() && resource.data.disabledAt == null;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.code == code
+        && request.resource.data.teamId is string
+        && request.resource.data.inviteId is string
+        && request.resource.data.createdBy == request.auth.uid
+        && canManageTeam(request.resource.data.teamId);
+      allow delete: if false;
     }
 
     match /teams/{teamId} {
@@ -60,57 +199,130 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.deletedAt == null
         && request.resource.data.rewardVisibility in ['admin_only', 'all_members', 'selected_members'];
-      allow read: if isApprovedMember(teamId);
-      allow update: if isAdmin(teamId);
+      allow read: if (signedIn() && resource.data.memberUids.hasAny([request.auth.uid])) || isApprovedMember(teamId) || isTeamCreator(teamId);
+      allow update: if canManageTeam(teamId);
       allow delete: if false;
 
       match /members/{uid} {
-        allow read: if isApprovedMember(teamId);
-        allow create: if isAdmin(teamId)
+        allow read: if canReadReadyPublicTeam(teamId);
+        allow create: if (canManageTeam(teamId) && validPublicMember(uid))
           || (signedIn()
             && uid == request.auth.uid
-            && get(/databases/$(database)/documents/teams/$(teamId)).data.createdBy == request.auth.uid
+            && isTeamCreator(teamId)
             && request.resource.data.uid == request.auth.uid
             && request.resource.data.role == 'admin'
-            && request.resource.data.status == 'active');
-        allow update: if isAdmin(teamId) || (isSelf(uid) && isSafeSelfMemberUpdate());
-        allow delete: if isAdmin(teamId)
+            && request.resource.data.status == 'active'
+            && validPublicMember(uid));
+        allow update: if (canManageTeam(teamId) && validPublicMember(uid))
+          || (isMigrationReady(teamId) && isSelf(uid) && validPublicMember(uid)
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.status == resource.data.status);
+        allow delete: if canManageTeam(teamId)
           || (isSelf(uid) && resource.data.role != 'admin');
       }
 
+      // 振込先(機微情報)は本人・管理者、またはチーム設定で公開された承認済みメンバーだけ読める
+      match /payouts/{uid} {
+        allow read: if canReadPayout(teamId, uid);
+        allow create, update: if isSelf(uid)
+          && request.resource.data.uid == request.auth.uid
+          && (isApprovedMember(teamId) || isTeamCreator(teamId));
+        allow delete: if isSelf(uid) || canManageTeam(teamId);
+      }
+
+      // Private profile fields are intentionally separate from public member docs.
+      match /memberEmails/{uid} {
+        allow read: if canManageTeam(teamId)
+          || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid));
+        allow create, update: if (canManageTeam(teamId) || isSelf(uid))
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'updatedAt', 'updatedBy'])
+          && request.resource.data.uid == uid && request.resource.data.updatedBy == request.auth.uid;
+        allow delete: if canManageTeam(teamId) || isSelf(uid);
+      }
+
+      match /memberNotes/{uid} {
+        allow read: if canManageTeam(teamId)
+          || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid));
+        allow create, update: if (canManageTeam(teamId) || isSelf(uid))
+          && request.resource.data.keys().hasOnly(['uid', 'note', 'updatedAt', 'updatedBy'])
+          && request.resource.data.uid == uid && request.resource.data.updatedBy == request.auth.uid;
+        allow delete: if canManageTeam(teamId) || isSelf(uid);
+      }
+
       match /folders/{folderId} {
-        allow read, create, update: if isApprovedMember(teamId);
+        allow read, create, update: if isApprovedMember(teamId) || isTeamCreator(teamId);
         allow delete: if false;
       }
 
       match /accounts/{accountId} {
-        allow read, create, update: if isApprovedMember(teamId);
+        allow read: if canReadReadyPublicTeam(teamId);
+        allow create, update: if canReadReadyPublicTeam(teamId) && validPublicAccount(accountId);
         allow delete: if false;
       }
 
+      match /projects/{projectId} {
+        allow read: if canReadReadyPublicTeam(teamId);
+        allow create, update: if canReadReadyPublicTeam(teamId) && validPublicProject(projectId);
+        allow delete: if false;
+      }
+
+      match /projectRewardTotals/{projectId} {
+        allow read, write: if canManageTeam(teamId);
+      }
+
+      match /projectRewardShares/{shareId} {
+        allow read: if canManageTeam(teamId)
+          || (isMigrationReady(teamId) && isApprovedMember(teamId)
+            && resource.data.uid == request.auth.uid);
+        allow create, update, delete: if canManageTeam(teamId);
+      }
+
+      match /projectCosts/{projectId} {
+        allow read, write: if canManageTeam(teamId);
+      }
+
       match /templates/{templateId} {
-        allow read, create, update: if isApprovedMember(teamId);
+        allow read, create, update: if isApprovedMember(teamId) || isTeamCreator(teamId);
+        allow delete: if false;
+      }
+
+      match /settings/{settingId} {
+        allow read, create, update: if canManageTeam(teamId);
         allow delete: if false;
       }
 
       match /activity/{activityId} {
-        allow read, create: if isApprovedMember(teamId);
+        allow read: if isApprovedMember(teamId) || isTeamCreator(teamId);
+        allow create: if (isApprovedMember(teamId) || isTeamCreator(teamId))
+          && (isValidProjectActivity() || isValidLegacyActivity(teamId));
         allow update, delete: if false;
       }
 
       match /invites/{inviteId} {
-        allow read, create, update: if isAdmin(teamId);
+        allow read, create, update: if canManageTeam(teamId);
         allow delete: if false;
       }
 
       match /joinRequests/{requestId} {
         allow create: if signedIn()
           && request.resource.data.uid == request.auth.uid
-          && request.resource.data.status == 'pending';
-        allow read: if isAdmin(teamId) || (signedIn() && resource.data.uid == request.auth.uid);
-        allow update: if isAdmin(teamId);
+          && request.resource.data.status == 'pending'
+          && exists(/databases/$(database)/documents/teams/$(teamId)/invites/$(request.resource.data.inviteId))
+          && get(/databases/$(database)/documents/teams/$(teamId)/invites/$(request.resource.data.inviteId)).data.disabledAt == null;
+        allow read: if canManageTeam(teamId) || (signedIn() && resource.data.uid == request.auth.uid);
+        allow update: if canManageTeam(teamId);
         allow delete: if false;
       }
+    }
+
+    // collectionGroup query support: allow user to read their own joinRequests across teams
+    match /{path=**}/joinRequests/{requestId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // collectionGroup query support: allow user to find their own membership docs
+    match /{path=**}/members/{memberId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
     }
   }
 }
