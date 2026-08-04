@@ -117,6 +117,9 @@ async function seedLegacyTeamData(env) {
       id: 'a1', name: 'Legacy account', project: { rewardYen: 12000, costYen: 3000 },
     });
     await db.doc('teams/tLegacy/settings/main').set({ any: 'legacy' });
+    await db.doc('teams/tLegacy/folders/f1').set({ name: 'legacy folder' });
+    await db.doc('teams/tLegacy/templates/x1').set({ name: 'legacy template' });
+    await db.doc('teams/tLegacy/activity/a1').set({ text: 'legacy activity' });
   });
 }
 
@@ -128,7 +131,8 @@ async function seedReadyTeamData(env) {
     });
     await db.doc('teams/tReady/settings/main').set({
       memberEmailVisibility: 'self', memberNoteVisibility: 'admin_only',
-      rewardVisibility: 'self', assignmentVisibility: 'all_members', deletionPermission: 'admin_only',
+      rewardVisibility: 'self', memberPayoutVisibility: 'admin_only',
+      assignmentVisibility: 'all_members', deletionPermission: 'admin_only',
     });
     for (const [uid, role] of [['u1', 'admin'], ['u2', 'member'], ['u3', 'member']]) {
       await db.doc(`teams/tReady/members/${uid}`).set({
@@ -182,6 +186,44 @@ test('ready v2 teams separate public data from private and financial documents',
     }));
     await assertFails(member.doc('teams/tReady/members/u2').update({ updatedBy: 'u1', updatedAt: 2 }));
     await assertSucceeds(admin.doc('teams/tReady/projectCosts/p1').get());
+  } finally { await env.cleanup(); }
+});
+
+test('ready settings gate private values and locked members cannot use workspace documents', async () => {
+  const env = await createEnv();
+  try {
+    await seedLegacyTeamData(env);
+    await seedReadyTeamData(env);
+    const member = env.authenticatedContext('u2').firestore();
+    const admin = env.authenticatedContext('u1').firestore();
+    await assertFails(member.doc('teams/tLegacy/folders/f1').get());
+    await assertFails(member.doc('teams/tLegacy/templates/x1').get());
+    await assertFails(member.doc('teams/tLegacy/activity/a1').get());
+    await assertSucceeds(admin.doc('teams/tLegacy/folders/f1').get());
+    await assertSucceeds(member.doc('teams/tReady/memberEmails/u2').set({
+      uid: 'u2', email: 'self@example.com', updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(member.doc('teams/tReady/memberEmails/u1').get());
+    await assertFails(member.doc('teams/tReady/memberNotes/u1').get());
+    await assertFails(member.doc('teams/tReady/projectRewardShares/p1_u1').get());
+    await assertFails(member.doc('teams/tReady/projects/p2').set({
+      id: 'p2', name: 'bad', note: 'private', updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(member.doc('teams/tReady/projectCosts/p2').set({
+      projectId: 'p2', costYen: 1, extra: true, updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(member.doc('teams/tReady/projectRewardTotals/p1').get());
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/tReady/settings/main').set({
+        memberEmailVisibility: 'all_members', memberNoteVisibility: 'all_members',
+        rewardVisibility: 'all_members', memberPayoutVisibility: 'all_members',
+      });
+    });
+    await assertSucceeds(member.doc('teams/tReady/memberEmails/u1').get());
+    await assertSucceeds(member.doc('teams/tReady/memberNotes/u1').get());
+    await assertSucceeds(member.doc('teams/tReady/projectRewardShares/p1_u1').get());
+    await assertSucceeds(member.doc('teams/tReady/projectRewardTotals/p1').get());
+    await assertFails(member.doc('teams/tReady/projectCosts/p1').get());
   } finally { await env.cleanup(); }
 });
 
@@ -472,19 +514,21 @@ test('payout records are readable by members only when team setting allows it', 
     await assertSucceeds(admin.doc('teams/t1/payouts/u1').get());
     await assertFails(member.doc('teams/t1/payouts/u1').get());
 
-    await assertSucceeds(admin.doc('teams/t1').update({
-      settings: {
-        memberPayoutVisibility: 'all_members',
-      },
+    await assertSucceeds(admin.doc('teams/t1/settings/main').set({
+      memberEmailVisibility: 'self',
+      memberNoteVisibility: 'admin_only',
+      rewardVisibility: 'self',
+      memberPayoutVisibility: 'all_members',
     }));
 
     await assertSucceeds(member.doc('teams/t1/payouts/u1').get());
     await assertFails(pending.doc('teams/t1/payouts/u1').get());
 
-    await assertSucceeds(admin.doc('teams/t1').update({
-      settings: {
-        memberPayoutVisibility: 'admin_only',
-      },
+    await assertSucceeds(admin.doc('teams/t1/settings/main').set({
+      memberEmailVisibility: 'self',
+      memberNoteVisibility: 'admin_only',
+      rewardVisibility: 'self',
+      memberPayoutVisibility: 'admin_only',
     }));
 
     await assertFails(member.doc('teams/t1/payouts/u1').get());
