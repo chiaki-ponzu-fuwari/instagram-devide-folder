@@ -198,6 +198,39 @@ test('ready v2 teams separate public data from private and financial documents',
   } finally { await env.cleanup(); }
 });
 
+test('ready members cannot read malformed public documents while admins can migrate them', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('teams/tReady/members/legacy-member').set({
+        uid: 'legacy-member', role: 'member', status: 'active', displayName: 'Legacy',
+        email: 'legacy@example.com', note: 'private note', updatedAt: 1, updatedBy: 'u1',
+      });
+      await db.doc('teams/tReady/accounts/legacy-account').set({
+        id: 'legacy-account', name: 'Legacy account', rewardYen: 12000, costYen: 3000,
+        updatedAt: 1, updatedBy: 'u1',
+      });
+      await db.doc('teams/tReady/projects/legacy-project').set({
+        id: 'legacy-project', name: 'Legacy project', rewardYen: 12000, costYen: 3000,
+        updatedAt: 1, updatedBy: 'u1',
+      });
+    });
+
+    const admin = env.authenticatedContext('u1').firestore();
+    const member = env.authenticatedContext('u2').firestore();
+    for (const path of [
+      'teams/tReady/members/legacy-member',
+      'teams/tReady/accounts/legacy-account',
+      'teams/tReady/projects/legacy-project',
+    ]) {
+      await assertFails(member.doc(path).get());
+      await assertSucceeds(admin.doc(path).get());
+    }
+  } finally { await env.cleanup(); }
+});
+
 test('ready settings gate private values and locked members cannot use workspace documents', async () => {
   const env = await createEnv();
   try {

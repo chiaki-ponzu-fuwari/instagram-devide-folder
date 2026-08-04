@@ -146,6 +146,26 @@ service cloud.firestore {
         && request.resource.data.updatedBy == request.auth.uid;
     }
 
+    function hasPublicMemberShape() {
+      return resource.data.keys().hasOnly([
+        'uid', 'role', 'status', 'displayName', 'photoURL',
+        'createdAt', 'updatedAt', 'updatedBy'
+      ]);
+    }
+
+    function hasPublicProjectShape() {
+      return resource.data.keys().hasOnly([
+        'id', 'name', 'status', 'assignedUids', 'completedAt',
+        'parentProjectId', 'revision', 'tombstone', 'createdAt', 'updatedAt', 'updatedBy'
+      ]);
+    }
+
+    function hasPublicAccountShape() {
+      return resource.data.keys().hasOnly([
+        'id', 'name', 'username', 'folderId', 'projectId', 'createdAt', 'updatedAt', 'updatedBy'
+      ]);
+    }
+
     function canReadPayout(teamId, uid) {
       return canManageTeam(teamId)
         || (isMigrationReady(teamId) && isApprovedMember(teamId)
@@ -258,7 +278,8 @@ service cloud.firestore {
       allow delete: if false;
 
       match /members/{uid} {
-        allow read: if canReadReadyPublicTeam(teamId);
+        allow read: if canManageTeam(teamId)
+          || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicMemberShape());
         allow create: if (canManageTeam(teamId) && validPublicMember(uid))
           || (signedIn()
             && uid == request.auth.uid
@@ -312,13 +333,15 @@ service cloud.firestore {
       }
 
       match /accounts/{accountId} {
-        allow read: if canReadReadyPublicTeam(teamId);
+        allow read: if canManageTeam(teamId)
+          || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicAccountShape());
         allow create, update: if canReadReadyPublicTeam(teamId) && validPublicAccount(accountId);
         allow delete: if false;
       }
 
       match /projects/{projectId} {
-        allow read: if canReadReadyPublicTeam(teamId);
+        allow read: if canManageTeam(teamId)
+          || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicProjectShape());
         allow create, update: if canReadReadyPublicTeam(teamId) && validPublicProject(projectId);
         allow delete: if false;
       }
