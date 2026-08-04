@@ -8,7 +8,7 @@ export function resolveTeamSecurityState(team = {}) {
 }
 
 export function resolveTeamWorkspaceAccess({ team = {}, member, uid } = {}) {
-  if (!member || member.uid !== uid || member.status !== 'active') {
+  if (!uid || !member?.uid || member.uid !== uid || member.status !== 'active') {
     return 'denied';
   }
 

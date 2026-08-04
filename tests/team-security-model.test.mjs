@@ -41,3 +41,17 @@ test('active normal members can access a ready team workspace', () => {
     uid: 'member-1',
   }), 'member');
 });
+
+test('workspace access is denied when the caller UID is missing', () => {
+  assert.equal(resolveTeamWorkspaceAccess({
+    team: {},
+    member: { uid: 'member-1', role: 'member', status: 'active' },
+  }), 'denied');
+});
+
+test('workspace access is denied when the member UID is missing', () => {
+  assert.equal(resolveTeamWorkspaceAccess({
+    team: {},
+    member: { role: 'admin', status: 'active' },
+  }), 'denied');
+});
