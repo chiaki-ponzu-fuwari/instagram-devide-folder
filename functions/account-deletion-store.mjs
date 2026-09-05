@@ -26,6 +26,12 @@ const DROP = Symbol('drop');
 const MANAGEMENT_UID_ARRAY_FIELDS = ['assignOwnerUids', 'adminUids', 'ownerUids', 'managerUids'];
 const SETTINGS_UID_ARRAY_FIELDS = [...MANAGEMENT_UID_ARRAY_FIELDS, 'assignedUids', 'assigneeUids'];
 const PERSON_TARGET_ACTIONS = new Set(['removeMember', 'approveMember', 'rejectMember']);
+const PERSON_SHARED_FIELDS = new Set([
+  'id', 'type', 'action', 'projectId', 'projectName', 'coreText', 'text',
+  'createdAt', 'updatedAt', 'occurredAt',
+  ...UID_FIELDS, 'name', 'displayName', 'memberName', 'actorName', 'targetName',
+  'target', 'member', 'person',
+]);
 
 export class AccountDeletionStoreError extends Error {
   constructor(code, details = undefined) {
@@ -197,10 +203,7 @@ async function commitMutations(db, documents, mutate) {
   }
 }
 
-function assertMembershipConsistency(team, memberDocuments) {
-  if (!Array.isArray(team?.memberUids) || new Set(team.memberUids).size !== team.memberUids.length) {
-    fail('inconsistent-membership');
-  }
+function canonicalMembershipTeam(team, memberDocuments) {
   const activeUids = [];
   for (const snapshot of memberDocuments) {
     const data = snapshot.data();
@@ -210,13 +213,22 @@ function assertMembershipConsistency(team, memberDocuments) {
     ) fail('inconsistent-membership');
     if (data.status === 'active') activeUids.push(snapshot.id);
   }
-  if ([...team.memberUids].sort().join('\n') !== activeUids.sort().join('\n')) {
+  if (team?.memberUids !== undefined && (
+    !Array.isArray(team.memberUids)
+    || new Set(team.memberUids).size !== team.memberUids.length
+    || [...team.memberUids].sort().join('\n') !== [...activeUids].sort().join('\n')
+  )) {
     fail('inconsistent-membership');
   }
   const creator = memberDocuments.find((snapshot) => snapshot.id === team.createdBy);
   if (!creator || creator.data().status !== 'active' || creator.data().role !== 'admin') {
     fail('inconsistent-admin-state');
   }
+  return { ...team, memberUids: activeUids };
+}
+
+function assertMembershipConsistency(team, memberDocuments) {
+  canonicalMembershipTeam(team, memberDocuments);
 }
 
 async function readCandidateTeam(db, teamId, uid) {
@@ -224,8 +236,7 @@ async function readCandidateTeam(db, teamId, uid) {
   if (!teamSnapshot.exists) fail('orphan-membership', { teamId });
   const membersSnapshot = await db.collection(`teams/${teamId}/members`).get();
   const own = membersSnapshot.docs.find((row) => row.id === uid);
-  const team = { id: teamId, ...teamSnapshot.data() };
-  assertMembershipConsistency(team, membersSnapshot.docs);
+  const team = canonicalMembershipTeam({ id: teamId, ...teamSnapshot.data() }, membersSnapshot.docs);
   if (
     !own || own.data().uid !== uid || own.data().status !== 'active'
     || !['admin', 'member'].includes(own.data().role) || !team.memberUids.includes(uid)
@@ -313,9 +324,8 @@ function validateTeamDecisionState(uid, decision, snapshots) {
   const { teamSnapshot, ownSnapshot, settingsSnapshot, members, successorSnapshot } = snapshots;
   if (!teamSnapshot.exists) fail('team-not-found', { teamId });
   if (!ownSnapshot.exists) fail('membership-not-found', { teamId });
-  const teamData = teamSnapshot.data();
+  const teamData = canonicalMembershipTeam(teamSnapshot.data(), members.docs);
   const ownData = ownSnapshot.data();
-  assertMembershipConsistency(teamData, members.docs);
   if (
     ownData.uid !== uid || ownData.status !== 'active' || !['admin', 'member'].includes(ownData.role)
     || !teamData.memberUids.includes(uid)
@@ -493,10 +503,22 @@ function sanitizeActivityValue(value, uid, identity, field = '', personContext =
     return value.map((item) => sanitizeActivityValue(item, uid, identity, '', personContext)).filter((item) => item !== DROP);
   }
   if (value && typeof value === 'object') {
-    const localPerson = personContext || [...UID_FIELDS].some((key) => value[key] === uid);
+    const matchingUidFields = [...UID_FIELDS].filter((key) => value[key] === uid);
+    const localPerson = personContext || matchingUidFields.length > 0;
+    const deletedActor = value.actorUid === uid;
+    const deletedTarget = matchingUidFields.some((key) => key !== 'actorUid');
     const output = {};
     for (const [key, item] of Object.entries(value)) {
-      if (localPerson && /email/i.test(key)) continue;
+      if (localPerson && !PERSON_SHARED_FIELDS.has(key)) continue;
+      if (localPerson && /email|photo|avatar|phone|contact|profile|notes?/i.test(key)) continue;
+      if (deletedActor && key === 'actorName') {
+        output[key] = DELETED_LABEL;
+        continue;
+      }
+      if (deletedTarget && ['name', 'displayName', 'memberName', 'targetName'].includes(key)) {
+        output[key] = DELETED_LABEL;
+        continue;
+      }
       const sanitized = sanitizeActivityValue(item, uid, identity, key, localPerson);
       if (sanitized !== DROP) output[key] = sanitized;
     }
@@ -528,6 +550,7 @@ function sanitizeActivity(data, uid, identity = {}) {
     || (PERSON_TARGET_ACTIONS.has(data?.action) && (isKnownName(data?.targetName) || isKnownName(data?.memberName)))
     || (actorPersonAction && isKnownName(data?.targetName));
   let next = actorWasDeleted ? anonymizeActivityRecord(data, uid) : { ...(data || {}) };
+  next = sanitizeActivityValue(next, uid, identity);
   if (actorWasDeleted && data?.actorUid !== uid) next.actorName = DELETED_LABEL;
   if (targetWasDeleted) {
     if (next.targetUid === uid) next.targetUid = DELETED_UID;
@@ -549,7 +572,6 @@ function sanitizeActivity(data, uid, identity = {}) {
       next.text = `${DELETED_LABEL}さんが${coreText}`;
     }
   }
-  next = sanitizeActivityValue(next, uid, identity);
   return next;
 }
 

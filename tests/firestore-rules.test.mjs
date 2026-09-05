@@ -210,6 +210,18 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
     await assertSucceeds(admin.doc('teams/tSettings/settings/main').set({
       assignOwnerUids: ['u2'],
     }));
+    await assertFails(admin.doc('teams/tSettings').update({ createdBy: 'uLocked' }));
+    await assertFails(admin.doc('teams/tSettings').update({ ownerUid: 'uLocked' }));
+    await assertFails(admin.doc('teams/tSettings/folders/locked-owner').set({ createdBy: 'uLocked' }));
+    await assertFails(admin.doc('teams/tSettings/templates/locked-owner').set({ ownerUid: 'uLocked' }));
+    await assertFails(admin.doc('teams/tSettings/settings/locked-updater').set({ updatedBy: 'uLocked' }));
+    await assertFails(admin.doc('teams/tSettings/projects/locked-assignment').set({
+      id: 'locked-assignment', assignedUids: ['uLocked'], updatedBy: 'u2',
+    }));
+    await assertFails(admin.doc('teams/tSettings/projects/malformed-assignment').set({
+      id: 'malformed-assignment', assignedUids: 'u2', updatedBy: 'u2',
+    }));
+    await assertSucceeds(admin.doc('teams/tSettings/folders/unlocked-owner').set({ createdBy: 'u2' }));
     const approval = admin.batch();
     approval.set(admin.doc('teams/tLock/members/u3'), {
       uid: 'u3', role: 'member', status: 'active', displayName: 'Unlocked',

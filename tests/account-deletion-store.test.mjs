@@ -104,6 +104,27 @@ test('snapshot uses actual team and member paths and rejects orphan memberships'
   await assert.rejects(() => loadAccountDeletionSnapshot(db, 'deleted'), /orphan-membership/);
 });
 
+test('snapshot derives canonical active member UIDs for a valid legacy team', async () => {
+  await db.doc('teams/legacy').set({ createdBy: 'admin', name: 'Legacy' });
+  await db.doc('teams/legacy/members/admin').set(member('admin', 'admin'));
+  await db.doc('teams/legacy/members/deleted').set(member('deleted'));
+  const snapshot = await loadAccountDeletionSnapshot(db, 'deleted');
+  assert.deepEqual(snapshot.teams[0].memberUids, ['admin', 'deleted']);
+
+  const ctx = await begin([{ teamId: 'legacy', action: 'leave' }]);
+  await applyTeamDecision(db, 'deleted', { teamId: 'legacy', action: 'leave' }, ctx);
+  assert.deepEqual((await db.doc('teams/legacy').get()).data().memberUids, ['admin']);
+});
+
+test('snapshot derives a valid legacy creator admin and rejects an invalid creator role', async () => {
+  await db.doc('teams/legacy-admin').set({ createdBy: 'deleted' });
+  await db.doc('teams/legacy-admin/members/deleted').set(member('deleted', 'admin'));
+  assert.deepEqual((await loadAccountDeletionSnapshot(db, 'deleted')).teams[0].memberUids, ['deleted']);
+
+  await db.doc('teams/legacy-admin/members/deleted').update({ role: 'member' });
+  await assert.rejects(() => loadAccountDeletionSnapshot(db, 'deleted'), /inconsistent-admin-state/);
+});
+
 test('job creation is idempotent and rejects a changed plan hash', async () => {
   const decisions = [{ teamId: 'team-a', action: 'leave' }];
   const first = await beginAccountDeletionJob(db, 'deleted', requestId, planHash, decisions);
@@ -383,6 +404,15 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
     coreText: 'チームに参加しました', text: '管理者さんが山田花子さんの参加を承認しました',
     contactEmail: 'deleted@example.com', createdAt: 458,
   });
+  await db.doc('teams/team-a/activity/unknown-target').set({
+    action: 'futureAction', actorUid: 'admin', actorName: '管理者',
+    targetUid: 'deleted', targetName: '山田花子', targetPhotoURL: 'https://private.example/photo',
+    projectId: 'shared-project', projectName: '共有案件', createdAt: 459,
+    target: {
+      uid: 'deleted', displayName: '山田花子', email: 'deleted@example.com',
+      profile: { phone: '090-0000-0000' }, unknownSecret: '秘密', type: 'member',
+    },
+  });
   const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
   await applyTeamDecision(db, 'deleted', { teamId: 'team-a', action: 'leave' }, ctx);
   await removeUserIdentityFromTeam(db, 'deleted', 'team-a', ctx);
@@ -405,6 +435,15 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
   assert.equal(legacyJoin.targetName, '削除済みユーザー');
   assert.equal(legacyJoin.contactEmail, undefined);
   assert.equal(legacyJoin.text, '管理者さんがチームに参加しました');
+  const unknownTarget = (await db.doc('teams/team-a/activity/unknown-target').get()).data();
+  assert.equal(unknownTarget.actorUid, 'admin');
+  assert.equal(unknownTarget.actorName, '管理者');
+  assert.equal(unknownTarget.targetUid, 'deleted-user');
+  assert.equal(unknownTarget.targetName, '削除済みユーザー');
+  assert.equal(unknownTarget.targetPhotoURL, undefined);
+  assert.deepEqual(unknownTarget.target, {
+    uid: 'deleted-user', displayName: '削除済みユーザー', type: 'member',
+  });
 });
 
 test('non-member pending requests and UID or verified-email invitations are deleted globally', async () => {

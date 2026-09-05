@@ -24,9 +24,16 @@ service cloud.firestore {
     }
 
     function hasUnlockedIdentity(data) {
-      return (!data.keys().hasAny(['uid']) || isDeletionUnlocked(data.uid))
-        && (!data.keys().hasAny(['memberUid']) || isDeletionUnlocked(data.memberUid))
-        && (!data.keys().hasAny(['invitedUid']) || isDeletionUnlocked(data.invitedUid));
+      return (!data.keys().hasAny(['uid']) || data.uid == null || isDeletionUnlocked(data.uid))
+        && (!data.keys().hasAny(['memberUid']) || data.memberUid == null || isDeletionUnlocked(data.memberUid))
+        && (!data.keys().hasAny(['invitedUid']) || data.invitedUid == null || isDeletionUnlocked(data.invitedUid))
+        && (!data.keys().hasAny(['createdBy']) || data.createdBy == null || isDeletionUnlocked(data.createdBy))
+        && (!data.keys().hasAny(['updatedBy']) || data.updatedBy == null || isDeletionUnlocked(data.updatedBy))
+        && (!data.keys().hasAny(['deletedBy']) || data.deletedBy == null || isDeletionUnlocked(data.deletedBy))
+        && (!data.keys().hasAny(['ownerUid']) || data.ownerUid == null || isDeletionUnlocked(data.ownerUid))
+        && (!data.keys().hasAny(['approvedBy']) || data.approvedBy == null || isDeletionUnlocked(data.approvedBy))
+        && (!data.keys().hasAny(['actorUid']) || data.actorUid == null || isDeletionUnlocked(data.actorUid))
+        && (!data.keys().hasAny(['targetUid']) || data.targetUid == null || isDeletionUnlocked(data.targetUid));
     }
 
     function uidArrayIsMemberSubset(data, field, memberUids) {
@@ -45,6 +52,27 @@ service cloud.firestore {
         && uidArrayIsMemberSubset(settings, 'managerUids', memberUids)
         && uidArrayIsMemberSubset(settings, 'assignedUids', memberUids)
         && uidArrayIsMemberSubset(settings, 'assigneeUids', memberUids);
+    }
+
+    function childIdentityIsValid(teamId, data) {
+      let members = getAfter(teamPath(teamId)).data.memberUids;
+      return hasUnlockedIdentity(data)
+        && members is list
+        && uidArrayIsMemberSubset(data, 'assignedUids', members)
+        && uidArrayIsMemberSubset(data, 'assigneeUids', members)
+        && uidArrayIsMemberSubset(data, 'assignOwnerUids', members)
+        && uidArrayIsMemberSubset(data, 'adminUids', members)
+        && uidArrayIsMemberSubset(data, 'ownerUids', members)
+        && uidArrayIsMemberSubset(data, 'managerUids', members);
+    }
+
+    function stableTeamOwners() {
+      return request.resource.data.createdBy == resource.data.createdBy
+        && ((!resource.data.keys().hasAny(['ownerUid'])
+            && !request.resource.data.keys().hasAny(['ownerUid']))
+          || (resource.data.keys().hasAll(['ownerUid'])
+            && request.resource.data.keys().hasAll(['ownerUid'])
+            && request.resource.data.ownerUid == resource.data.ownerUid));
     }
 
     function teamPath(teamId) {
@@ -369,12 +397,15 @@ service cloud.firestore {
     match /teams/{teamId} {
       allow create: if signedIn()
         && canWriteTeamData()
+        && hasUnlockedIdentity(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.deletedAt == null
         && request.resource.data.rewardVisibility in ['admin_only', 'all_members', 'selected_members'];
       allow read: if (signedIn() && resource.data.memberUids.hasAny([request.auth.uid])) || isApprovedMember(teamId) || isTeamCreator(teamId);
       allow update: if canWriteTeamData()
         && canManageTeam(teamId)
+        && hasUnlockedIdentity(request.resource.data)
+        && stableTeamOwners()
         && isValidTeamMemberUidUpdate(teamId)
         && embeddedSettingsUidsAreMembers(request.resource.data);
       allow delete: if false;
@@ -431,14 +462,16 @@ service cloud.firestore {
 
       match /folders/{folderId} {
         allow read: if canReadReadyPublicTeam(teamId);
-        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId);
+        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId)
+          && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if false;
       }
 
       match /accounts/{accountId} {
         allow read: if canManageTeam(teamId)
           || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicAccountShape());
-        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId) && validPublicAccount(accountId);
+        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId)
+          && validPublicAccount(accountId) && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if false;
       }
 
@@ -448,13 +481,15 @@ service cloud.firestore {
         allow create, update: if canWriteTeamData()
           && canReadReadyPublicTeam(teamId)
           && validPublicProject(projectId)
-          && projectAssigneesAreMembers(teamId, request.resource.data);
+          && projectAssigneesAreMembers(teamId, request.resource.data)
+          && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if false;
       }
 
       match /projectRewardTotals/{projectId} {
         allow read: if canReadRewardTotal(teamId);
-        allow create, update: if canWriteTeamData() && canManageTeam(teamId) && validRewardTotal(projectId);
+        allow create, update: if canWriteTeamData() && canManageTeam(teamId)
+          && validRewardTotal(projectId) && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if canWriteTeamData() && canManageTeam(teamId);
       }
 
@@ -469,13 +504,15 @@ service cloud.firestore {
 
       match /projectCosts/{projectId} {
         allow read: if canManageTeam(teamId);
-        allow create, update: if canWriteTeamData() && canManageTeam(teamId) && validProjectCost(projectId);
+        allow create, update: if canWriteTeamData() && canManageTeam(teamId)
+          && validProjectCost(projectId) && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if canWriteTeamData() && canManageTeam(teamId);
       }
 
       match /templates/{templateId} {
         allow read: if canReadReadyPublicTeam(teamId);
-        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId);
+        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId)
+          && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if false;
       }
 
@@ -483,14 +520,16 @@ service cloud.firestore {
         allow read: if canManageTeam(teamId);
         allow create, update: if canWriteTeamData()
           && canManageTeam(teamId)
-          && settingsUidArraysAreMembers(request.resource.data, getAfter(teamPath(teamId)).data.memberUids);
+          && settingsUidArraysAreMembers(request.resource.data, getAfter(teamPath(teamId)).data.memberUids)
+          && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if false;
       }
 
       match /activity/{activityId} {
         allow read: if canReadReadyPublicTeam(teamId);
         allow create: if canWriteTeamData() && canReadReadyPublicTeam(teamId)
-          && (isValidProjectActivity() || isValidLegacyActivity(teamId));
+          && (isValidProjectActivity() || isValidLegacyActivity(teamId))
+          && childIdentityIsValid(teamId, request.resource.data);
         allow update, delete: if false;
       }
 
