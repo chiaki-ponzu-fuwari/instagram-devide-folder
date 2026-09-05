@@ -380,19 +380,59 @@ test('transfer rejects malformed management arrays without partially changing ow
 
 test('invalid successor is rejected before activity anonymization starts', async () => {
   await db.doc('teams/invalid-successor').set(team({
-    createdBy: 'deleted', memberUids: ['deleted'],
+    createdBy: 'deleted', memberUids: ['deleted', 'missing'],
   }));
   await db.doc('teams/invalid-successor/members/deleted').set(member('deleted', 'admin'));
+  await db.doc('teams/invalid-successor/members/missing').set(member('missing'));
   const untouchedActivity = {
     actorUid: 'deleted', actorName: 'Deleted Admin', action: 'leaveTeam',
     text: 'Deleted Adminさんがチームから退出しました', createdAt: 1,
   };
   await db.doc('teams/invalid-successor/activity/untouched').set(untouchedActivity);
   const ctx = await begin([{ teamId: 'invalid-successor', action: 'transfer', transferToUid: 'missing' }]);
+  await preflightAccountDeletionDecisions(db, 'deleted', [{
+    teamId: 'invalid-successor', action: 'transfer', transferToUid: 'missing',
+  }]);
+  const raceBatch = db.batch();
+  raceBatch.delete(db.doc('teams/invalid-successor/members/missing'));
+  raceBatch.update(db.doc('teams/invalid-successor'), { memberUids: ['deleted'] });
+  await raceBatch.commit();
   await assert.rejects(() => applyTeamDecision(db, 'deleted', {
     teamId: 'invalid-successor', action: 'transfer', transferToUid: 'missing',
   }, ctx), /invalid-successor/);
   assert.deepEqual((await db.doc('teams/invalid-successor/activity/untouched').get()).data(), untouchedActivity);
+  const job = (await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data();
+  const checkpoint = job.teamCheckpoints[Buffer.from('invalid-successor').toString('base64url')];
+  assert.equal(checkpoint.status, 'pending');
+  assert.equal(checkpoint.decisionApplied, false);
+  await abortPendingAccountDeletionJob(db, 'deleted', ctx);
+  assert.equal((await db.doc('accountDeletionLocks/deleted').get()).exists, false);
+});
+
+test('a decision committed before activity cleanup resumes without membership documents', async () => {
+  await seedLeaveTeam('retry-after-commit');
+  await db.doc('teams/retry-after-commit/activity/indexed').set({
+    action: 'leaveTeam', actorUid: 'deleted', actorName: 'Deleted User',
+    targetName: 'Deleted User', identityUids: ['deleted'], createdAt: 1,
+  });
+  const ctx = await begin([{ teamId: 'retry-after-commit', action: 'leave' }]);
+  await assert.rejects(
+    () => applyTeamDecision(db, 'deleted', { teamId: 'retry-after-commit', action: 'leave' }, {
+      ...ctx,
+      sanitizeActivities: async () => { throw new Error('injected-sanitize-failure'); },
+    }),
+    /injected-sanitize-failure/,
+  );
+  assert.equal((await db.doc('teams/retry-after-commit/members/deleted').get()).exists, false);
+  const job = (await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data();
+  const checkpoint = job.teamCheckpoints[Buffer.from('retry-after-commit').toString('base64url')];
+  assert.equal(checkpoint.status, 'decision-applied');
+  assert.equal(checkpoint.decisionApplied, true);
+
+  await applyTeamDecision(db, 'deleted', { teamId: 'retry-after-commit', action: 'leave' }, ctx);
+  const activity = (await db.doc('teams/retry-after-commit/activity/indexed').get()).data();
+  assert.deepEqual(activity.identityUids, []);
+  assert.equal(activity.actorUid, 'deleted-user');
 });
 
 test('dissolve requires a sole effective admin and deletes only that team subtree', async () => {
@@ -515,7 +555,7 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
   const unstructured = (await db.doc('teams/team-a/activity/unstructured').get()).data();
   assert.equal(unstructured.actorName, '山田花子');
   assert.equal(unstructured.targetName, '山田花子');
-  assert.equal(unstructured.legacyNote, undefined);
+  assert.equal(unstructured.legacyNote, 'deleted@example.com was shown historically');
   const legacyJoin = (await db.doc('teams/team-a/activity/legacy-join').get()).data();
   assert.equal(legacyJoin.actorUid, 'admin');
   assert.equal(legacyJoin.actorName, '管理者');
@@ -581,32 +621,18 @@ test('UID-only deletion can become ready when the token has no verified email', 
   assert.equal(job.verificationPassed, false);
 });
 
-test('protected activity verification scans expected teams only', async () => {
-  await db.doc('teams/unrelated/activity/private').set({
-    actorUid: 'deleted', actorName: 'unrelated identity', action: 'updateRecord',
+test('indexed activity cleanup includes teams outside the current deletion plan', async () => {
+  await db.doc('teams/exited/activity/private').set({
+    actorUid: 'deleted', actorName: 'past identity', action: 'leaveTeam',
+    identityUids: ['deleted'],
   });
   const ctx = await begin([]);
   await deletePersonalCloudData(db, 'deleted', ctx);
   await reverifyDeletionBeforeAuthDelete(db, 'deleted', ctx);
-
-  const expectedUid = 'expected-user';
-  const expectedRequest = 'request_expected_123456789012345';
-  const expectedContext = { requestId: expectedRequest, planHash };
-  await beginAccountDeletionJob(db, expectedUid, expectedRequest, planHash, [{ teamId: 'expected', action: 'leave' }]);
-  const key = Buffer.from('expected').toString('base64url');
-  await db.doc(`accountDeletionJobs/${expectedUid}_${expectedRequest}`).update({
-    personalDataDeleted: true,
-    [`teamCheckpoints.${key}.status`]: 'complete',
-    [`teamCheckpoints.${key}.decisionApplied`]: true,
-    [`teamCheckpoints.${key}.identityRemoved`]: true,
-  });
-  await db.doc('teams/expected/activity/private').set({
-    actorUid: expectedUid, actorName: 'expected identity', action: 'updateRecord',
-  });
-  await assert.rejects(
-    () => verifyNoProtectedReferences(db, expectedUid, expectedContext),
-    /protected-references-remain/,
-  );
+  const activity = (await db.doc('teams/exited/activity/private').get()).data();
+  assert.equal(activity.actorUid, 'deleted-user');
+  assert.deepEqual(activity.identityUids, []);
+  await verifyNoProtectedReferences(db, 'deleted', ctx);
 });
 
 test('identity query pagination streams 450 matches without skipping duplicate document IDs', async () => {

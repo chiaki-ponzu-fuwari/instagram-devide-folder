@@ -16,6 +16,7 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { getFirebaseCore } from './firestore-core.mjs';
+import { deriveActivityIdentityUids } from './activity-identity.mjs';
 import { buildActivityText, currentUserLabel, normalizeTeamRecord } from './team-model.mjs';
 
 function requireUser(user) {
@@ -31,12 +32,20 @@ function memberRef(db, teamId, uid) {
   return doc(db, 'teams', teamId, 'members', uid);
 }
 
-async function writeActivity(db, teamId, user, action, targetName) {
+async function writeActivity(db, teamId, user, action, targetName, opts = {}) {
+  const actorUid = opts.actorUid || user.uid;
+  const actorName = opts.actorName || currentUserLabel(user);
+  const identities = {
+    actorUid,
+    ...(opts.targetUid ? { targetUid: opts.targetUid } : {}),
+    ...(opts.memberUid ? { memberUid: opts.memberUid } : {}),
+  };
   await addDoc(collection(db, 'teams', teamId, 'activity'), {
     action,
-    text: buildActivityText({ actorName: currentUserLabel(user), action, targetName }),
-    actorUid: user.uid,
-    actorName: currentUserLabel(user),
+    text: buildActivityText({ actorName, action, targetName }),
+    ...identities,
+    identityUids: deriveActivityIdentityUids(identities),
+    actorName,
     targetName: targetName || '',
     createdAt: serverTimestamp(),
   });
@@ -161,7 +170,11 @@ export async function approveJoinRequest({ user, teamId, requestUid }) {
     approvedBy: user.uid,
     updatedAt: serverTimestamp(),
   });
-  await writeActivity(db, teamId, user, 'joinTeam', data.displayName || 'メンバー');
+  await writeActivity(db, teamId, user, 'joinTeam', data.displayName || 'メンバー', {
+    actorUid: requestUid,
+    actorName: data.displayName || 'メンバー',
+    memberUid: requestUid,
+  });
 }
 
 export async function updateTeamName({ user, teamId, name }) {
@@ -208,6 +221,9 @@ export async function removeTeamMember({ user, teamId, memberId }) {
     updatedAt: serverTimestamp(),
     updatedBy: user.uid,
   });
+  if (String(memberId) !== String(user.uid)) {
+    await writeActivity(db, teamId, user, 'removeMember', 'メンバー', { targetUid: memberId });
+  }
 }
 
 export function subscribeTeam({ teamId, includeJoinRequests = false, onChange, onError }) {

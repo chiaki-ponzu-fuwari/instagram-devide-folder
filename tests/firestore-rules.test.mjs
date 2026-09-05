@@ -208,6 +208,12 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
     await assertFails(admin.doc('teams/tLock/projectRewardShares/p1_uLocked').set({
       projectId: 'p1', uid: 'uLocked', rewardYen: 0, updatedAt: 2, updatedBy: 'u2',
     }));
+    await assertFails(admin.doc('teams/tLock/activity/locked-target').set({
+      action: 'removeMember', text: 'AdminさんがLockedさんを外しました',
+      coreText: 'Lockedさんを外しました', actorUid: 'u2', actorName: 'Admin',
+      targetUid: 'uLocked', targetName: 'Locked', identityUids: ['u2', 'uLocked'],
+      createdAt: serverTimestamp(),
+    }));
     await assertFails(admin.doc('teams/tLock/projects/locked-assignment').set({
       id: 'locked-assignment', assignedUids: ['uLocked'], updatedBy: 'u2',
     }));
@@ -568,6 +574,7 @@ test('all approved members can read new project activity while outsiders cannot'
       text: '管理者が「共有案件」を追加しました',
       coreText: '「共有案件」を追加しました',
       actorUid: 'u1',
+      identityUids: ['u1'],
       actorName: '管理者',
       targetName: '共有案件',
       projectId: 'p-shared',
@@ -945,6 +952,7 @@ test('approved members can only write inside teams they belong to', async () => 
       text: 'メンバーが「共有案件」を追加しました',
       coreText: '「共有案件」を追加しました',
       actorUid: 'u2',
+      identityUids: ['u2'],
       actorName: 'メンバー',
       targetName: '共有案件',
       projectId: 'a2',
@@ -954,6 +962,11 @@ test('approved members can only write inside teams they belong to', async () => 
     await assertFails(member.doc('teams/t1/activity/spoofed').set({
       ...validActivity,
       actorUid: 'u1',
+      createdAt: serverTimestamp(),
+    }));
+    await assertFails(member.doc('teams/t1/activity/spoofed-index').set({
+      ...validActivity,
+      identityUids: ['u1', 'u2'],
       createdAt: serverTimestamp(),
     }));
     await assertFails(member.doc('teams/t1/activity/extra-field').set({

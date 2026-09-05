@@ -332,12 +332,19 @@ service cloud.firestore {
       return action in ['createProject', 'markDelivered', 'markCompleted', 'deleteProject'];
     }
 
+    function hasActorOnlyActivityIdentity(data) {
+      return data.identityUids is list
+        && data.identityUids.size() == 1
+        && data.identityUids[0] == data.actorUid;
+    }
+
     function isValidProjectActivity() {
       return isProjectActivityAction(request.resource.data.action)
         && request.resource.data.keys().hasOnly([
           'action', 'text', 'coreText', 'actorUid', 'actorName',
-          'targetName', 'projectId', 'createdAt'
+          'targetName', 'projectId', 'identityUids', 'createdAt'
         ])
+        && hasActorOnlyActivityIdentity(request.resource.data)
         && request.resource.data.actorUid == request.auth.uid
         && request.resource.data.actorName is string
         && request.resource.data.actorName.size() > 0
@@ -358,12 +365,26 @@ service cloud.firestore {
     function isValidLegacyActivity(teamId) {
       return request.resource.data.keys().hasOnly([
           'action', 'text', 'coreText', 'actorUid', 'actorName',
-          'targetName', 'createdAt'
+          'targetUid', 'memberUid', 'targetName', 'identityUids', 'createdAt'
         ])
         && request.resource.data.action in ['createTeam', 'joinTeam', 'leaveTeam', 'removeMember']
         && request.resource.data.createdAt == request.time
-        && ((request.resource.data.action == 'joinTeam' && canManageTeam(teamId))
-          || (request.resource.data.actorUid == request.auth.uid));
+        && ((request.resource.data.action == 'joinTeam'
+            && canManageTeam(teamId)
+            && request.resource.data.keys().hasAll(['memberUid'])
+            && request.resource.data.memberUid == request.resource.data.actorUid
+            && hasActorOnlyActivityIdentity(request.resource.data))
+          || (request.resource.data.action == 'removeMember'
+            && canManageTeam(teamId)
+            && request.resource.data.keys().hasAll(['targetUid'])
+            && request.resource.data.targetUid != request.resource.data.actorUid
+            && request.resource.data.identityUids is list
+            && request.resource.data.identityUids.size() == 2
+            && request.resource.data.actorUid in request.resource.data.identityUids
+            && request.resource.data.targetUid in request.resource.data.identityUids)
+          || (request.resource.data.action in ['createTeam', 'leaveTeam']
+            && request.resource.data.actorUid == request.auth.uid
+            && hasActorOnlyActivityIdentity(request.resource.data)));
     }
 
     function isSafeSelfMemberUpdate() {
