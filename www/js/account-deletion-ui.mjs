@@ -93,7 +93,6 @@ export function clearTeamDecision(state, teamId) {
 export function buildDeletionRequest(state) {
   if (!state?.choicesComplete) fail('team-decisions-required');
   if (state.typedConfirmation !== confirmPhrase(state.language)) fail('confirmation-required');
-  if (!['keep', 'erase'].includes(state.localDataChoice)) fail('local-data-choice-required');
   return { requestId: state.requestId, teamDecisions: clone(state.teamDecisions) };
 }
 
@@ -134,6 +133,7 @@ export async function clearScopedLocalData({ storage, filesystem, uid } = {}) {
 
 export function createAccountDeletionFlow(deps) {
   let running = false;
+  let cloudDeleted = false;
   async function load(language = 'ja') {
     let plan;
     try {
@@ -147,29 +147,35 @@ export function createAccountDeletionFlow(deps) {
   }
   async function execute(state) {
     if (running) fail('deletion-in-progress');
+    if (cloudDeleted) fail('cloud-deletion-complete');
     const request = buildDeletionRequest(state);
     running = true;
     try {
       const proof = await deps.reauthenticate();
       await deps.deleteAccount(request);
-      let localData = 'kept';
-      if (state.localDataChoice === 'erase') {
-        try {
-          await deps.clearLocalData();
-          localData = 'erased';
-        } catch {
-          localData = 'erase-failed';
-        }
-      }
+      cloudDeleted = true;
       try {
         await deps.signOut();
       } catch {
-        fail('sign-out-failed');
+        const error = new AccountDeletionUiError('sign-out-failed');
+        error.cloudDeleted = true;
+        throw error;
       }
-      return { cloudDeleted: true, localData, providerId: proof?.providerId || '' };
+      return { cloudDeleted: true, providerId: proof?.providerId || '' };
     } finally {
       running = false;
     }
   }
-  return { load, execute, isRunning: () => running };
+  async function finalizeLocalData(choice) {
+    if (!cloudDeleted) fail('cloud-deletion-required');
+    if (choice === 'keep') return { localData: 'kept' };
+    if (choice !== 'erase') fail('local-data-choice-required');
+    try {
+      await deps.clearLocalData();
+      return { localData: 'erased' };
+    } catch {
+      return { localData: 'erase-failed' };
+    }
+  }
+  return { load, execute, finalizeLocalData, isRunning: () => running };
 }

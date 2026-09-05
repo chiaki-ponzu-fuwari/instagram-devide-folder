@@ -2753,6 +2753,7 @@
     <div class="modal-handle"></div>
     <div class="modal-ttl" id="accountDeletionModalTitle">アカウントを削除</div>
     <div class="modal-body account-deletion-body account-deletion-safe-bottom">
+      <div id="accountDeletionCloudStep">
       <p class="account-deletion-lead" id="accountDeletionImpact"></p>
       <div class="account-deletion-warning">
         <p id="accountDeletionCloudImpact"></p>
@@ -2769,17 +2770,22 @@
           <div class="account-deletion-section-title" id="accountDeletionReauthTitle"></div>
           <p class="account-deletion-team-note" id="accountDeletionReauthProvider"></p>
         </div>
+        <div class="account-deletion-section">
+          <label class="account-deletion-section-title" for="accountDeletionConfirmInput" id="accountDeletionConfirmLabel"></label>
+          <input class="fi" id="accountDeletionConfirmInput" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        </div>
+      </div>
+      </div>
+      <div id="accountDeletionLocalStep" hidden>
+        <p class="account-deletion-lead" id="accountDeletionCloudComplete"></p>
         <fieldset class="account-deletion-section" style="border:0">
           <legend class="account-deletion-section-title" id="accountDeletionLocalTitle"></legend>
           <label class="account-deletion-choice"><input type="radio" name="accountDeletionLocal" value="keep" checked><span id="accountDeletionKeepLocal"></span></label>
           <label class="account-deletion-choice"><input type="radio" name="accountDeletionLocal" value="erase"><span id="accountDeletionEraseLocal"></span></label>
         </fieldset>
-        <div class="account-deletion-section">
-          <label class="account-deletion-section-title" for="accountDeletionConfirmInput" id="accountDeletionConfirmLabel"></label>
-          <input class="fi" id="accountDeletionConfirmInput" autocomplete="off" autocapitalize="characters" spellcheck="false">
-        </div>
-        <div class="account-deletion-status" id="accountDeletionStatus" role="status" aria-live="assertive"></div>
+        <button id="accountDeletionLocalConfirm" type="button" class="btn-row btn-primary"></button>
       </div>
+      <div class="account-deletion-status" id="accountDeletionStatus" role="status" aria-live="assertive"></div>
     </div>
     <div class="modal-actions account-deletion-safe-bottom">
       <button type="button" class="btn-row btn-cancel" id="accountDeletionCancel">キャンセル</button>
@@ -3582,6 +3588,8 @@ function applyChromeStatic() {
     accountDeletionLocalTitle: 'account_delete_local_title',
     accountDeletionKeepLocal: 'account_delete_keep_local',
     accountDeletionEraseLocal: 'account_delete_erase_local',
+    accountDeletionCloudComplete: 'account_delete_cloud_complete',
+    accountDeletionLocalConfirm: 'account_delete_local_confirm',
     accountDeletionCancel: 'account_delete_cancel',
   };
   Object.entries(deletionCopy).forEach(([id, key]) => {
@@ -5150,19 +5158,22 @@ function updateLoginUi(mod) {
   const gBadge = document.getElementById('settingsGoogleLoginBadge');
   const aBadge = document.getElementById('settingsAppleLoginBadge');
   const deletionDanger = document.getElementById('settingsAccountDeletion');
+  const currentUser = authMod?.getCurrentUser?.() || null;
+  const lastLoginProvider = authMod?.getLastLoginProvider?.() || '';
   const googleUi = authState.getLoginRowUiState({
-    currentUser: authMod?.getCurrentUser?.() || null,
-    lastLoginProvider: authMod?.getLastLoginProvider?.() || '',
+    currentUser,
+    lastLoginProvider,
     rowProviderId: 'google.com',
   });
   const appleUi = authState.getLoginRowUiState({
-    currentUser: authMod?.getCurrentUser?.() || null,
-    lastLoginProvider: authMod?.getLastLoginProvider?.() || '',
+    currentUser,
+    lastLoginProvider,
     rowProviderId: 'apple.com',
   });
   const activeGoogle = !!googleUi.isActive;
   const activeApple = !!appleUi.isActive;
-  activeLoginProviderId = activeGoogle ? 'google.com' : (activeApple ? 'apple.com' : '');
+  const deletionUi = authState.getAccountDeletionUiState({ currentUser, lastLoginProvider });
+  activeLoginProviderId = deletionUi.providerId;
   if (loginTtl) loginTtl.textContent = tt('settings_login');
   if (loginRow) loginRow.setAttribute('aria-expanded', settingsLoginOpen ? 'true' : 'false');
   if (loginChev) loginChev.textContent = settingsLoginOpen ? '⌄' : '›';
@@ -5173,7 +5184,7 @@ function updateLoginUi(mod) {
   if (aBadge) aBadge.textContent = appleUi.badgeText || tt('settings_login_signed_in');
   if (gBadge) gBadge.hidden = !activeGoogle;
   if (aBadge) aBadge.hidden = !activeApple;
-  if (deletionDanger) deletionDanger.hidden = !(activeGoogle || activeApple);
+  if (deletionDanger) deletionDanger.hidden = !deletionUi.signedIn;
   updateCloudSyncUi();
 }
 
@@ -5181,6 +5192,8 @@ let accountDeletionBusy = false;
 let accountDeletionState = null;
 let accountDeletionFlow = null;
 let accountDeletionPreviousFocus = null;
+let accountDeletionAwaitingLocalChoice = false;
+let accountDeletionSignOutFailed = false;
 
 function accountDeletionSafeErrorKey(error) {
   const code = String(error?.code || '');
@@ -5312,17 +5325,38 @@ async function renderAccountDeletionPlan(uiModule) {
 }
 
 function closeAccountDeletionModal(force = false) {
-  if (accountDeletionBusy && !force) return false;
+  if ((accountDeletionBusy || accountDeletionAwaitingLocalChoice) && !force) return false;
   const modal = document.getElementById('accountDeletionModal');
   if (!modal) return true;
   modal.classList.remove('show');
   modal.hidden = true;
   accountDeletionState = null;
   accountDeletionFlow = null;
+  accountDeletionAwaitingLocalChoice = false;
+  accountDeletionSignOutFailed = false;
   updateFabVisibility();
   accountDeletionPreviousFocus?.focus?.();
   accountDeletionPreviousFocus = null;
   return true;
+}
+
+function showAccountDeletionLocalStep(messageKey = 'account_delete_cloud_complete') {
+  const cloudStep = document.getElementById('accountDeletionCloudStep');
+  const form = document.getElementById('accountDeletionForm');
+  const localStep = document.getElementById('accountDeletionLocalStep');
+  const submit = document.getElementById('accountDeletionSubmit');
+  const cancel = document.getElementById('accountDeletionCancel');
+  const status = document.getElementById('accountDeletionStatus');
+  if (cloudStep) cloudStep.hidden = true;
+  if (form) form.hidden = true;
+  if (localStep) localStep.hidden = false;
+  if (submit) submit.hidden = true;
+  if (cancel) cancel.hidden = true;
+  if (status) { status.classList.toggle('is-error', messageKey === 'account_delete_error_signout'); status.textContent = tt(messageKey); }
+  const keep = document.querySelector('input[name="accountDeletionLocal"][value="keep"]');
+  if (keep) keep.checked = true;
+  accountDeletionAwaitingLocalChoice = true;
+  document.getElementById('accountDeletionLocalConfirm')?.focus();
 }
 
 function trapAccountDeletionFocus(event) {
@@ -5342,12 +5376,20 @@ async function openAccountDeletionModal() {
   const modal = document.getElementById('accountDeletionModal');
   const loading = document.getElementById('accountDeletionLoading');
   const form = document.getElementById('accountDeletionForm');
+  const cloudStep = document.getElementById('accountDeletionCloudStep');
+  const localStep = document.getElementById('accountDeletionLocalStep');
   const status = document.getElementById('accountDeletionStatus');
   if (!modal || !loading || !form || !status) return;
   accountDeletionPreviousFocus = document.activeElement;
   modal.hidden = false;
   modal.classList.add('show');
   form.hidden = true;
+  if (cloudStep) cloudStep.hidden = false;
+  if (localStep) localStep.hidden = true;
+  document.getElementById('accountDeletionSubmit').hidden = false;
+  document.getElementById('accountDeletionCancel').hidden = false;
+  accountDeletionAwaitingLocalChoice = false;
+  accountDeletionSignOutFailed = false;
   loading.textContent = tt('account_delete_loading');
   status.textContent = '';
   document.getElementById('accountDeletionConfirmInput').value = '';
@@ -5633,6 +5675,7 @@ function initModals() {
   const accountDeletionCancel = document.getElementById('accountDeletionCancel');
   const accountDeletionInput = document.getElementById('accountDeletionConfirmInput');
   const accountDeletionSubmit = document.getElementById('accountDeletionSubmit');
+  const accountDeletionLocalConfirm = document.getElementById('accountDeletionLocalConfirm');
   if (settingsDeleteAccountBtn) settingsDeleteAccountBtn.addEventListener('click', openAccountDeletionModal);
   if (accountDeletionCancel) accountDeletionCancel.addEventListener('click', () => closeAccountDeletionModal());
   if (accountDeletionInput) accountDeletionInput.addEventListener('input', updateAccountDeletionSubmit);
@@ -5651,8 +5694,31 @@ function initModals() {
     const status = document.getElementById('accountDeletionStatus');
     if (status) { status.classList.remove('is-error'); status.textContent = tt('account_delete_running'); }
     try {
-      const result = await accountDeletionFlow.execute(accountDeletionState);
-      if (accountDeletionState.localDataChoice === 'erase') {
+      await accountDeletionFlow.execute(accountDeletionState);
+      updateLoginUi();
+      showAccountDeletionLocalStep();
+    } catch (error) {
+      if (error?.cloudDeleted === true) {
+        accountDeletionSignOutFailed = true;
+        showAccountDeletionLocalStep('account_delete_error_signout');
+      } else if (status) {
+        status.classList.add('is-error');
+        status.textContent = tt(accountDeletionSafeErrorKey(error));
+      }
+    } finally {
+      accountDeletionBusy = false;
+      if (accountDeletionCancel) accountDeletionCancel.disabled = false;
+      updateAccountDeletionSubmit();
+    }
+  });
+  if (accountDeletionLocalConfirm) accountDeletionLocalConfirm.addEventListener('click', async () => {
+    if (accountDeletionBusy || !accountDeletionFlow || !accountDeletionAwaitingLocalChoice) return;
+    const localChoice = document.querySelector('input[name="accountDeletionLocal"]:checked')?.value || 'keep';
+    accountDeletionBusy = true;
+    accountDeletionLocalConfirm.disabled = true;
+    try {
+      const result = await accountDeletionFlow.finalizeLocalData(localChoice);
+      if (result.localData === 'erased') {
         S.folders = JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
         S.accounts = [];
         S.projects = [];
@@ -5661,18 +5727,14 @@ function initModals() {
         S.currentFolderId = null;
         renderTree(); renderMain(); renderTemplates();
       }
-      updateLoginUi();
-      if (status) status.textContent = result.localData === 'erase-failed'
-        ? tt('account_delete_local_erase_failed')
-        : tt('account_delete_success');
-      accountDeletionFlow = null;
-      accountDeletionState = null;
-    } catch (error) {
-      if (status) { status.classList.add('is-error'); status.textContent = tt(accountDeletionSafeErrorKey(error)); }
+      const messageKey = result.localData === 'erase-failed'
+        ? 'account_delete_local_erase_failed'
+        : accountDeletionSignOutFailed ? 'account_delete_error_signout' : 'account_delete_success';
+      closeAccountDeletionModal(true);
+      toast(tt(messageKey));
     } finally {
       accountDeletionBusy = false;
-      if (accountDeletionCancel) accountDeletionCancel.disabled = false;
-      updateAccountDeletionSubmit();
+      accountDeletionLocalConfirm.disabled = false;
     }
   });
 

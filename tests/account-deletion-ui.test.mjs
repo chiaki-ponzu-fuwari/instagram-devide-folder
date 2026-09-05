@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import * as accountDeletionUi from '../www/js/account-deletion-ui.mjs';
+import * as authState from '../www/js/auth-state.mjs';
 
 const {
   AccountDeletionUiError,
@@ -38,6 +39,21 @@ test('settings exposes a signed-in-only danger action and an accessible deletion
   assert.match(html, /account-deletion-safe-bottom/);
 });
 
+test('account deletion visibility uses Firebase signed-in state without requiring a session provider key', () => {
+  assert.equal(typeof authState.getLoginRowUiState, 'function');
+  assert.equal(typeof authState.getAccountDeletionUiState, 'function');
+  assert.deepEqual(authState.getAccountDeletionUiState({
+    currentUser: { uid: 'u1', providerData: [{ providerId: 'google.com' }] },
+    lastLoginProvider: '',
+  }), { signedIn: true, providerId: 'google.com' });
+  assert.deepEqual(authState.getAccountDeletionUiState({
+    currentUser: { uid: 'u2', providerData: [] }, lastLoginProvider: '',
+  }), { signedIn: true, providerId: '' });
+  assert.match(html, /const deletionUi = authState\.getAccountDeletionUiState/);
+  assert.match(html, /deletionDanger\.hidden = !deletionUi\.signedIn/);
+  assert.match(html, /activeLoginProviderId = deletionUi\.providerId/);
+});
+
 test('Japanese and English copy covers cloud, team, device, resume, providers, and safe errors', () => {
   for (const key of [
     'account_delete_action', 'account_delete_cloud_impact', 'account_delete_team_impact',
@@ -46,6 +62,7 @@ test('Japanese and English copy covers cloud, team, device, resume, providers, a
     'account_delete_error_reauth', 'account_delete_error_cancelled',
     'account_delete_error_network', 'account_delete_error_in_progress',
     'account_delete_error_signout', 'account_delete_dissolve_impact',
+    'account_delete_cloud_complete', 'account_delete_local_confirm',
   ]) assert.equal((i18n.match(new RegExp(`\\b${key}:`, 'g')) || []).length, 2, key);
   assert.match(i18n, /account_delete_phrase:\s*'削除'/);
   assert.match(i18n, /account_delete_phrase:\s*'DELETE'/);
@@ -109,6 +126,17 @@ test('typed confirmation is exact and local data defaults to keep', () => {
   assert.doesNotThrow(() => buildDeletionRequest({ ...state, typedConfirmation: 'DELETE' }));
 });
 
+test('device data choice is a separate step after cloud deletion', () => {
+  const cloudForm = html.indexOf('id="accountDeletionForm"');
+  const localStep = html.indexOf('id="accountDeletionLocalStep"');
+  assert.ok(cloudForm >= 0 && localStep > cloudForm);
+  assert.match(html, /id="accountDeletionCloudStep"/);
+  assert.match(html, /cloudStep\.hidden = true/);
+  assert.match(html, /id="accountDeletionLocalStep"[^>]*hidden/);
+  assert.match(html, /id="accountDeletionLocalConfirm"[^>]*type="button"/);
+  assert.match(html, /accountDeletionFlow\.finalizeLocalData\(localChoice\)/);
+});
+
 test('active jobs retain expected decisions and reuse the resume request ID', () => {
   const state = createDeletionFormState({ plan: {
     teams: [], resumeRequestId: 'resume_request_123456789012345678',
@@ -137,8 +165,9 @@ test('flow retries a stale plan after reauth and deletes only after form validat
   assert.equal(calls.some((call) => Array.isArray(call) && call[0] === 'delete'), false);
   const result = await flow.execute({ ...loaded, typedConfirmation: '削除' });
   assert.deepEqual(calls.slice(3).map((call) => Array.isArray(call) ? call[0] : call), ['reauth', 'delete', 'signout']);
-  assert.equal(result.localData, 'kept');
+  assert.deepEqual(result, { cloudDeleted: true, providerId: 'google.com' });
   assert.equal(calls.includes('clear'), false);
+  assert.deepEqual(await flow.finalizeLocalData('keep'), { localData: 'kept' });
 });
 
 test('erase is scoped, deletes listed native files one by one, and preserves settings', async () => {
@@ -173,8 +202,10 @@ test('local erase failure does not undo cloud deletion', async () => {
   });
   const state = await flow.load('ja');
   const result = await flow.execute({ ...state, typedConfirmation: '削除', localDataChoice: 'erase' });
-  assert.deepEqual(calls, ['reauth', 'delete', 'clear', 'signout']);
-  assert.deepEqual(result, { cloudDeleted: true, localData: 'erase-failed', providerId: 'apple.com' });
+  assert.deepEqual(calls, ['reauth', 'delete', 'signout']);
+  assert.deepEqual(result, { cloudDeleted: true, providerId: 'apple.com' });
+  assert.deepEqual(await flow.finalizeLocalData('erase'), { localData: 'erase-failed' });
+  assert.deepEqual(calls, ['reauth', 'delete', 'signout', 'clear']);
 });
 
 test('sign-out failure is reported instead of returning deletion success', async () => {
@@ -190,8 +221,18 @@ test('sign-out failure is reported instead of returning deletion success', async
   await assert.rejects(flow.execute(state), (error) => (
     error instanceof AccountDeletionUiError
     && error.code === 'sign-out-failed'
+    && error.cloudDeleted === true
     && !error.message.includes('private auth detail')
   ));
+  assert.deepEqual(await flow.finalizeLocalData('keep'), { localData: 'kept' });
+});
+
+test('local data cannot be changed before cloud deletion completes', async () => {
+  const flow = createAccountDeletionFlow({
+    fetchPlan: async () => ({ teams: [] }), reauthenticate: async () => ({}),
+    deleteAccount: async () => ({}), signOut: async () => {}, clearLocalData: async () => {},
+  });
+  await assert.rejects(flow.finalizeLocalData('erase'), /cloud-deletion-required/);
 });
 
 test('failed deletion can retry, reauthenticates again, and blocks double submission', async () => {
