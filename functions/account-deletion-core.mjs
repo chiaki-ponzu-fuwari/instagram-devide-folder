@@ -6,20 +6,17 @@ const DELETED_ACTOR_NAME = "削除済みユーザー";
 const REQUEST_FIELDS = new Set(["requestId", "teamDecisions"]);
 const DECISION_FIELDS = new Set(["teamId", "action", "transferToUid"]);
 const DECISION_ACTIONS = new Set(["leave", "transfer", "dissolve"]);
-const MAX_TEAM_DECISIONS = 100;
+const MAX_REQUEST_BYTES = 256 * 1024;
 const APPROVED_MEMBERSHIP_STATUS = "active";
-const ACTIVITY_SHARED_FIELDS = new Set([
+const ACTIVITY_SHARED_STRING_FIELDS = new Set([
   "id",
   "type",
   "action",
-  "text",
-  "coreText",
   "projectId",
   "projectName",
   "targetName",
-  "createdAt",
 ]);
-const SENSITIVE_ACTIVITY_FIELD = /(?:email|e-mail|mailaddress|displayname|profile|avatar|photo|image|phone|telephone|contact|address|handle|username|private|personal|identity|secret|token|memo|note|bank|payout|recipient|account)/i;
+const ACTIVITY_TIMESTAMP_FIELDS = new Set(["createdAt", "updatedAt"]);
 
 export class AccountDeletionError extends Error {
   constructor(code, message, details = undefined) {
@@ -122,6 +119,19 @@ export function normalizeDeletionRequest(input) {
   }
   assertKnownFields(input, REQUEST_FIELDS);
 
+  let serializedInput;
+  try {
+    serializedInput = JSON.stringify(input);
+  } catch {
+    fail("invalid-request", "Deletion request must be JSON serializable.");
+  }
+  if (
+    typeof serializedInput !== "string"
+    || new TextEncoder().encode(serializedInput).byteLength > MAX_REQUEST_BYTES
+  ) {
+    fail("invalid-request", "Deletion request cannot exceed 256 KiB.");
+  }
+
   if (
     typeof input.requestId !== "string"
     || !/^[A-Za-z0-9_-]{32,64}$/.test(input.requestId)
@@ -131,10 +141,6 @@ export function normalizeDeletionRequest(input) {
   if (input.teamDecisions !== undefined && !Array.isArray(input.teamDecisions)) {
     fail("invalid-team-decision", "teamDecisions must be an array.");
   }
-  if ((input.teamDecisions?.length ?? 0) > MAX_TEAM_DECISIONS) {
-    fail("invalid-team-decision", "teamDecisions cannot contain more than 100 entries.");
-  }
-
   return {
     requestId: input.requestId,
     teamDecisions: (input.teamDecisions ?? []).map(normalizeTeamDecision),
@@ -142,13 +148,16 @@ export function normalizeDeletionRequest(input) {
 }
 
 export function buildAccountDeletionPlan({ uid, memberships, teams } = {}) {
-  if (!isNonEmptyString(uid) || !Array.isArray(memberships) || !Array.isArray(teams)) {
+  if (!isSafeDocumentId(uid) || !Array.isArray(memberships) || !Array.isArray(teams)) {
     fail("invalid-plan-input", "Plan input must contain uid, memberships, and teams.");
   }
 
   const teamsById = new Map();
   for (const team of teams) {
-    if (!isPlainObject(team) || !isNonEmptyString(team.id) || teamsById.has(team.id)) continue;
+    if (!isPlainObject(team) || !isSafeDocumentId(team.id)) {
+      fail("invalid-plan-input", "Team snapshot has an unsafe ID.");
+    }
+    if (teamsById.has(team.id)) continue;
     teamsById.set(team.id, team);
   }
 
@@ -157,9 +166,13 @@ export function buildAccountDeletionPlan({ uid, memberships, teams } = {}) {
   for (const membership of memberships) {
     if (
       !isPlainObject(membership)
-      || !isNonEmptyString(membership.teamId)
-      || !isNonEmptyString(membership.uid)
-      || membership.status !== APPROVED_MEMBERSHIP_STATUS
+      || !isSafeDocumentId(membership.teamId)
+      || !isSafeDocumentId(membership.uid)
+    ) {
+      fail("invalid-plan-input", "Membership snapshot has an unsafe ID.");
+    }
+    if (
+      membership.status !== APPROVED_MEMBERSHIP_STATUS
       || !teamsById.has(membership.teamId)
     ) continue;
 
@@ -293,28 +306,18 @@ export function validateTeamDecisions(plan, decisions) {
   return normalized.sort((left, right) => left.teamId.localeCompare(right.teamId));
 }
 
-function cloneAndScrubActivityValue(value, deletedUid) {
-  if (typeof value === "string") {
-    if (value === deletedUid) return DELETED_ACTOR_UID;
-    return value;
+function isSupportedTimestamp(value) {
+  if (typeof value === "string") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (value instanceof Date) return Number.isFinite(value.getTime());
+  if (value === null || typeof value !== "object" || typeof value.toMillis !== "function") {
+    return false;
   }
-  if (Array.isArray(value)) {
-    return value.map((nestedValue) => cloneAndScrubActivityValue(nestedValue, deletedUid));
+  try {
+    return Number.isFinite(value.toMillis());
+  } catch {
+    return false;
   }
-  if (!isPlainObject(value)) return value;
-
-  const copy = {};
-  for (const [key, nestedValue] of Object.entries(value)) {
-    if (
-      key === "__proto__"
-      || key === "prototype"
-      || key === "constructor"
-      || SENSITIVE_ACTIVITY_FIELD.test(key)
-      || (key.startsWith("actor") && key !== "actorUid" && key !== "actorName")
-    ) continue;
-    copy[key] = cloneAndScrubActivityValue(nestedValue, deletedUid);
-  }
-  return copy;
 }
 
 function anonymizeActivityText(activity) {
@@ -339,13 +342,13 @@ export function anonymizeActivityRecord(activity, deletedUid) {
 
   const sharedFacts = {};
   for (const [key, value] of Object.entries(activity)) {
-    if (!ACTIVITY_SHARED_FIELDS.has(key) || key === "text") continue;
-    if (key === "coreText") {
-      if (typeof value === "string") sharedFacts[key] = value;
-      continue;
+    if (ACTIVITY_SHARED_STRING_FIELDS.has(key) && typeof value === "string") {
+      sharedFacts[key] = value;
+    } else if (ACTIVITY_TIMESTAMP_FIELDS.has(key) && isSupportedTimestamp(value)) {
+      sharedFacts[key] = value;
     }
-    sharedFacts[key] = cloneAndScrubActivityValue(value, deletedUid);
   }
+  if (typeof activity.coreText === "string") sharedFacts.coreText = activity.coreText;
   const anonymizedText = anonymizeActivityText(activity);
   if (anonymizedText !== undefined) sharedFacts.text = anonymizedText;
 

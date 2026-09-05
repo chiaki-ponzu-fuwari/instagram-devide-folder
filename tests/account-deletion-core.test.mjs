@@ -111,7 +111,7 @@ test("request normalization rejects malformed or over-permissive team decisions"
   }
 });
 
-test("request normalization limits decision count and validates document IDs", () => {
+test("request normalization validates document IDs at the length boundary", () => {
   const requestId = "a".repeat(32);
   const validId = `team_${"x".repeat(123)}`;
   assert.equal(validId.length, 128);
@@ -125,7 +125,6 @@ test("request normalization limits decision count and validates document IDs", (
   });
 
   const invalidDecisions = [
-    Array.from({ length: 101 }, (_, index) => ({ teamId: `team-${index}`, action: "leave" })),
     [{ teamId: "team/child", action: "leave" }],
     [{ teamId: "x".repeat(129), action: "leave" }],
     [{ teamId: "team", action: "transfer", transferToUid: "user/child" }],
@@ -137,6 +136,43 @@ test("request normalization limits decision count and validates document IDs", (
       expectCode("invalid-team-decision"),
     );
   }
+});
+
+test("101 team decisions remain representable from plan through validation", () => {
+  const teams = Array.from({ length: 101 }, (_, index) => ({ id: `team-${index}` }));
+  const memberships = teams.map((team) => ({
+    teamId: team.id,
+    uid: "deleted",
+    role: "member",
+    status: "active",
+  }));
+  const plan = buildAccountDeletionPlan({ uid: "deleted", memberships, teams });
+  const normalized = normalizeDeletionRequest({
+    requestId: "a".repeat(32),
+    teamDecisions: plan.teams.map(({ teamId }) => ({ teamId, action: "leave" })),
+  });
+
+  assert.equal(plan.teams.length, 101);
+  assert.equal(validateTeamDecisions(plan, normalized.teamDecisions).length, 101);
+});
+
+test("request normalization rejects payloads over 256 KiB and unserializable input", () => {
+  const oversizedDecisions = Array.from({ length: 2_000 }, (_, index) => ({
+    teamId: `team-${index}-${"x".repeat(110)}`,
+    action: "leave",
+  }));
+  assert.throws(
+    () => normalizeDeletionRequest({ requestId: "a".repeat(32), teamDecisions: oversizedDecisions }),
+    expectCode("invalid-request"),
+  );
+
+  const circular = { requestId: "a".repeat(32), teamDecisions: [] };
+  circular.teamDecisions.push(circular);
+  assert.throws(() => normalizeDeletionRequest(circular), expectCode("invalid-request"));
+  assert.throws(() => normalizeDeletionRequest({
+    requestId: "a".repeat(32),
+    teamDecisions: [{ teamId: "team", action: "transfer", transferToUid: 1n }],
+  }), expectCode("invalid-request"));
 });
 
 test("deletion plan includes only the user's active memberships with required actions", () => {
@@ -267,6 +303,19 @@ test("deletion plan treats a team creator as admin and rejects unknown active ro
     memberships: [
       { teamId: "team", uid: "deleted", role: "owner", status: "active" },
     ],
+    teams: [{ id: "team" }],
+  }), expectCode("invalid-plan-input"));
+});
+
+test("deletion plan rejects unsafe team and membership IDs from database snapshots", () => {
+  assert.throws(() => buildAccountDeletionPlan({
+    uid: "deleted",
+    memberships: [],
+    teams: [{ id: "team/child", createdBy: "deleted" }],
+  }), expectCode("invalid-plan-input"));
+  assert.throws(() => buildAccountDeletionPlan({
+    uid: "deleted",
+    memberships: [{ teamId: "team", uid: "user/child", role: "member", status: "active" }],
     teams: [{ id: "team" }],
   }), expectCode("invalid-plan-input"));
 });
@@ -409,6 +458,50 @@ test("activity anonymization retains coreText only when it is a string", () => {
   }, "deleted");
 
   assert.equal(Object.hasOwn(anonymized, "coreText"), false);
+});
+
+test("activity anonymization rejects structured values in shared scalar fields", () => {
+  const sharedStringFields = [
+    "id", "type", "action", "projectId", "projectName", "targetName", "coreText", "text",
+  ];
+  for (const field of sharedStringFields) {
+    for (const unsafeValue of [{ Email: "old@example.com" }, ["old@example.com"]]) {
+      const anonymized = anonymizeActivityRecord({
+        actorUid: "deleted",
+        actorName: "山田",
+        [field]: unsafeValue,
+      }, "deleted");
+      assert.equal(Object.hasOwn(anonymized, field), false, field);
+    }
+  }
+
+  for (const field of ["createdAt", "updatedAt"]) {
+    for (const unsafeValue of [{ Email: "old@example.com" }, ["old@example.com"], NaN]) {
+      const anonymized = anonymizeActivityRecord({
+        actorUid: "deleted",
+        actorName: "山田",
+        action: "updated",
+        [field]: unsafeValue,
+      }, "deleted");
+      assert.equal(Object.hasOwn(anonymized, field), false, field);
+    }
+  }
+});
+
+test("activity anonymization preserves supported timestamp values", () => {
+  const timestamp = { toMillis: () => 1_000 };
+  const values = [timestamp, new Date("2026-09-05T12:00:00.000Z"), "2026-09-05", 1_000];
+  for (const value of values) {
+    const anonymized = anonymizeActivityRecord({
+      actorUid: "deleted",
+      actorName: "山田",
+      action: "updated",
+      createdAt: value,
+      updatedAt: value,
+    }, "deleted");
+    assert.equal(anonymized.createdAt, value);
+    assert.equal(anonymized.updatedAt, value);
+  }
 });
 
 test("activity anonymization preserves shared names when they equal the actor name", () => {
