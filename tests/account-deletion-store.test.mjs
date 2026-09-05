@@ -435,7 +435,7 @@ test('a decision committed before activity cleanup resumes without membership do
   assert.equal(activity.actorUid, 'deleted-user');
 });
 
-test('dissolve requires a sole effective admin and deletes only that team subtree', async () => {
+test('dissolve lets an active admin delete the selected team even when active members remain', async () => {
   await db.doc('teams/solo').set(team({ createdBy: 'deleted', memberUids: ['deleted'] }));
   await db.doc('teams/solo/members/deleted').set(member('deleted', 'admin'));
   await db.doc('teams/solo/projects/p1').set({ name: 'delete me' });
@@ -457,16 +457,13 @@ test('dissolve requires a sole effective admin and deletes only that team subtre
   assert.equal((await db.doc('teams/control').get()).exists, true);
 
   const request2 = 'request_223456789012345678901234';
-  await db.doc('teams/not-solo').set(team({ createdBy: 'deleted2', memberUids: ['deleted2', 'other'] }));
+  await db.doc('teams/not-solo').set(team({ createdBy: 'other', memberUids: ['deleted2', 'other'] }));
   await db.doc('teams/not-solo/members/deleted2').set(member('deleted2', 'admin'));
-  await db.doc('teams/not-solo/members/other').set(member('other'));
+  await db.doc('teams/not-solo/members/other').set(member('other', 'admin'));
   const context2 = context({ requestId: request2 });
   await beginAccountDeletionJob(db, 'deleted2', request2, planHash, [{ teamId: 'not-solo', action: 'dissolve' }]);
-  await assert.rejects(
-    () => applyTeamDecision(db, 'deleted2', { teamId: 'not-solo', action: 'dissolve' }, context2),
-    /active-members-remain/,
-  );
-  assert.equal((await db.doc('teams/not-solo').get()).exists, true);
+  await applyTeamDecision(db, 'deleted2', { teamId: 'not-solo', action: 'dissolve' }, context2);
+  assert.equal((await db.doc('teams/not-solo').get()).exists, false);
 });
 
 test('personal cloud deletion removes the user document and every nested document', async () => {

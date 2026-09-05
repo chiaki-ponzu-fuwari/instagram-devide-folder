@@ -18,7 +18,7 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 const plan = {
   teams: [
     { teamId: 'member-team', teamName: '通常チーム', requiredAction: 'leave', eligibleSuccessors: [] },
-    { teamId: 'admin-team', teamName: '管理チーム', requiredAction: 'transfer', eligibleSuccessors: [{ uid: 'active-user', displayName: '引継ぎ先' }] },
+    { teamId: 'admin-team', teamName: '管理チーム', requiredAction: 'admin-choice', eligibleSuccessors: [{ uid: 'active-user', displayName: '引継ぎ先' }] },
     { teamId: 'solo-team', teamName: 'ひとりチーム', requiredAction: 'dissolve', eligibleSuccessors: [] },
   ],
 };
@@ -42,6 +42,7 @@ test('Japanese and English copy covers cloud, team, device, resume, providers, a
     'account_delete_resume', 'account_delete_reauth_google', 'account_delete_reauth_apple',
     'account_delete_error_reauth', 'account_delete_error_cancelled',
     'account_delete_error_network', 'account_delete_error_in_progress',
+    'account_delete_error_signout',
   ]) assert.equal((i18n.match(new RegExp(`\\b${key}:`, 'g')) || []).length, 2, key);
   assert.match(i18n, /account_delete_phrase:\s*'削除'/);
   assert.match(i18n, /account_delete_phrase:\s*'DELETE'/);
@@ -57,6 +58,21 @@ test('member leave is read-only and every admin choice is required', () => {
   assert.equal(state.choicesComplete, true);
   assert.throws(() => setTeamDecision(state, 'admin-team', 'transfer', 'outsider'),
     (error) => error instanceof AccountDeletionUiError && error.code === 'invalid-successor');
+});
+
+test('shared-team admins can explicitly choose transfer or dissolve', () => {
+  assert.match(html, /team\.requiredAction === 'admin-choice'/);
+  assert.match(html, /setTeamDecision\(accountDeletionState, team\.teamId, 'dissolve'\)/);
+  assert.match(html, /setTeamDecision\(accountDeletionState, team\.teamId, 'transfer'/);
+  let state = createDeletionFormState({ plan, language: 'ja' });
+  state = setTeamDecision(state, 'admin-team', 'dissolve');
+  assert.deepEqual(state.teamDecisions.find((entry) => entry.teamId === 'admin-team'), {
+    teamId: 'admin-team', action: 'dissolve',
+  });
+  state = setTeamDecision(state, 'admin-team', 'transfer', 'active-user');
+  assert.deepEqual(state.teamDecisions.find((entry) => entry.teamId === 'admin-team'), {
+    teamId: 'admin-team', action: 'transfer', transferToUid: 'active-user',
+  });
 });
 
 test('typed confirmation is exact and local data defaults to keep', () => {
@@ -135,6 +151,23 @@ test('local erase failure does not undo cloud deletion', async () => {
   const result = await flow.execute({ ...state, typedConfirmation: '削除', localDataChoice: 'erase' });
   assert.deepEqual(calls, ['reauth', 'delete', 'clear', 'signout']);
   assert.deepEqual(result, { cloudDeleted: true, localData: 'erase-failed', providerId: 'apple.com' });
+});
+
+test('sign-out failure is reported instead of returning deletion success', async () => {
+  const flow = createAccountDeletionFlow({
+    fetchPlan: async () => ({ teams: [] }),
+    reauthenticate: async () => ({ providerId: 'google.com' }),
+    deleteAccount: async () => ({ deleted: true }),
+    signOut: async () => { throw new Error('private auth detail'); },
+    clearLocalData: async () => {},
+    createRequestId: () => 'request_123456789012345678901234',
+  });
+  const state = { ...(await flow.load('ja')), typedConfirmation: '削除' };
+  await assert.rejects(flow.execute(state), (error) => (
+    error instanceof AccountDeletionUiError
+    && error.code === 'sign-out-failed'
+    && !error.message.includes('private auth detail')
+  ));
 });
 
 test('failed deletion can retry, reauthenticates again, and blocks double submission', async () => {

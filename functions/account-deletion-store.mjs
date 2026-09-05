@@ -482,10 +482,6 @@ function validateTeamDecisionState(uid, decision, snapshots) {
     };
   }
   if (!effectiveAdmin) fail('admin-required', { teamId });
-  if (teamData.createdBy !== uid) fail('not-sole-effective-admin', { teamId });
-  if (members.docs.some((row) => row.id !== uid && row.data().status === 'active')) {
-    fail('active-members-remain', { teamId });
-  }
   return { ownData };
 }
 

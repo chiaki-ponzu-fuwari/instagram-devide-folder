@@ -109,7 +109,7 @@ test('plan response is a safe projection with a deterministic SHA-256 hash', asy
   assert.deepEqual(first.teams, [{
     teamId: 'team-a',
     teamName: '安全なチーム名',
-    requiredAction: 'transfer',
+    requiredAction: 'admin-choice',
     eligibleSuccessors: [{ uid: 'successor', displayName: '引継ぎ先' }],
   }]);
   assert.doesNotMatch(JSON.stringify(first), /privateNote|successor@example\.com|role/);
@@ -517,7 +517,7 @@ test('emulator callable completes fresh and partially-applied account deletion j
   assert.equal(planResponse.ok, true, await planResponse.clone().text());
   const plan = (await planResponse.json()).result;
   assert.deepEqual(plan.teams.map((team) => [team.teamId, team.requiredAction]), [
-    ['dissolve', 'dissolve'], ['leave', 'leave'], ['transfer', 'transfer'],
+    ['dissolve', 'dissolve'], ['leave', 'leave'], ['transfer', 'admin-choice'],
   ]);
   assert.deepEqual(plan.teams[2].eligibleSuccessors, [{ uid: successor, displayName: '引継ぎ先' }]);
 

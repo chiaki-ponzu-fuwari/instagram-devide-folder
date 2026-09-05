@@ -6,6 +6,7 @@ const DELETED_ACTOR_NAME = "削除済みユーザー";
 const REQUEST_FIELDS = new Set(["requestId", "teamDecisions"]);
 const DECISION_FIELDS = new Set(["teamId", "action", "transferToUid"]);
 const DECISION_ACTIONS = new Set(["leave", "transfer", "dissolve"]);
+const PLAN_REQUIRED_ACTIONS = new Set(["leave", "admin-choice", "dissolve"]);
 const MAX_REQUEST_BYTES = 256 * 1024;
 const APPROVED_MEMBERSHIP_STATUS = "active";
 const ACTIVITY_SHARED_STRING_FIELDS = new Set([
@@ -213,7 +214,7 @@ export function buildAccountDeletionPlan({ uid, memberships, teams } = {}) {
       role,
       requiredAction: role === "member"
         ? "leave"
-        : eligibleSuccessorUids.length > 0 ? "transfer" : "dissolve",
+        : eligibleSuccessorUids.length > 0 ? "admin-choice" : "dissolve",
       eligibleSuccessorUids,
     });
   }
@@ -245,7 +246,7 @@ export function validateTeamDecisions(plan, decisions) {
         && team.requiredAction === "leave"
         && eligibleSuccessorUids.length === 0)
       || (team?.role === "admin"
-        && team.requiredAction === "transfer"
+        && team.requiredAction === "admin-choice"
         && eligibleSuccessorUids.length > 0)
       || (team?.role === "admin"
         && team.requiredAction === "dissolve"
@@ -254,7 +255,7 @@ export function validateTeamDecisions(plan, decisions) {
     if (
       !isPlainObject(team)
       || !isNonEmptyString(team.teamId)
-      || !DECISION_ACTIONS.has(team.requiredAction)
+      || !PLAN_REQUIRED_ACTIONS.has(team.requiredAction)
       || !hasValidSuccessors
       || !actionMatchesRole
       || planByTeamId.has(team.teamId)
@@ -281,7 +282,10 @@ export function validateTeamDecisions(plan, decisions) {
         teamId: decision.teamId,
       });
     }
-    if (decision.action !== plannedTeam.requiredAction) {
+    const actionAllowed = plannedTeam.requiredAction === "admin-choice"
+      ? decision.action === "transfer" || decision.action === "dissolve"
+      : decision.action === plannedTeam.requiredAction;
+    if (!actionAllowed) {
       fail("invalid-team-action", "Decision does not match the required team action.", {
         teamId: decision.teamId,
       });

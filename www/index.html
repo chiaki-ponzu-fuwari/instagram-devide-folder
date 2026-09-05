@@ -5188,6 +5188,7 @@ function accountDeletionSafeErrorKey(error) {
   if (/cancel|popup-closed|canceled/i.test(code)) return 'account_delete_error_cancelled';
   if (['temporarily-unavailable', 'retry-required', 'functions/unavailable'].includes(code)) return 'account_delete_error_network';
   if (code === 'deletion-in-progress' || code === 'account-deletion-in-progress') return 'account_delete_error_in_progress';
+  if (code === 'sign-out-failed') return 'account_delete_error_signout';
   if (['team-decisions-required', 'invalid-team-decision', 'invalid-successor'].includes(code)) return 'account_delete_error_choices';
   return 'account_delete_error_generic';
 }
@@ -5239,7 +5240,7 @@ async function renderAccountDeletionPlan(uiModule) {
         note.className = 'account-deletion-team-note';
         note.textContent = tt('account_delete_leave');
         card.appendChild(note);
-      } else if (team.requiredAction === 'transfer') {
+      } else if (team.requiredAction === 'admin-choice') {
         const label = document.createElement('label');
         label.className = 'account-deletion-team-note';
         label.textContent = tt('account_delete_transfer');
@@ -5258,10 +5259,29 @@ async function renderAccountDeletionPlan(uiModule) {
         select.addEventListener('change', () => {
           if (!select.value) return;
           try { accountDeletionState = uiModule.setTeamDecision(accountDeletionState, team.teamId, 'transfer', select.value); } catch {}
+          dissolveCheckbox.checked = false;
           updateAccountDeletionSubmit();
         });
         label.appendChild(select);
         card.appendChild(label);
+        const dissolveLabel = document.createElement('label');
+        dissolveLabel.className = 'account-deletion-choice';
+        const dissolveCheckbox = document.createElement('input');
+        dissolveCheckbox.type = 'checkbox';
+        const dissolveText = document.createElement('span');
+        dissolveText.textContent = tt('account_delete_dissolve');
+        dissolveCheckbox.addEventListener('change', () => {
+          if (dissolveCheckbox.checked) {
+            select.value = '';
+            accountDeletionState = uiModule.setTeamDecision(accountDeletionState, team.teamId, 'dissolve');
+          } else {
+            accountDeletionState.teamDecisions = accountDeletionState.teamDecisions.filter((decision) => decision.teamId !== team.teamId);
+            accountDeletionState.choicesComplete = false;
+          }
+          updateAccountDeletionSubmit();
+        });
+        dissolveLabel.append(dissolveCheckbox, dissolveText);
+        card.appendChild(dissolveLabel);
       } else {
         const label = document.createElement('label');
         label.className = 'account-deletion-choice';

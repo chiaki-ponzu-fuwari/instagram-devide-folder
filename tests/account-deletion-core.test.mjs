@@ -216,7 +216,7 @@ test("deletion plan includes only the user's active memberships with required ac
         teamId: "team-transfer",
         teamName: "引き継ぐチーム",
         role: "admin",
-        requiredAction: "transfer",
+        requiredAction: "admin-choice",
         eligibleSuccessorUids: ["successor-a"],
       },
     ],
@@ -248,7 +248,7 @@ test("deletion plan is deterministic and prevents membership data crossing team 
         teamId: "team-b",
         teamName: "",
         role: "admin",
-        requiredAction: "transfer",
+        requiredAction: "admin-choice",
         eligibleSuccessorUids: ["member-a"],
       },
     ],
@@ -274,7 +274,7 @@ test("deletion plan treats only active memberships as approved", () => {
       teamId: "shared",
       teamName: "",
       role: "admin",
-      requiredAction: "transfer",
+      requiredAction: "admin-choice",
       eligibleSuccessorUids: ["active-successor"],
     }],
   });
@@ -293,7 +293,7 @@ test("deletion plan treats a team creator as admin and rejects unknown active ro
       teamId: "creator-team",
       teamName: "",
       role: "admin",
-      requiredAction: "transfer",
+      requiredAction: "admin-choice",
       eligibleSuccessorUids: ["successor"],
     }],
   });
@@ -325,7 +325,7 @@ test("team decision validation accepts a complete matching decision set", () => 
     teams: [
       { teamId: "member", role: "member", requiredAction: "leave", eligibleSuccessorUids: [] },
       { teamId: "solo", role: "admin", requiredAction: "dissolve", eligibleSuccessorUids: [] },
-      { teamId: "shared", role: "admin", requiredAction: "transfer", eligibleSuccessorUids: ["u2"] },
+      { teamId: "shared", role: "admin", requiredAction: "admin-choice", eligibleSuccessorUids: ["u2"] },
     ],
   };
   const decisions = [
@@ -343,11 +343,26 @@ test("team decision validation accepts a complete matching decision set", () => 
   assert.deepEqual(decisions, before);
 });
 
+test("shared-team admins may explicitly dissolve instead of transferring", () => {
+  const plan = {
+    teams: [{
+      teamId: "shared", role: "admin", requiredAction: "admin-choice",
+      eligibleSuccessorUids: ["eligible"],
+    }],
+  };
+  assert.deepEqual(validateTeamDecisions(plan, [
+    { teamId: "shared", action: "dissolve" },
+  ]), [{ teamId: "shared", action: "dissolve" }]);
+  assert.deepEqual(validateTeamDecisions(plan, [
+    { teamId: "shared", action: "transfer", transferToUid: "eligible" },
+  ]), [{ teamId: "shared", action: "transfer", transferToUid: "eligible" }]);
+});
+
 test("team decision validation rejects unknown, duplicate, missing, and mismatched decisions", () => {
   const plan = {
     teams: [
       { teamId: "member", role: "member", requiredAction: "leave", eligibleSuccessorUids: [] },
-      { teamId: "shared", role: "admin", requiredAction: "transfer", eligibleSuccessorUids: ["eligible"] },
+      { teamId: "shared", role: "admin", requiredAction: "admin-choice", eligibleSuccessorUids: ["eligible"] },
       { teamId: "solo", role: "admin", requiredAction: "dissolve", eligibleSuccessorUids: [] },
     ],
   };
@@ -362,7 +377,6 @@ test("team decision validation rejects unknown, duplicate, missing, and mismatch
     [[...valid, { teamId: "unknown", action: "leave" }], "unknown-team"],
     [[{ teamId: "member", action: "dissolve" }, ...valid.slice(1)], "invalid-team-action"],
     [[valid[0], { teamId: "shared", action: "transfer", transferToUid: "outsider" }, valid[2]], "ineligible-successor"],
-    [[valid[0], { teamId: "shared", action: "dissolve" }, valid[2]], "invalid-team-action"],
     [[valid[0], valid[1], { teamId: "solo", action: "transfer", transferToUid: "eligible" }], "invalid-team-action"],
   ];
 
@@ -377,6 +391,7 @@ test("team decision validation rejects plans that bypass role constraints", () =
     { teamId: "team", role: "admin", requiredAction: "leave", eligibleSuccessorUids: [] },
     { teamId: "team", role: "member", requiredAction: "dissolve", eligibleSuccessorUids: [] },
     { teamId: "team", role: "admin", requiredAction: "transfer", eligibleSuccessorUids: [] },
+    { teamId: "team", role: "admin", requiredAction: "admin-choice", eligibleSuccessorUids: [] },
     { teamId: "team", role: "admin", requiredAction: "dissolve", eligibleSuccessorUids: ["u2"] },
   ];
 

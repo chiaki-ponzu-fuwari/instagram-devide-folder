@@ -41,8 +41,10 @@ function decisionsComplete(teams, decisions) {
     const decision = byTeam.get(team.teamId);
     if (team.requiredAction === 'leave') return decision?.action === 'leave';
     if (team.requiredAction === 'dissolve') return decision?.action === 'dissolve';
-    if (team.requiredAction !== 'transfer' || decision?.action !== 'transfer') return false;
-    return (team.eligibleSuccessors || []).some((member) => member.uid === decision.transferToUid);
+    if (team.requiredAction !== 'admin-choice') return false;
+    if (decision?.action === 'dissolve') return true;
+    return decision?.action === 'transfer'
+      && (team.eligibleSuccessors || []).some((member) => member.uid === decision.transferToUid);
   });
 }
 
@@ -68,9 +70,9 @@ export function setTeamDecision(state, teamId, action, transferToUid = '') {
   const team = state.teams.find((entry) => entry.teamId === teamId);
   if (!team || team.requiredAction === 'leave') fail('invalid-team-decision');
   let decision;
-  if (team.requiredAction === 'dissolve' && action === 'dissolve') {
+  if ((team.requiredAction === 'dissolve' || team.requiredAction === 'admin-choice') && action === 'dissolve') {
     decision = { teamId, action };
-  } else if (team.requiredAction === 'transfer' && action === 'transfer') {
+  } else if (team.requiredAction === 'admin-choice' && action === 'transfer') {
     if (!(team.eligibleSuccessors || []).some((member) => member.uid === transferToUid)) fail('invalid-successor');
     decision = { teamId, action, transferToUid };
   } else {
@@ -152,7 +154,11 @@ export function createAccountDeletionFlow(deps) {
           localData = 'erase-failed';
         }
       }
-      try { await deps.signOut(); } catch {}
+      try {
+        await deps.signOut();
+      } catch {
+        fail('sign-out-failed');
+      }
       return { cloudDeleted: true, localData, providerId: proof?.providerId || '' };
     } finally {
       running = false;
