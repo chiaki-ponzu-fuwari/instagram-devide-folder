@@ -158,9 +158,9 @@ export function getCurrentUser() {
 }
 
 export function subscribeAuth(callback) {
-  initFirebaseCore()
+  return initFirebaseCore()
     .then(({ auth: activeAuth }) => onAuthStateChanged(activeAuth, callback))
-    .catch(() => {});
+    .catch(() => () => {});
 }
 
 export async function signInWithGoogle() {

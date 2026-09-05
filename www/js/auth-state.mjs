@@ -36,6 +36,21 @@ export function getAccountDeletionUiState({ currentUser, lastLoginProvider }) {
   return { signedIn, providerId };
 }
 
-export function shouldOpenLogoutSheet({ currentUser }) {
-  return !!currentUser?.uid;
+export function getLoginAccountLabel({ currentUser }) {
+  if (!currentUser?.uid) return '';
+  const email = String(currentUser.email || '').trim();
+  if (email) return email;
+  const providerEmail = (Array.isArray(currentUser.providerData) ? currentUser.providerData : [])
+    .map((p) => String(p?.email || '').trim())
+    .find(Boolean);
+  if (providerEmail) return providerEmail;
+  const displayName = String(currentUser.displayName || '').trim();
+  if (displayName) return displayName;
+  return String(currentUser.uid || '').trim();
+}
+
+export function shouldOpenLogoutSheet({ currentUser, lastLoginProvider, rowProviderId }) {
+  if (!currentUser?.uid) return false;
+  if (!rowProviderId) return true;
+  return String(lastLoginProvider || '').trim() === String(rowProviderId || '').trim();
 }

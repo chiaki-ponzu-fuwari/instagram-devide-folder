@@ -19,3 +19,9 @@ test('activity identity migration pages activity and merges only planned patches
   assert.match(cli, /ambiguous/);
   assert.match(cli, /unresolved/);
 });
+
+test('production activity migration accepts an explicit Firebase CLI credential mode', () => {
+  assert.match(cli, /--auth/);
+  assert.match(cli, /firebase-cli/);
+  assert.match(cli, /prepareFirebaseCliApplicationDefault/);
+});

@@ -1,12 +1,24 @@
 import {
-  doc,
-  getDoc,
-  setDoc,
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import { getFirebaseCore, serverTimestamp } from './firestore-core.mjs';
-import {
   buildWorkspaceSnapshotFromLocal,
 } from './personal-cloud-store.mjs';
+
+let firestoreRuntimePromise = null;
+
+async function getFirestoreRuntime() {
+  if (!firestoreRuntimePromise) {
+    firestoreRuntimePromise = (async () => {
+      const firestore = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      const core = await import('./firestore-core.mjs');
+      const { db } = await core.getFirebaseCore();
+      return {
+        ...firestore,
+        db,
+        serverTimestamp: core.serverTimestamp,
+      };
+    })();
+  }
+  return firestoreRuntimePromise;
+}
 
 function cloneRecord(value) {
   if (value == null) return value;
@@ -19,6 +31,7 @@ function workspaceSnapshotToLegacyBackup(snapshot) {
   return {
     folders: Array.isArray(snapshot.folders) ? snapshot.folders.map(cloneRecord) : [],
     accounts: Array.isArray(snapshot.accounts) ? snapshot.accounts.map(cloneRecord) : [],
+    projects: Array.isArray(snapshot.projects) ? snapshot.projects.map(cloneRecord) : [],
     templates: Array.isArray(snapshot.templates) ? snapshot.templates.map(cloneRecord) : [],
     meta: snapshot.settings && typeof snapshot.settings === 'object'
       ? cloneRecord(snapshot.settings)
@@ -49,7 +62,7 @@ export function deserializePersonalBackupData(data) {
 
 export async function savePersonalBackup({ user, data }) {
   if (!user?.uid) throw new Error('login-required');
-  const { db } = await getFirebaseCore();
+  const { db, doc, setDoc, serverTimestamp } = await getFirestoreRuntime();
   const privateBackup = legacyBackupToWorkspaceSnapshot(data, { ownerUid: user.uid });
   await setDoc(doc(db, 'users', user.uid), {
     profile: {
@@ -60,6 +73,7 @@ export async function savePersonalBackup({ user, data }) {
     },
     privateBackup,
     syncMeta: {
+      migratedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       updatedBy: user.uid,
       schemaVersion: 1,
@@ -69,7 +83,7 @@ export async function savePersonalBackup({ user, data }) {
 
 export async function loadPersonalBackup({ user }) {
   if (!user?.uid) throw new Error('login-required');
-  const { db } = await getFirebaseCore();
+  const { db, doc, getDoc } = await getFirestoreRuntime();
   const snap = await getDoc(doc(db, 'users', user.uid));
   if (!snap.exists()) return null;
   const data = snap.data();

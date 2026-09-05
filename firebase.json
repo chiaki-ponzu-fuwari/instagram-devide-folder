@@ -1,6 +1,7 @@
 {
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "functions": {
     "source": "functions",
@@ -31,6 +32,17 @@
   },
   "hosting": {
     "public": "www",
+    "headers": [
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      }
+    ],
     "rewrites": [
       {
         "source": "**",
@@ -40,7 +52,7 @@
     "ignore": [
       "firebase.json",
       ".firebaserc",
-      "**/.*",
+      "**/.DS_Store",
       "**/node_modules/**"
     ]
   }

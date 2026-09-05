@@ -1,5 +1,6 @@
 import { applicationDefault, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { prepareFirebaseCliApplicationDefault } from './firebase-cli-credential.mjs';
 import { planActivityIdentityMigration } from './activity-identity-migration-core.mjs';
 
 const PAGE_SIZE = 200;
@@ -13,6 +14,9 @@ function parseArgs(argv) {
     else if (value.startsWith('--')) args[value.slice(2)] = argv[index + 1], index += 1;
   }
   if (!args.project) throw new Error('--project is required');
+  if (!['adc', 'firebase-cli'].includes(args.auth)) {
+    throw new Error('--auth must be adc or firebase-cli');
+  }
   if (!args.mode) throw new Error('exactly one of --dry-run or --apply is required');
   if (args.mode === 'apply' && args['confirm-project'] !== args.project) {
     throw new Error('--confirm-project must exactly match --project for apply');
@@ -48,6 +52,8 @@ async function main() {
   if (process.env.FIRESTORE_EMULATOR_HOST && args.emulator !== 'yes') {
     throw new Error('FIRESTORE_EMULATOR_HOST is set; pass --emulator yes explicitly');
   }
+  const prepared = args.auth === 'firebase-cli' ? await prepareFirebaseCliApplicationDefault() : null;
+  try {
   initializeApp({ credential: applicationDefault(), projectId: args.project });
   const db = getFirestore();
   const teams = args.team
@@ -69,6 +75,9 @@ async function main() {
     });
   }
   console.log(JSON.stringify({ mode: args.mode, projectId: args.project, teams: reports }, null, 2));
+  } finally {
+    await prepared?.cleanup();
+  }
 }
 
 main().catch((error) => {

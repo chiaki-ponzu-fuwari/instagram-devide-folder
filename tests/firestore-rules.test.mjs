@@ -8,14 +8,75 @@ import { deleteField, serverTimestamp } from 'firebase/firestore';
 
 const projectId = 'dm-manager-rules';
 
+function securitySettings(overrides = {}) {
+  return {
+    rewardVisibility: 'self',
+    memberEmailVisibility: 'admin_only',
+    memberNoteVisibility: 'admin_only',
+    memberPayoutVisibility: 'admin_only',
+    assignPermission: 'admin_only',
+    assignOwnerUids: [],
+    deletePermission: 'admin_only',
+    ...overrides,
+  };
+}
+
+function publicAccount(id, updatedBy, overrides = {}) {
+  return {
+    id, teamId: 't1', scope: 'team', username: `@${id}`,
+    createdAt: 1, updatedAt: 1, updatedBy, revision: 1,
+    deletedAt: null, deletedBy: null, schemaVersion: 2,
+    ...overrides,
+  };
+}
+
+function publicProject(id, updatedBy, overrides = {}) {
+  return {
+    id, accountId: id, teamId: 't1', scope: 'team', contractType: 'single',
+    status: '契約中', name: id, assignedUids: [],
+    createdAt: 1, updatedAt: 1, updatedBy, revision: 1,
+    deletedAt: null, deletedBy: null, schemaVersion: 2,
+    ...overrides,
+  };
+}
+
+function publicFolder(id, updatedBy, overrides = {}) {
+  return {
+    id, teamId: 't1', scope: 'team', name: id, color: '#2F86D9', parentId: null,
+    order: 0, collapsed: false, createdAt: 1, updatedAt: 1, updatedBy, revision: 1,
+    deletedAt: null, deletedBy: null, schemaVersion: 2,
+    ...overrides,
+  };
+}
+
+function publicTemplate(id, updatedBy, overrides = {}) {
+  return {
+    id, teamId: 't1', scope: 'team', title: id, body: 'Template body',
+    createdAt: 1, updatedAt: 1, updatedBy, revision: 1,
+    deletedAt: null, deletedBy: null, schemaVersion: 2,
+    ...overrides,
+  };
+}
+
+function publicWorkspaceSettings(updatedBy, overrides = {}) {
+  return {
+    id: 'main', teamId: 't1', scope: 'team', hideDoneProjectsInList: false,
+    hideRepeatClosedProjectsInRepeatList: false, revenueBasis: 'deadline',
+    createdAt: 1, updatedAt: 1, updatedBy, revision: 1, schemaVersion: 2,
+    ...overrides,
+  };
+}
+
 async function createEnv() {
-  return initializeTestEnvironment({
+  const env = await initializeTestEnvironment({
     projectId,
     firestore: {
       host: '127.0.0.1',
       port: 8088,
     },
   });
+  await env.clearFirestore();
+  return env;
 }
 
 async function seedTeamData(env) {
@@ -29,6 +90,7 @@ async function seedTeamData(env) {
       memberUids: ['u1', 'u2'],
       securitySchemaVersion: 2,
       securityMigrationState: 'ready',
+      settings: securitySettings(),
     });
     await db.doc('teams/t1/members/u1').set({
       uid: 'u1',
@@ -51,14 +113,10 @@ async function seedTeamData(env) {
       displayName: 'Pending',
       createdAt: 1, updatedAt: 1, updatedBy: 'u1',
     });
-    await db.doc('teams/t1/folders/f1').set({ name: 'Inbox' });
-    await db.doc('teams/t1/accounts/a1').set({ name: 'Primary' });
-    await db.doc('teams/t1/templates/x1').set({ name: 'Default' });
-    await db.doc('teams/t1/settings/main').set({
-      memberEmailVisibility: 'self',
-      memberNoteVisibility: 'admin_only',
-      rewardVisibility: 'self',
-    });
+    await db.doc('teams/t1/folders/f1').set(publicFolder('f1', 'u1'));
+    await db.doc('teams/t1/accounts/a1').set(publicAccount('a1', 'u1'));
+    await db.doc('teams/t1/templates/x1').set(publicTemplate('x1', 'u1'));
+    await db.doc('teams/t1/settings/main').set(publicWorkspaceSettings('u1'));
     await db.doc('teams/t1/activity/act1').set({ text: 'created' });
     await db.doc('teams/t1/invites/i1').set({
       code: 'ABCD1234',
@@ -114,12 +172,7 @@ test('account deletion jobs are inaccessible to every client including the owner
       await assertFails(client.doc('accountDeletionLocks/u1').get());
       await assertFails(client.doc('accountDeletionLocks/u1').set({ uid: 'u1' }));
     }
-  } finally {
-    await env.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc('accountDeletionLocks/u1').delete();
-    });
-    await env.cleanup();
-  }
+  } finally { await env.cleanup(); }
 });
 
 test('owners cannot physically delete their user root or any known personal collection document', async () => {
@@ -145,106 +198,110 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
   try {
     await env.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
-      await db.doc('accountDeletionLocks/uLocked').set({ uid: 'uLocked', phase: 'started' });
-      await db.doc('users/uLocked').set({ uid: 'uLocked' });
+      await db.doc('accountDeletionLocks/u1').set({ uid: 'u1', phase: 'started' });
+      await db.doc('users/u1').set({ uid: 'u1' });
       await db.doc('teams/tLock').set({
         createdBy: 'u2', memberUids: ['u2'], securitySchemaVersion: 2,
-        securityMigrationState: 'ready', rewardVisibility: 'admin_only',
+        securityMigrationState: 'ready', settings: securitySettings(),
       });
       await db.doc('teams/tLock/members/u2').set({
         uid: 'u2', role: 'admin', status: 'active', displayName: 'Admin',
         createdAt: 1, updatedAt: 1, updatedBy: 'u2',
       });
-      await db.doc('teams/tLock/members/uLocked').set({
-        uid: 'uLocked', role: 'member', status: 'active', displayName: 'Locked',
+      await db.doc('teams/tLock/members/u1').set({
+        uid: 'u1', role: 'member', status: 'active', displayName: 'Locked',
         createdAt: 1, updatedAt: 1, updatedBy: 'u2',
       });
       await db.doc('teams/tLock/invites/open').set({ disabledAt: null });
+      await db.doc('teams/tSettings/joinRequests/array-ref').set({ uid: 'u2', status: 'pending' });
       await db.doc('teams/tSettings').set({
         createdBy: 'u2', memberUids: ['u2'], securitySchemaVersion: 1,
-        securityMigrationState: 'locked', rewardVisibility: 'admin_only',
+        securityMigrationState: 'locked', settings: securitySettings(),
       });
       await db.doc('teams/tSettings/members/u2').set({
         uid: 'u2', role: 'admin', status: 'active', displayName: 'Admin',
         createdAt: 1, updatedAt: 1, updatedBy: 'u2',
       });
-      await db.doc('teams/tSettings/joinRequests/array-ref').set({ uid: 'u2', status: 'pending' });
       await db.doc('teams/tLegacyArrays').set({
         createdBy: 'u2', memberUids: ['u2'], assignedUids: ['legacy-user'],
         securitySchemaVersion: 1, securityMigrationState: 'locked',
-        rewardVisibility: 'admin_only',
+        settings: securitySettings(),
       });
       await db.doc('teams/tLegacyArrays/members/u2').set({
         uid: 'u2', role: 'admin', status: 'active', displayName: 'Admin',
         createdAt: 1, updatedAt: 1, updatedBy: 'u2',
       });
     });
-    const locked = env.authenticatedContext('uLocked').firestore();
+    const locked = env.authenticatedContext('u1').firestore();
     const admin = env.authenticatedContext('u2').firestore();
-    await assertFails(locked.doc('users/uLocked').update({ touched: true }));
-    await assertFails(locked.doc('users/uLocked/projects/new').set({ id: 'new' }));
-    await assertFails(locked.doc('teams/tLock/joinRequests/uLocked').set({
-      uid: 'uLocked', status: 'pending', inviteId: 'open',
+    await assertFails(locked.doc('users/u1').update({ touched: true }));
+    await assertFails(locked.doc('users/u1/projects/new').set({
+      id: 'new', ownerUid: 'u1', revision: 1, updatedAt: 1, updatedBy: 'u1',
+    }));
+    await assertFails(locked.doc('teams/tLock/joinRequests/u1').set({
+      uid: 'u1', status: 'pending', inviteId: 'open',
     }));
     await assertFails(locked.doc('teams/new-locked').set({
-      createdBy: 'uLocked', deletedAt: null, rewardVisibility: 'admin_only',
+      createdBy: 'u1', deletedAt: null, securitySchemaVersion: 1,
+      securityMigrationState: 'locked', settings: securitySettings(),
     }));
-    await assertFails(locked.doc('teams/tLock/folders/locked-write').set({ name: 'blocked' }));
-    await assertFails(admin.doc('teams/tLock').update({ memberUids: ['u2', 'uLocked'] }));
-    await assertFails(admin.doc('teams/tLock/invites/locked').set({ invitedUid: 'uLocked' }));
-    await assertFails(admin.doc('teams/tLock/members/uLocked').set({
-      uid: 'uLocked', role: 'member', status: 'active', displayName: 'Locked',
+    await assertFails(locked.doc('teams/tLock/folders/locked-write').set(
+      publicFolder('locked-write', 'u1', { teamId: 'tLock' }),
+    ));
+    await assertFails(admin.doc('teams/tLock').update({ memberUids: ['u2', 'u1'] }));
+    await assertFails(admin.doc('teams/tLock/invites/locked').set({ invitedUid: 'u1' }));
+    await assertFails(admin.doc('teams/tLock/members/u1').set({
+      uid: 'u1', role: 'member', status: 'active', displayName: 'Locked',
       createdAt: 2, updatedAt: 2, updatedBy: 'u2',
     }));
-    await assertFails(admin.doc('teams/tLock/memberEmails/uLocked').set({
-      uid: 'uLocked', email: 'locked@example.com', updatedAt: 2, updatedBy: 'u2',
+    await assertFails(admin.doc('teams/tLock/memberEmails/u1').set({
+      uid: 'u1', email: 'locked@example.com', createdAt: 2, updatedAt: 2, updatedBy: 'u2',
     }));
-    await assertFails(admin.doc('teams/tLock/memberNotes/uLocked').set({
-      uid: 'uLocked', note: 'locked', updatedAt: 2, updatedBy: 'u2',
+    await assertFails(admin.doc('teams/tLock/memberNotes/u1').set({
+      uid: 'u1', note: 'locked', createdAt: 2, updatedAt: 2, updatedBy: 'u2',
     }));
-    await assertFails(admin.doc('teams/tLock/payouts/uLocked').set({
-      uid: 'uLocked', payoutName: 'Locked', updatedAt: 2, updatedBy: 'u2',
+    await assertFails(admin.doc('teams/tLock/payouts/u1').set({
+      uid: 'u1', payoutName: 'Locked', payoutAccount: '', payoutBankCode: '', payoutBankName: '',
+      payoutBranchName: '', payoutBranchCode: '', payoutAccountType: '', payoutAccountNumber: '',
+      updatedAt: 2, updatedBy: 'u2',
     }));
-    await assertFails(admin.doc('teams/tLock/projectRewardShares/p1_uLocked').set({
-      projectId: 'p1', uid: 'uLocked', rewardYen: 0, updatedAt: 2, updatedBy: 'u2',
+    await assertFails(admin.doc('teams/tLock/projectRewardShares/p1_u1').set({
+      projectId: 'p1', memberUid: 'u1', amountYen: 0, assigned: false,
+      createdAt: 2, updatedAt: 2, updatedBy: 'u2',
     }));
     await assertFails(admin.doc('teams/tLock/activity/locked-target').set({
       action: 'removeMember', text: 'AdminさんがLockedさんを外しました',
       coreText: 'Lockedさんを外しました', actorUid: 'u2', actorName: 'Admin',
-      targetUid: 'uLocked', targetName: 'Locked', identityUids: ['u2', 'uLocked'],
+      targetUid: 'u1', targetName: 'Locked', identityUids: ['u1', 'u2'],
       createdAt: serverTimestamp(),
     }));
-    await assertFails(admin.doc('teams/tLock/projects/locked-assignment').set({
-      id: 'locked-assignment', assignedUids: ['uLocked'], updatedBy: 'u2',
-    }));
+    await assertFails(admin.doc('teams/tLock/projects/locked-assignment').set(
+      publicProject('locked-assignment', 'u2', { teamId: 'tLock', assignedUids: ['u1'] }),
+    ));
     await assertFails(admin.doc('teams/tLock').update({
-      settings: { assignOwnerUids: ['uLocked'] },
+      'settings.assignOwnerUids': ['u1'],
     }));
     await assertFails(admin.doc('teams/tSettings/settings/main').set({
-      assignOwnerUids: ['uLocked'],
+      assignOwnerUids: ['u1'],
     }));
     await assertSucceeds(admin.doc('teams/tSettings/settings/main').set({
       assignOwnerUids: ['u2'],
     }));
-    await assertFails(admin.doc('teams/tSettings').update({ createdBy: 'uLocked' }));
-    await assertFails(admin.doc('teams/tSettings').update({ ownerUid: 'uLocked' }));
-    await assertFails(admin.doc('teams/tSettings').update({ assignedUids: ['uLocked'] }));
+    await assertFails(admin.doc('teams/tSettings').update({ createdBy: 'u1' }));
+    await assertFails(admin.doc('teams/tSettings').update({ ownerUid: 'u1' }));
+    await assertFails(admin.doc('teams/tSettings').update({ assignedUids: ['u1'] }));
     await assertSucceeds(admin.doc('teams/tSettings').update({ name: 'Normal update' }));
     await assertSucceeds(admin.doc('teams/tLegacyArrays').update({ name: 'Legacy preserved' }));
     await assertSucceeds(admin.doc('teams/tLegacyArrays').update({ assignedUids: deleteField() }));
-    await assertFails(admin.doc('teams/tSettings/folders/locked-owner').set({ createdBy: 'uLocked' }));
-    await assertFails(admin.doc('teams/tSettings/templates/locked-owner').set({ ownerUid: 'uLocked' }));
-    await assertFails(admin.doc('teams/tSettings/settings/locked-updater').set({ updatedBy: 'uLocked' }));
-    await assertFails(admin.doc('teams/tSettings/projects/locked-assignment').set({
-      id: 'locked-assignment', assignedUids: ['uLocked'], updatedBy: 'u2',
-    }));
-    await assertFails(admin.doc('teams/tSettings/projects/malformed-assignment').set({
-      id: 'malformed-assignment', assignedUids: 'u2', updatedBy: 'u2',
-    }));
+    await assertFails(admin.doc('teams/tSettings/folders/locked-owner').set({ createdBy: 'u1' }));
+    await assertFails(admin.doc('teams/tSettings/templates/locked-owner').set({ ownerUid: 'u1' }));
+    await assertFails(admin.doc('teams/tSettings/settings/locked-updater').set({ updatedBy: 'u1' }));
+    await assertFails(admin.doc('teams/tSettings/projects/locked-assignment').set({ assignedUids: ['u1'] }));
+    await assertFails(admin.doc('teams/tSettings/projects/malformed-assignment').set({ assignedUids: 'u2' }));
+    await assertFails(admin.doc('teams/tSettings/folders/locked-array').set({ memberUids: ['u1'] }));
+    await assertFails(admin.doc('teams/tSettings/invites/locked-array').set({ memberUids: ['u1'] }));
+    await assertFails(admin.doc('teams/tSettings/joinRequests/array-ref').update({ memberUids: ['u1'] }));
     await assertSucceeds(admin.doc('teams/tSettings/folders/unlocked-owner').set({ createdBy: 'u2' }));
-    await assertFails(admin.doc('teams/tSettings/folders/locked-array').set({ memberUids: ['uLocked'] }));
-    await assertFails(admin.doc('teams/tSettings/invites/locked-array').set({ memberUids: ['uLocked'] }));
-    await assertFails(admin.doc('teams/tSettings/joinRequests/array-ref').update({ memberUids: ['uLocked'] }));
     await assertSucceeds(admin.doc('teams/tSettings/invites/unlocked').set({ invitedUid: 'u2' }));
     const approval = admin.batch();
     approval.set(admin.doc('teams/tLock/members/u3'), {
@@ -253,14 +310,23 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
     });
     approval.update(admin.doc('teams/tLock'), { memberUids: ['u2', 'u3'] });
     await assertSucceeds(approval.commit());
-    await assertSucceeds(admin.doc('teams/tLock/projects/multi-assignment').set({
-      id: 'multi-assignment', assignedUids: ['u2', 'u3'], updatedBy: 'u2',
-    }));
+    await assertSucceeds(admin.doc('teams/tLock/projects/multi-assignment').set(
+      publicProject('multi-assignment', 'u2', { teamId: 'tLock', assignedUids: ['u2', 'u3'] }),
+    ));
     await assertSucceeds(admin.doc('teams/tLock').update({
-      settings: { assignOwnerUids: ['u3'] },
+      'settings.assignOwnerUids': ['u3'],
     }));
     await assertSucceeds(admin.doc('users/u2').set({ uid: 'u2' }));
     await assertSucceeds(admin.doc('teams/tLock/invites/other').set({ invitedUid: 'u3' }));
+  } finally { await env.cleanup(); }
+});
+
+test('remaining members can read canonical assignedUids projects', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const member = env.authenticatedContext('u2').firestore();
+    await assertSucceeds(member.doc('teams/tReady/projects/p1').get());
   } finally { await env.cleanup(); }
 });
 
@@ -297,11 +363,8 @@ async function seedReadyTeamData(env) {
     const db = context.firestore();
     await db.doc('teams/tReady').set({
       createdBy: 'u1', securitySchemaVersion: 2, securityMigrationState: 'ready', name: 'Ready Team',
-    });
-    await db.doc('teams/tReady/settings/main').set({
-      memberEmailVisibility: 'self', memberNoteVisibility: 'admin_only',
-      rewardVisibility: 'self', memberPayoutVisibility: 'admin_only',
-      assignmentVisibility: 'all_members', deletionPermission: 'admin_only',
+      memberUids: ['u1', 'u2', 'u3'],
+      settings: securitySettings(),
     });
     for (const [uid, role] of [['u1', 'admin'], ['u2', 'member'], ['u3', 'member']]) {
       await db.doc(`teams/tReady/members/${uid}`).set({
@@ -311,11 +374,11 @@ async function seedReadyTeamData(env) {
     await db.doc('teams/tReady/memberEmails/u1').set({ uid: 'u1', email: 'admin@example.com', updatedAt: 1, updatedBy: 'u1' });
     await db.doc('teams/tReady/memberNotes/u1').set({ uid: 'u1', note: 'private', updatedAt: 1, updatedBy: 'u1' });
     await db.doc('teams/tReady/payouts/u2').set({ uid: 'u2', payoutName: 'Member Name', updatedAt: 1, updatedBy: 'u2' });
-    await db.doc('teams/tReady/projects/p1').set({ id: 'p1', name: 'Public project', assignedUids: ['u2'], updatedAt: 1, updatedBy: 'u1' });
-    await db.doc('teams/tReady/projectRewardTotals/p1').set({ projectId: 'p1', rewardYen: 12000, updatedAt: 1, updatedBy: 'u1' });
-    await db.doc('teams/tReady/projectRewardShares/p1_u1').set({ projectId: 'p1', uid: 'u1', rewardYen: 9000, updatedAt: 1, updatedBy: 'u1' });
-    await db.doc('teams/tReady/projectRewardShares/p1_u2').set({ projectId: 'p1', uid: 'u2', rewardYen: 3000, updatedAt: 1, updatedBy: 'u1' });
-    await db.doc('teams/tReady/projectCosts/p1').set({ projectId: 'p1', costYen: 3000, updatedAt: 1, updatedBy: 'u1' });
+    await db.doc('teams/tReady/projects/p1').set(publicProject('p1', 'u1', { teamId: 'tReady', assignedUids: ['u2'] }));
+    await db.doc('teams/tReady/projectRewardTotals/p1').set({ projectId: 'p1', totalYen: 12000, updatedAt: 1, updatedBy: 'u1' });
+    await db.doc('teams/tReady/projectRewardShares/p1_u1').set({ projectId: 'p1', memberUid: 'u1', amountYen: 9000, assigned: true, updatedAt: 1, updatedBy: 'u1' });
+    await db.doc('teams/tReady/projectRewardShares/p1_u2').set({ projectId: 'p1', memberUid: 'u2', amountYen: 3000, assigned: true, updatedAt: 1, updatedBy: 'u1' });
+    await db.doc('teams/tReady/projectCosts/p1').set({ projectId: 'p1', costYen: 3000, expenses: [], updatedAt: 1, updatedBy: 'u1' });
   });
 }
 
@@ -328,14 +391,52 @@ test('legacy teams fail closed for active members while admins retain migration 
     await assertSucceeds(admin.doc('teams/tLegacy/accounts/a1').get());
     await assertSucceeds(admin.doc('teams/tLegacy/projects/p1').get());
     await assertSucceeds(member.doc('teams/tLegacy').get());
+    await assertSucceeds(member.doc('teams/tLegacy/members/u2').get());
     await assertFails(member.doc('teams/tLegacy/members/u1').get());
     await assertFails(member.doc('teams/tLegacy/accounts/a1').get());
     await assertFails(member.doc('teams/tLegacy/projects/p1').get());
     await assertFails(member.doc('teams/tLegacy/projects/p1').update({
       name: 'Attempted legacy write', updatedAt: 2, updatedBy: 'u2',
     }));
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/tLegacy').update({ securityMigrationState: 'migrating' });
+    });
+    await assertFails(admin.doc('teams/tLegacy/projects/p1').update({ name: 'blocked during migration' }));
     await assertFails(member.doc('teams/tLegacy/settings/main').get());
     await assertFails(member.doc('teams/tLegacy/settings/main').update({ any: 'value' }));
+  } finally { await env.cleanup(); }
+});
+
+test('migration lock freezes private, financial, and membership writes for admins', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/tReady').update({ securityMigrationState: 'migrating' });
+    });
+    const admin = env.authenticatedContext('u1').firestore();
+
+    await assertFails(admin.doc('teams/tReady/payouts/u2').update({
+      payoutName: 'Changed during migration', updatedAt: 2, updatedBy: 'u1',
+    }));
+    await assertFails(admin.doc('teams/tReady/memberEmails/u1').update({
+      email: 'changed@example.com', updatedAt: 2, updatedBy: 'u1',
+    }));
+    await assertFails(admin.doc('teams/tReady/memberNotes/u1').update({
+      note: 'changed during migration', updatedAt: 2, updatedBy: 'u1',
+    }));
+    await assertFails(admin.doc('teams/tReady/projectRewardTotals/p1').update({
+      totalYen: 99999, updatedAt: 2, updatedBy: 'u1',
+    }));
+    await assertFails(admin.doc('teams/tReady/projectRewardShares/p1_u2').update({
+      amountYen: 99999, updatedAt: 2, updatedBy: 'u1',
+    }));
+    await assertFails(admin.doc('teams/tReady/projectCosts/p1').update({
+      costYen: 99999, updatedAt: 2, updatedBy: 'u1',
+    }));
+    await assertFails(admin.doc('teams/tReady/members/u2').delete());
+    await assertFails(admin.doc('teams/tReady/memberEmails/u1').delete());
+    await assertFails(admin.doc('teams/tReady/memberNotes/u1').delete());
   } finally { await env.cleanup(); }
 });
 
@@ -361,6 +462,25 @@ test('ready v2 teams separate public data from private and financial documents',
     }));
     await assertFails(member.doc('teams/tReady/members/u2').update({ updatedBy: 'u1', updatedAt: 2 }));
     await assertSucceeds(admin.doc('teams/tReady/projectCosts/p1').get());
+  } finally { await env.cleanup(); }
+});
+
+test('approved members can list ready public team collections while pending users cannot', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const member = env.authenticatedContext('u2').firestore();
+    const pending = env.authenticatedContext('u4').firestore();
+
+    await assertSucceeds(member.collection('teams/tReady/members').get());
+    await assertSucceeds(member.collection('teams/tReady/folders').get());
+    await assertSucceeds(member.collection('teams/tReady/accounts').get());
+    await assertSucceeds(member.collection('teams/tReady/projects').get());
+    await assertSucceeds(member.collection('teams/tReady/templates').get());
+    await assertSucceeds(member.doc('teams/tReady/settings/main').get());
+    await assertSucceeds(member.collection('teams/tReady/projectRewardShares').where('memberUid', '==', 'u2').get());
+    await assertFails(pending.collection('teams/tReady/members').get());
+    await assertFails(pending.collection('teams/tReady/projects').get());
   } finally { await env.cleanup(); }
 });
 
@@ -406,7 +526,7 @@ test('ready settings gate private values and locked members cannot use workspace
     const admin = env.authenticatedContext('u1').firestore();
     await assertFails(member.doc('teams/tLegacy/folders/f1').get());
     await assertFails(member.doc('teams/tLegacy/templates/x1').get());
-    await assertFails(member.doc('teams/tLegacy/activity/a1').get());
+    await assertSucceeds(member.doc('teams/tLegacy/activity/a1').get());
     await assertSucceeds(admin.doc('teams/tLegacy/folders/f1').get());
     await assertSucceeds(member.doc('teams/tReady/memberEmails/u2').set({
       uid: 'u2', email: 'self@example.com', updatedAt: 2, updatedBy: 'u2',
@@ -422,9 +542,11 @@ test('ready settings gate private values and locked members cannot use workspace
     }));
     await assertFails(member.doc('teams/tReady/projectRewardTotals/p1').get());
     await env.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc('teams/tReady/settings/main').set({
-        memberEmailVisibility: 'all_members', memberNoteVisibility: 'all_members',
-        rewardVisibility: 'all_members', memberPayoutVisibility: 'all_members',
+      await context.firestore().doc('teams/tReady').update({
+        'settings.memberEmailVisibility': 'all_members',
+        'settings.memberNoteVisibility': 'all_members',
+        'settings.rewardVisibility': 'all',
+        'settings.memberPayoutVisibility': 'all_members',
       });
     });
     await assertSucceeds(member.doc('teams/tReady/memberEmails/u1').get());
@@ -435,7 +557,119 @@ test('ready settings gate private values and locked members cannot use workspace
   } finally { await env.cleanup(); }
 });
 
-test('missing or unknown settings deny member private and financial reads including self', async () => {
+test('ready members receive email and note only through their independent settings', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('teams/tReady/memberEmails/u2').set({ uid: 'u2', email: 'member@example.com' });
+      await db.doc('teams/tReady/memberNotes/u2').set({ uid: 'u2', note: 'member note' });
+    });
+    const member = env.authenticatedContext('u2').firestore();
+    const pending = env.authenticatedContext('u4').firestore();
+
+    await assertSucceeds(member.doc('teams/tReady/memberEmails/u2').get());
+    await assertSucceeds(member.doc('teams/tReady/memberNotes/u2').get());
+    await assertFails(member.doc('teams/tReady/memberEmails/u1').get());
+    await assertFails(member.doc('teams/tReady/memberNotes/u1').get());
+    await assertFails(pending.doc('teams/tReady/memberEmails/u1').get());
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/tReady').update({
+        'settings.memberEmailVisibility': 'all_members',
+        'settings.memberNoteVisibility': 'admin_only',
+      });
+    });
+    await assertSucceeds(member.doc('teams/tReady/memberEmails/u1').get());
+    await assertFails(member.doc('teams/tReady/memberNotes/u1').get());
+  } finally { await env.cleanup(); }
+});
+
+test('reward modes never expose costs and expose only the approved share scope', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const admin = env.authenticatedContext('u1').firestore();
+    const member = env.authenticatedContext('u2').firestore();
+
+    await assertSucceeds(member.doc('teams/tReady/projectRewardShares/p1_u2').get());
+    await assertFails(member.doc('teams/tReady/projectRewardShares/p1_u1').get());
+    await assertFails(member.doc('teams/tReady/projectRewardTotals/p1').get());
+    await assertFails(member.doc('teams/tReady/projectCosts/p1').get());
+    await assertSucceeds(admin.doc('teams/tReady/projectCosts/p1').get());
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/tReady').update({ 'settings.rewardVisibility': 'self_plus_total' });
+    });
+    await assertSucceeds(member.doc('teams/tReady/projectRewardTotals/p1').get());
+    await assertFails(member.doc('teams/tReady/projectRewardShares/p1_u1').get());
+    await assertFails(member.doc('teams/tReady/projectCosts/p1').get());
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/tReady').update({ 'settings.rewardVisibility': 'all' });
+    });
+    await assertSucceeds(member.doc('teams/tReady/projectRewardTotals/p1').get());
+    await assertSucceeds(member.doc('teams/tReady/projectRewardShares/p1_u1').get());
+    await assertFails(member.doc('teams/tReady/projectCosts/p1').get());
+  } finally { await env.cleanup(); }
+});
+
+test('ready assignment and tombstone updates follow team permission settings', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const member = env.authenticatedContext('u2').firestore();
+    const project = publicProject('p2', 'u2', { teamId: 'tReady' });
+    await assertSucceeds(member.doc('teams/tReady/projects/p2').set(project));
+    await assertFails(member.doc('teams/tReady/projects/p2').set({ ...project, assignedUids: ['u2'], updatedAt: 2, revision: 2 }));
+    await assertFails(member.doc('teams/tReady/projects/p2').set({
+      ...project, deletedAt: serverTimestamp(), deletedBy: 'u2', updatedAt: 2, revision: 2,
+    }));
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/tReady').update({
+        'settings.assignPermission': 'owner_set',
+        'settings.assignOwnerUids': ['u2'],
+        'settings.deletePermission': 'all_edit',
+      });
+    });
+    const assigned = { ...project, assignedUids: ['u2'], updatedAt: 3, revision: 2 };
+    await assertSucceeds(member.doc('teams/tReady/projects/p2').set(assigned));
+    await assertSucceeds(member.doc('teams/tReady/projects/p2').set({
+      ...assigned, deletedAt: serverTimestamp(), deletedBy: 'u2', updatedAt: 4, revision: 3,
+    }));
+    await assertFails(member.doc('teams/tReady/projects/p2').set({
+      ...assigned, deletedAt: serverTimestamp(), deletedBy: 'u1', updatedAt: 5, revision: 4,
+    }));
+    await assertFails(member.doc('teams/tReady/projects/p2').set({ ...assigned, updatedAt: 6 }));
+    await assertSucceeds(member.doc('teams/tReady/projects/p2').set({
+      ...assigned, deletedAt: null, deletedBy: null, updatedAt: 6, revision: 4,
+    }));
+  } finally { await env.cleanup(); }
+});
+
+test('stale clients cannot overwrite newer ready workspace records', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const admin = env.authenticatedContext('u1').firestore();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('teams/tReady/folders/f1').set(publicFolder('f1', 'u1', { teamId: 'tReady', name: 'new folder', updatedAt: 20, revision: 4 }));
+      await db.doc('teams/tReady/templates/x1').set(publicTemplate('x1', 'u1', { teamId: 'tReady', title: 'new template', updatedAt: 20, revision: 4 }));
+      await db.doc('teams/tReady/settings/main').set(publicWorkspaceSettings('u1', { teamId: 'tReady', updatedAt: 20, revision: 4 }));
+    });
+
+    await assertFails(admin.doc('teams/tReady/folders/f1').set(publicFolder('f1', 'u1', { teamId: 'tReady', name: 'stale', updatedAt: 10, revision: 5 })));
+    await assertFails(admin.doc('teams/tReady/templates/x1').set(publicTemplate('x1', 'u1', { teamId: 'tReady', title: 'stale', updatedAt: 10, revision: 5 })));
+    await assertFails(admin.doc('teams/tReady/settings/main').set(publicWorkspaceSettings('u1', { teamId: 'tReady', updatedAt: 10, revision: 5 })));
+    await assertFails(admin.doc('teams/tReady/folders/f1').set(publicFolder('f1', 'u1', { teamId: 'tReady', name: 'revision skipped', updatedAt: 30, revision: 6 })));
+    await assertSucceeds(admin.doc('teams/tReady/folders/f1').set(publicFolder('f1', 'u1', { teamId: 'tReady', name: 'fresh', updatedAt: 30, revision: 5 })));
+  } finally { await env.cleanup(); }
+});
+
+test('missing or unknown settings keep self-private access but deny other members', async () => {
   const env = await createEnv();
   try {
     await seedReadyTeamData(env);
@@ -452,21 +686,28 @@ test('missing or unknown settings deny member private and financial reads includ
       const db = context.firestore();
       await db.doc('teams/tReady/memberEmails/u2').set({ uid: 'u2', email: 'member@example.com', updatedAt: 1, updatedBy: 'u2' });
       await db.doc('teams/tReady/memberNotes/u2').set({ uid: 'u2', note: 'member private', updatedAt: 1, updatedBy: 'u2' });
-      await db.doc('teams/tReady/settings/main').delete();
+      await db.doc('teams/tReady').update({ settings: {} });
     });
-    for (const path of selfPrivateRefs) await assertFails(member.doc(path).get());
+    for (const path of selfPrivateRefs) await assertSucceeds(member.doc(path).get());
     await assertSucceeds(admin.doc('teams/tReady/memberEmails/u2').get());
     await assertSucceeds(admin.doc('teams/tReady/memberNotes/u2').get());
     await assertSucceeds(admin.doc('teams/tReady/payouts/u2').get());
     await assertSucceeds(admin.doc('teams/tReady/projectRewardShares/p1_u2').get());
 
     await env.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc('teams/tReady/settings/main').set({
-        memberEmailVisibility: 'invalid', memberNoteVisibility: 'self',
-        rewardVisibility: 'self', memberPayoutVisibility: 'self',
+      await context.firestore().doc('teams/tReady').update({
+        settings: securitySettings({
+          memberEmailVisibility: 'invalid',
+          memberNoteVisibility: 'invalid',
+          rewardVisibility: 'invalid',
+          memberPayoutVisibility: 'invalid',
+        }),
       });
     });
-    for (const path of selfPrivateRefs) await assertFails(member.doc(path).get());
+    for (const path of selfPrivateRefs) await assertSucceeds(member.doc(path).get());
+    await assertFails(member.doc('teams/tReady/memberEmails/u1').get());
+    await assertFails(member.doc('teams/tReady/memberNotes/u1').get());
+    await assertFails(member.doc('teams/tReady/projectRewardShares/p1_u1').get());
   } finally { await env.cleanup(); }
 });
 
@@ -494,6 +735,39 @@ test('public project and account documents reject embedded cost payloads', async
     await assertFails(member.doc('teams/tReady/accounts/a2').set({
       id: 'a2', name: 'Cost leak account', expenses: 3000, updatedAt: 2, updatedBy: 'u2',
     }));
+    await assertFails(member.doc('teams/tReady/projects/cross-team').set(publicProject('cross-team', 'u2', {
+      teamId: 'another-team',
+    })));
+    await assertFails(member.doc('teams/tReady/accounts/cross-team').set(publicAccount('cross-team', 'u2', {
+      teamId: 'another-team',
+    })));
+  } finally { await env.cleanup(); }
+});
+
+test('ready public folders templates and workspace settings reject sensitive or unknown fields', async () => {
+  const env = await createEnv();
+  try {
+    await seedTeamData(env);
+    const admin = env.authenticatedContext('u1').firestore();
+    const member = env.authenticatedContext('u2').firestore();
+    await assertSucceeds(member.doc('teams/t1/folders/f2').set(publicFolder('f2', 'u2')));
+    await assertSucceeds(member.doc('teams/t1/templates/x2').set(publicTemplate('x2', 'u2')));
+    await assertSucceeds(member.doc('teams/t1/settings/main').set(publicWorkspaceSettings('u2', { updatedAt: 2, revision: 2 })));
+    for (const [path, data] of [
+      ['teams/t1/folders/leak', publicFolder('leak', 'u2', { email: 'leak@example.com' })],
+      ['teams/t1/templates/leak', publicTemplate('leak', 'u2', { rewardYen: 50000 })],
+      ['teams/t1/settings/main', publicWorkspaceSettings('u2', { costYen: 10000 })],
+      ['teams/t1/folders/cross-team', publicFolder('cross-team', 'u2', { teamId: 'another-team' })],
+      ['teams/t1/templates/cross-team', publicTemplate('cross-team', 'u2', { teamId: 'another-team' })],
+      ['teams/t1/settings/main', publicWorkspaceSettings('u2', { teamId: 'another-team' })],
+    ]) {
+      await assertFails(member.doc(path).set(data));
+    }
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('teams/t1/folders/legacy-leak').set({ id: 'legacy-leak', email: 'legacy@example.com' });
+    });
+    await assertFails(member.doc('teams/t1/folders/legacy-leak').get());
+    await assertSucceeds(admin.doc('teams/t1/folders/legacy-leak').get());
   } finally { await env.cleanup(); }
 });
 
@@ -541,17 +815,8 @@ test('approved members can read team docs; pending users and outsiders cannot', 
     await assertFails(outsider.doc('teams/t1').get());
     await assertFails(pending.doc('teams/t1/members/u1').get());
     await assertFails(outsider.doc('teams/t1/folders/f1').get());
-    await assertSucceeds(admin.doc('teams/t1/projects/p1').set({
-      id: 'p1',
-      name: 'Shared project',
-      updatedAt: 1,
-      updatedBy: 'u1',
-    }));
-    await assertSucceeds(admin.doc('teams/t1/settings/main').set({
-      id: 'main',
-      teamId: 't1',
-      ownerUid: 'u1',
-    }));
+    await assertSucceeds(admin.doc('teams/t1/projects/p1').set(publicProject('p1', 'u1')));
+    await assertSucceeds(admin.doc('teams/t1/settings/main').set(publicWorkspaceSettings('u1', { updatedAt: 2, revision: 2 })));
     await assertSucceeds(member.doc('teams/t1/projects/p1').get());
     await assertFails(pending.doc('teams/t1/projects/p1').get());
   } finally {
@@ -587,6 +852,45 @@ test('all approved members can read new project activity while outsiders cannot'
   }
 });
 
+test('an approved member receives an admin project write through a live listener', async () => {
+  const env = await createEnv();
+  try {
+    await seedTeamData(env);
+    const admin = env.authenticatedContext('u1').firestore();
+    const member = env.authenticatedContext('u2').firestore();
+    const received = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('member-listener-timeout')), 3000);
+      const unsubscribe = member.collection('teams/t1/projects').onSnapshot((snapshot) => {
+        if (!snapshot.docs.some((row) => row.id === 'live-project')) return;
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(true);
+      }, reject);
+    });
+    await assertSucceeds(admin.doc('teams/t1/projects/live-project').set(
+      publicProject('live-project', 'u1'),
+    ));
+    await received;
+  } finally {
+    await env.cleanup();
+  }
+});
+
+test('operation receipts are idempotent and cannot spoof another actor', async () => {
+  const env = await createEnv();
+  try {
+    await seedTeamData(env);
+    const member = env.authenticatedContext('u2').firestore();
+    const outsider = env.authenticatedContext('u4').firestore();
+    const receipt = { operationId: 'op1', actorUid: 'u2', createdAt: serverTimestamp() };
+    await assertSucceeds(member.doc('teams/t1/operations/op1').set(receipt));
+    await assertSucceeds(member.doc('teams/t1/operations/op1').get());
+    await assertFails(member.doc('teams/t1/operations/spoof').set({ ...receipt, operationId: 'spoof', actorUid: 'u1' }));
+    await assertFails(member.doc('teams/t1/operations/op1').update({ actorUid: 'u1' }));
+    await assertFails(outsider.doc('teams/t1/operations/op1').get());
+  } finally { await env.cleanup(); }
+});
+
 test('users can discover their own team memberships with collection group queries', async () => {
   const env = await createEnv();
 
@@ -603,7 +907,7 @@ test('users can discover their own team memberships with collection group querie
   }
 });
 
-test('team creation requires a valid reward visibility value', async () => {
+test('team creation requires the restrictive locked security boundary', async () => {
   const env = await createEnv();
 
   try {
@@ -622,7 +926,9 @@ test('team creation requires a valid reward visibility value', async () => {
       deletedAt: null,
       name: 'Team Three',
       memberUids: ['u1'],
-      rewardVisibility: 'admin_only',
+      securitySchemaVersion: 1,
+      securityMigrationState: 'locked',
+      settings: securitySettings(),
     }));
     await assertSucceeds(admin.doc('teams/t3').update({
       name: 'Team Three Updated',
@@ -643,7 +949,9 @@ test('team creation requires a valid reward visibility value', async () => {
       createdBy: 'u1',
       deletedAt: null,
       name: 'Team Four',
-      rewardVisibility: 'unexpected',
+      securitySchemaVersion: 1,
+      securityMigrationState: 'locked',
+      settings: securitySettings({ rewardVisibility: 'all' }),
     }));
     await assertFails(admin.doc('teams/t5').set({
       createdBy: 'u1',
@@ -653,11 +961,76 @@ test('team creation requires a valid reward visibility value', async () => {
     await assertFails(admin.doc('teams/tLockedMember').set({
       createdBy: 'u1', deletedAt: null, name: 'Locked Member Team',
       memberUids: ['u1', 'uLocked'], adminUids: ['u1', 'uLocked'],
-      rewardVisibility: 'admin_only',
+      securitySchemaVersion: 1, securityMigrationState: 'locked',
+      settings: securitySettings(),
     }));
   } finally {
     await env.cleanup();
   }
+});
+
+test('team creator can atomically create the locked team and private profile split', async () => {
+  const env = await createEnv();
+  try {
+    const admin = env.authenticatedContext('u1').firestore();
+    const batch = admin.batch();
+    batch.set(admin.doc('teams/tAtomic'), {
+      id: 'tAtomic', createdBy: 'u1', deletedAt: null, name: 'Atomic Team',
+      memberUids: ['u1'], securitySchemaVersion: 1, securityMigrationState: 'locked',
+      settings: securitySettings(),
+    });
+    batch.set(admin.doc('teams/tAtomic/members/u1'), {
+      uid: 'u1', role: 'admin', status: 'active', displayName: 'Creator',
+      createdAt: 1, updatedAt: 1, updatedBy: 'u1',
+    });
+    batch.set(admin.doc('teams/tAtomic/memberEmails/u1'), {
+      uid: 'u1', email: 'creator@example.com', createdAt: 1, updatedAt: 1, updatedBy: 'u1',
+    });
+    await assertSucceeds(batch.commit());
+  } finally { await env.cleanup(); }
+});
+
+test('team creator can atomically create a ready V2 team for immediate member sharing', async () => {
+  const env = await createEnv();
+  try {
+    const admin = env.authenticatedContext('u1').firestore();
+    const batch = admin.batch();
+    batch.set(admin.doc('teams/tReadyNew'), {
+      id: 'tReadyNew', createdBy: 'u1', deletedAt: null, name: 'Ready Team',
+      memberUids: ['u1'], securitySchemaVersion: 2, securityMigrationState: 'ready',
+      settings: securitySettings(),
+    });
+    batch.set(admin.doc('teams/tReadyNew/members/u1'), {
+      uid: 'u1', role: 'admin', status: 'active', displayName: 'Creator',
+      createdAt: 1, updatedAt: 1, updatedBy: 'u1',
+    });
+    batch.set(admin.doc('teams/tReadyNew/memberEmails/u1'), {
+      uid: 'u1', email: 'creator@example.com', createdAt: 1, updatedAt: 1, updatedBy: 'u1',
+    });
+    await assertSucceeds(batch.commit());
+  } finally { await env.cleanup(); }
+});
+
+test('ready admin can atomically approve a public member and private email without spoofing actor identity', async () => {
+  const env = await createEnv();
+  try {
+    await seedReadyTeamData(env);
+    const admin = env.authenticatedContext('u1').firestore();
+    await assertSucceeds(admin.doc('teams/tReady/members/u5').set({
+      uid: 'u5', role: 'member', status: 'active', displayName: 'Control Member',
+      createdAt: 2, updatedAt: 2, updatedBy: 'u1',
+    }));
+    const batch = admin.batch();
+    batch.set(admin.doc('teams/tReady/members/u4'), {
+      uid: 'u4', role: 'member', status: 'active', displayName: 'New Member',
+      createdAt: 2, updatedAt: 2, updatedBy: 'u1',
+    });
+    batch.set(admin.doc('teams/tReady/memberEmails/u4'), {
+      uid: 'u4', email: 'new@example.com', createdAt: 2, updatedAt: 2, updatedBy: 'u1',
+    });
+    await assertSucceeds(batch.commit());
+    await assertFails(admin.doc('teams/tReady/memberEmails/u4').update({ updatedBy: 'u4', updatedAt: 3 }));
+  } finally { await env.cleanup(); }
 });
 
 test('only signed-in users can create join requests', async () => {
@@ -743,31 +1116,60 @@ test('users can read and write their own personal workspace docs', async () => {
       id: 'f1',
       name: 'Folder 1',
       ownerUid: 'u1',
+      revision: 1, updatedAt: 1, updatedBy: 'u1',
     }));
     await assertSucceeds(self.doc('users/u1/accounts/a1').set({
       id: 'a1',
       username: '@a1',
       ownerUid: 'u1',
+      revision: 1, updatedAt: 1, updatedBy: 'u1',
     }));
     await assertSucceeds(self.doc('users/u1/projects/a1').set({
       id: 'a1',
       ownerUid: 'u1',
+      revision: 1, updatedAt: 1, updatedBy: 'u1',
     }));
     await assertSucceeds(self.doc('users/u1/templates/t1').set({
       id: 't1',
       ownerUid: 'u1',
+      revision: 1, updatedAt: 1, updatedBy: 'u1',
     }));
     await assertSucceeds(self.doc('users/u1/settings/main').set({
       id: 'main',
       ownerUid: 'u1',
       scope: 'personal',
+      revision: 1, updatedAt: 1, updatedBy: 'u1',
     }));
     await assertSucceeds(self.doc('users/u1/folders/f1').get());
     await assertFails(other.doc('users/u1/folders/f1').get());
     await assertFails(other.doc('users/u1/settings/main').set({
       id: 'main',
       ownerUid: 'u1',
+      revision: 1, updatedAt: 1, updatedBy: 'u2',
     }));
+  } finally {
+    await env.cleanup();
+  }
+});
+
+test('stale personal devices cannot overwrite or physically delete newer records', async () => {
+  const env = await createEnv();
+  try {
+    const self = env.authenticatedContext('u1').firestore();
+    const ref = self.doc('users/u1/accounts/a1');
+    await assertSucceeds(ref.set({
+      id: 'a1', ownerUid: 'u1', username: '@first',
+      revision: 1, updatedAt: 10, updatedBy: 'u1',
+    }));
+    await assertSucceeds(ref.set({
+      id: 'a1', ownerUid: 'u1', username: '@newer',
+      revision: 2, updatedAt: 20, updatedBy: 'u1',
+    }));
+    await assertFails(ref.set({
+      id: 'a1', ownerUid: 'u1', username: '@stale',
+      revision: 2, updatedAt: 15, updatedBy: 'u1',
+    }));
+    await assertFails(ref.delete());
   } finally {
     await env.cleanup();
   }
@@ -817,21 +1219,15 @@ test('payout records are readable by members only when team setting allows it', 
     await assertSucceeds(admin.doc('teams/t1/payouts/u1').get());
     await assertFails(member.doc('teams/t1/payouts/u1').get());
 
-    await assertSucceeds(admin.doc('teams/t1/settings/main').set({
-      memberEmailVisibility: 'self',
-      memberNoteVisibility: 'admin_only',
-      rewardVisibility: 'self',
-      memberPayoutVisibility: 'all_members',
+    await assertSucceeds(admin.doc('teams/t1').update({
+      'settings.memberPayoutVisibility': 'all_members',
     }));
 
     await assertSucceeds(member.doc('teams/t1/payouts/u1').get());
     await assertFails(pending.doc('teams/t1/payouts/u1').get());
 
-    await assertSucceeds(admin.doc('teams/t1/settings/main').set({
-      memberEmailVisibility: 'self',
-      memberNoteVisibility: 'admin_only',
-      rewardVisibility: 'self',
-      memberPayoutVisibility: 'admin_only',
+    await assertSucceeds(admin.doc('teams/t1').update({
+      'settings.memberPayoutVisibility': 'admin_only',
     }));
 
     await assertFails(member.doc('teams/t1/payouts/u1').get());
@@ -939,14 +1335,10 @@ test('approved members can only write inside teams they belong to', async () => 
     const member = env.authenticatedContext('u2').firestore();
     const outsider = env.authenticatedContext('u4').firestore();
 
-    await assertSucceeds(member.doc('teams/t1/folders/f2').set({ name: 'Shared' }));
-    await assertSucceeds(member.doc('teams/t1/accounts/a2').set({
-      id: 'a2', name: 'Shared account', updatedAt: 1, updatedBy: 'u2',
-    }));
-    await assertSucceeds(member.doc('teams/t1/projects/a2').set({
-      id: 'a2', name: 'Shared project', updatedAt: 1, updatedBy: 'u2',
-    }));
-    await assertSucceeds(member.doc('teams/t1/templates/x2').set({ name: 'Shared template' }));
+    await assertSucceeds(member.doc('teams/t1/folders/f2').set(publicFolder('f2', 'u2')));
+    await assertSucceeds(member.doc('teams/t1/accounts/a2').set(publicAccount('a2', 'u2')));
+    await assertSucceeds(member.doc('teams/t1/projects/a2').set(publicProject('a2', 'u2')));
+    await assertSucceeds(member.doc('teams/t1/templates/x2').set(publicTemplate('x2', 'u2')));
     const validActivity = {
       action: 'createProject',
       text: 'メンバーが「共有案件」を追加しました',

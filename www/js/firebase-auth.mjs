@@ -1,4 +1,5 @@
 export {
+  getFirebaseCore,
   hasFirebaseConfig,
   initFirebaseCore as initFirebase,
   waitForInitialAuth,

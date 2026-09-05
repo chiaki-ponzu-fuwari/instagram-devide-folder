@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as teamModel from '../www/js/team-model.mjs';
 import {
   normalizeMemberRecord,
   normalizeTeamRecord,
@@ -12,6 +13,73 @@ import {
   buildActivityText,
   currentUserLabel,
 } from '../www/js/team-model.mjs';
+
+test('team project record is routed through the shared team account store', () => {
+  assert.equal(typeof teamModel.buildTeamAccountRecord, 'function');
+  assert.equal(typeof teamModel.mergeTeamAccounts, 'function');
+
+  const shared = teamModel.buildTeamAccountRecord({
+    id: 'a1',
+    username: '@client',
+    ownerUid: 'admin',
+    project: { name: '案件A', scope: 'team', teamId: 't1' },
+  }, { teamId: 't1', updatedBy: 'admin', now: 100 });
+
+  assert.equal(shared.ownerUid, undefined);
+  assert.equal(shared.project.teamId, 't1');
+  const memberAccounts = teamModel.mergeTeamAccounts([
+    { id: 'personal', project: { name: '個人案件', scope: 'personal' } },
+    { id: 'other-team', project: { name: '別チーム案件', scope: 'team', teamId: 't2' } },
+  ], [
+    shared,
+    { id: 'wrong-team', project: { name: '混入禁止', scope: 'team', teamId: 't2' } },
+  ], 't1');
+
+  assert.deepEqual(memberAccounts.map((account) => account.id), [
+    'personal',
+    'other-team',
+    'a1',
+  ]);
+  assert.equal(memberAccounts[2].project.name, '案件A');
+});
+
+test('only local team accounts missing from the shared store are migrated', () => {
+  assert.equal(typeof teamModel.findMissingTeamAccounts, 'function');
+  const missing = teamModel.findMissingTeamAccounts([
+    { id: 'personal', project: { scope: 'personal' } },
+    { id: 'already-shared', project: { scope: 'team', teamId: 't1' } },
+    { id: 'needs-migration', project: { scope: 'team', teamId: 't1' } },
+    { id: 'other-team', project: { scope: 'team', teamId: 't2' } },
+  ], [
+    { id: 'already-shared', project: { scope: 'team', teamId: 't1' } },
+  ], 't1');
+
+  assert.deepEqual(missing.map((account) => account.id), ['needs-migration']);
+});
+
+test('local team accounts migrate only after an authoritative server snapshot', () => {
+  assert.equal(typeof teamModel.shouldMigrateTeamAccounts, 'function');
+  assert.equal(teamModel.shouldMigrateTeamAccounts({
+    isAdmin: true,
+    fromCache: true,
+    alreadyMigrated: false,
+  }), false);
+  assert.equal(teamModel.shouldMigrateTeamAccounts({
+    isAdmin: true,
+    fromCache: false,
+    alreadyMigrated: false,
+  }), true);
+  assert.equal(teamModel.shouldMigrateTeamAccounts({
+    isAdmin: true,
+    fromCache: false,
+    alreadyMigrated: true,
+  }), false);
+  assert.equal(teamModel.shouldMigrateTeamAccounts({
+    isAdmin: false,
+    fromCache: false,
+    alreadyMigrated: false,
+  }), false);
+});
 
 test('normalizeMemberRecord fills defaults for a new admin', () => {
   const now = 1778493600000;
