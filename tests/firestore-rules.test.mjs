@@ -587,6 +587,9 @@ test('team creation requires a valid reward visibility value', async () => {
   const env = await createEnv();
 
   try {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('accountDeletionLocks/uLocked').set({ uid: 'uLocked' });
+    });
     const admin = env.authenticatedContext('u1').firestore();
 
     await assertFails(admin.doc('teams/t2').set({
@@ -598,6 +601,7 @@ test('team creation requires a valid reward visibility value', async () => {
       createdBy: 'u1',
       deletedAt: null,
       name: 'Team Three',
+      memberUids: ['u1'],
       rewardVisibility: 'admin_only',
     }));
     await assertSucceeds(admin.doc('teams/t3').update({
@@ -626,6 +630,11 @@ test('team creation requires a valid reward visibility value', async () => {
       deletedAt: null,
       name: 'Team Five',
     }));
+    await assertFails(admin.doc('teams/tLockedMember').set({
+      createdBy: 'u1', deletedAt: null, name: 'Locked Member Team',
+      memberUids: ['u1', 'uLocked'], adminUids: ['u1', 'uLocked'],
+      rewardVisibility: 'admin_only',
+    }));
   } finally {
     await env.cleanup();
   }
@@ -643,8 +652,19 @@ test('only signed-in users can create join requests', async () => {
     await assertSucceeds(signedIn.doc('teams/t1/joinRequests/r2').set({
       uid: 'u4',
       inviteId: 'i1',
+      teamId: 't1',
+      teamName: 'Team One',
+      displayName: 'Joiner',
+      email: 'joiner@example.com',
       status: 'pending',
-      requestedAt: 1778493600000,
+      createdAt: 1778493600000,
+      updatedAt: 1778493600000,
+    }));
+    await assertFails(signedIn.doc('teams/t1/joinRequests/r-extra').set({
+      uid: 'u4', inviteId: 'i1', teamId: 't1', teamName: 'Team One',
+      displayName: 'Joiner', email: 'joiner@example.com', status: 'pending',
+      createdAt: 1778493600000, updatedAt: 1778493600000,
+      assignedUids: ['u1'],
     }));
     await assertFails(signedIn.doc('teams/t1/joinRequests/r3').set({
       uid: 'u9',
@@ -657,6 +677,16 @@ test('only signed-in users can create join requests', async () => {
       inviteId: 'i1',
       status: 'pending',
       requestedAt: 1778493600000,
+    }));
+    const admin = env.authenticatedContext('u1').firestore();
+    await assertSucceeds(admin.doc('teamInviteCodes/NEWCODE').set({
+      code: 'NEWCODE', teamId: 't1', inviteId: 'i-new', teamName: 'Team One',
+      createdBy: 'u1', createdAt: 1778493600000, disabledAt: null,
+    }));
+    await assertFails(admin.doc('teamInviteCodes/BADCODE').set({
+      code: 'BADCODE', teamId: 't1', inviteId: 'i-bad', teamName: 'Team One',
+      createdBy: 'u1', createdAt: 1778493600000, disabledAt: null,
+      memberUids: ['uLocked'],
     }));
   } finally {
     await env.cleanup();

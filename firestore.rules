@@ -71,6 +71,36 @@ service cloud.firestore {
             && uidArrayIsMemberSubset(data, 'managerUids', members)));
     }
 
+    function initialUidArrayIsCreator(data, field) {
+      return !data.keys().hasAny([field])
+        || (data[field] is list
+          && data[field].size() == 1
+          && data[field][0] == request.auth.uid);
+    }
+
+    function initialTeamIdentityIsValid(teamId, data) {
+      return data.memberUids is list
+        && data.memberUids.size() == 1
+        && data.memberUids[0] == request.auth.uid
+        && initialUidArrayIsCreator(data, 'adminUids')
+        && initialUidArrayIsCreator(data, 'ownerUids')
+        && childIdentityIsValid(teamId, data);
+    }
+
+    function isValidTeamInviteCodeCreate() {
+      return request.resource.data.keys().hasOnly([
+        'code', 'teamId', 'inviteId', 'teamName', 'createdBy',
+        'createdAt', 'disabledAt'
+      ]);
+    }
+
+    function isValidJoinRequestCreate() {
+      return request.resource.data.keys().hasOnly([
+        'uid', 'inviteId', 'teamId', 'teamName', 'displayName', 'email',
+        'status', 'createdAt', 'updatedAt'
+      ]);
+    }
+
     function stableTeamOwners() {
       return request.resource.data.createdBy == resource.data.createdBy
         && ((!resource.data.keys().hasAny(['ownerUid'])
@@ -388,7 +418,16 @@ service cloud.firestore {
     match /teamInviteCodes/{code} {
       allow get: if signedIn() && resource.data.disabledAt == null;
       allow list: if false;
-      allow create, update: if signedIn()
+      allow create: if signedIn()
+        && canWriteTeamData()
+        && hasUnlockedIdentity(request.resource.data)
+        && isValidTeamInviteCodeCreate()
+        && request.resource.data.code == code
+        && request.resource.data.teamId is string
+        && request.resource.data.inviteId is string
+        && request.resource.data.createdBy == request.auth.uid
+        && canManageTeam(request.resource.data.teamId);
+      allow update: if signedIn()
         && canWriteTeamData()
         && hasUnlockedIdentity(request.resource.data)
         && request.resource.data.code == code
@@ -403,6 +442,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && canWriteTeamData()
         && hasUnlockedIdentity(request.resource.data)
+        && initialTeamIdentityIsValid(teamId, request.resource.data)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.deletedAt == null
         && request.resource.data.rewardVisibility in ['admin_only', 'all_members', 'selected_members'];
@@ -548,6 +588,7 @@ service cloud.firestore {
       match /joinRequests/{requestId} {
         allow create: if signedIn()
           && isDeletionUnlocked(request.auth.uid)
+          && isValidJoinRequestCreate()
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.status == 'pending'
           && exists(/databases/$(database)/documents/teams/$(teamId)/invites/$(request.resource.data.inviteId))

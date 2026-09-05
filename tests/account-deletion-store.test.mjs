@@ -414,6 +414,12 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
       profile: { phone: '090-0000-0000' }, unknownSecret: '秘密', type: 'member',
     },
   });
+  await db.doc('teams/team-a/activity/spoofed-project-action').set({
+    action: 'createProject', actorUid: 'admin', actorName: '管理者',
+    targetUid: 'deleted', targetName: '山田花子',
+    text: '管理者が山田花子を作成しました', coreText: '山田花子を作成しました',
+    projectId: 'shared-project', projectName: '共有案件', createdAt: 460,
+  });
   const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
   await applyTeamDecision(db, 'deleted', { teamId: 'team-a', action: 'leave' }, ctx);
   await removeUserIdentityFromTeam(db, 'deleted', 'team-a', ctx);
@@ -447,6 +453,10 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
   assert.deepEqual(unknownTarget.target, {
     uid: 'deleted-user', displayName: '削除済みユーザー', type: 'member',
   });
+  const spoofedProjectAction = (await db.doc('teams/team-a/activity/spoofed-project-action').get()).data();
+  assert.equal(spoofedProjectAction.projectName, '共有案件');
+  assert.equal(spoofedProjectAction.text, undefined);
+  assert.equal(spoofedProjectAction.coreText, undefined);
 });
 
 test('non-member pending requests and UID or verified-email invitations are deleted globally', async () => {
