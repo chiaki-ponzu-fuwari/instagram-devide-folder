@@ -98,6 +98,22 @@ async function seedTeamData(env) {
   });
 }
 
+test('account deletion jobs are inaccessible to every client including the owner', async () => {
+  const env = await createEnv();
+  try {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('accountDeletionJobs/u1_request').set({ uid: 'u1' });
+    });
+    const owner = env.authenticatedContext('u1').firestore();
+    const other = env.authenticatedContext('u2').firestore();
+    const anonymous = env.unauthenticatedContext().firestore();
+    for (const client of [owner, other, anonymous]) {
+      await assertFails(client.doc('accountDeletionJobs/u1_request').get());
+      await assertFails(client.doc('accountDeletionJobs/u1_request').set({ uid: 'u1' }));
+    }
+  } finally { await env.cleanup(); }
+});
+
 async function seedLegacyTeamData(env) {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
