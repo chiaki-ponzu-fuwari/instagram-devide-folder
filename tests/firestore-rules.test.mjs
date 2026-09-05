@@ -114,7 +114,12 @@ test('account deletion jobs are inaccessible to every client including the owner
       await assertFails(client.doc('accountDeletionLocks/u1').get());
       await assertFails(client.doc('accountDeletionLocks/u1').set({ uid: 'u1' }));
     }
-  } finally { await env.cleanup(); }
+  } finally {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc('accountDeletionLocks/u1').delete();
+    });
+    await env.cleanup();
+  }
 });
 
 test('owners cannot physically delete their user root or any known personal collection document', async () => {
@@ -132,6 +137,40 @@ test('owners cannot physically delete their user root or any known personal coll
     for (const name of ['folders', 'accounts', 'projects', 'templates', 'settings']) {
       await assertFails(owner.doc(`users/u1/${name}/one`).delete());
     }
+  } finally { await env.cleanup(); }
+});
+
+test('deletion lock blocks identity recreation while unrelated users keep normal access', async () => {
+  const env = await createEnv();
+  try {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('accountDeletionLocks/uLocked').set({ uid: 'uLocked', phase: 'started' });
+      await db.doc('users/uLocked').set({ uid: 'uLocked' });
+      await db.doc('teams/tLock').set({
+        createdBy: 'u2', memberUids: ['u2'], securitySchemaVersion: 2,
+        securityMigrationState: 'ready', rewardVisibility: 'admin_only',
+      });
+      await db.doc('teams/tLock/members/u2').set({
+        uid: 'u2', role: 'admin', status: 'active', displayName: 'Admin',
+        createdAt: 1, updatedAt: 1, updatedBy: 'u2',
+      });
+      await db.doc('teams/tLock/invites/open').set({ disabledAt: null });
+    });
+    const locked = env.authenticatedContext('uLocked').firestore();
+    const admin = env.authenticatedContext('u2').firestore();
+    await assertFails(locked.doc('users/uLocked').update({ touched: true }));
+    await assertFails(locked.doc('users/uLocked/projects/new').set({ id: 'new' }));
+    await assertFails(locked.doc('teams/tLock/joinRequests/uLocked').set({
+      uid: 'uLocked', status: 'pending', inviteId: 'open',
+    }));
+    await assertFails(admin.doc('teams/tLock/invites/locked').set({ invitedUid: 'uLocked' }));
+    await assertFails(admin.doc('teams/tLock/members/uLocked').set({
+      uid: 'uLocked', role: 'member', status: 'active', displayName: 'Locked',
+      createdAt: 2, updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertSucceeds(admin.doc('users/u2').set({ uid: 'u2' }));
+    await assertSucceeds(admin.doc('teams/tLock/invites/other').set({ invitedUid: 'u3' }));
   } finally { await env.cleanup(); }
 });
 

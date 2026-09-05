@@ -10,6 +10,17 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function isDeletionUnlocked(uid) {
+      return uid is string
+        && !exists(/databases/$(database)/documents/accountDeletionLocks/$(uid));
+    }
+
+    function hasUnlockedIdentity(data) {
+      return (!data.keys().hasAny(['uid']) || isDeletionUnlocked(data.uid))
+        && (!data.keys().hasAny(['memberUid']) || isDeletionUnlocked(data.memberUid))
+        && (!data.keys().hasAny(['invitedUid']) || isDeletionUnlocked(data.invitedUid));
+    }
+
     function teamPath(teamId) {
       return /databases/$(database)/documents/teams/$(teamId);
     }
@@ -242,31 +253,36 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isSelf(uid);
-      allow create, update: if isSelf(uid);
+      allow create, update: if isSelf(uid) && isDeletionUnlocked(uid);
       allow delete: if false;
 
       match /folders/{folderId} {
-        allow read, create, update: if isSelf(uid);
+        allow read: if isSelf(uid);
+        allow create, update: if isSelf(uid) && isDeletionUnlocked(uid);
         allow delete: if false;
       }
 
       match /accounts/{accountId} {
-        allow read, create, update: if isSelf(uid);
+        allow read: if isSelf(uid);
+        allow create, update: if isSelf(uid) && isDeletionUnlocked(uid);
         allow delete: if false;
       }
 
       match /projects/{projectId} {
-        allow read, create, update: if isSelf(uid);
+        allow read: if isSelf(uid);
+        allow create, update: if isSelf(uid) && isDeletionUnlocked(uid);
         allow delete: if false;
       }
 
       match /templates/{templateId} {
-        allow read, create, update: if isSelf(uid);
+        allow read: if isSelf(uid);
+        allow create, update: if isSelf(uid) && isDeletionUnlocked(uid);
         allow delete: if false;
       }
 
       match /settings/{settingId} {
-        allow read, create, update: if isSelf(uid);
+        allow read: if isSelf(uid);
+        allow create, update: if isSelf(uid) && isDeletionUnlocked(uid);
         allow delete: if false;
       }
     }
@@ -275,6 +291,7 @@ service cloud.firestore {
       allow get: if signedIn() && resource.data.disabledAt == null;
       allow list: if false;
       allow create, update: if signedIn()
+        && hasUnlockedIdentity(request.resource.data)
         && request.resource.data.code == code
         && request.resource.data.teamId is string
         && request.resource.data.inviteId is string
@@ -295,18 +312,18 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if canManageTeam(teamId)
           || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicMemberShape());
-        allow create: if (canManageTeam(teamId) && validPublicMember(uid))
+        allow create: if isDeletionUnlocked(uid) && ((canManageTeam(teamId) && validPublicMember(uid))
           || (signedIn()
             && uid == request.auth.uid
             && isTeamCreator(teamId)
             && request.resource.data.uid == request.auth.uid
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'active'
-            && validPublicMember(uid));
-        allow update: if (canManageTeam(teamId) && validPublicMember(uid))
+            && validPublicMember(uid)));
+        allow update: if isDeletionUnlocked(uid) && ((canManageTeam(teamId) && validPublicMember(uid))
           || (isMigrationReady(teamId) && isSelf(uid) && validPublicMember(uid)
             && request.resource.data.role == resource.data.role
-            && request.resource.data.status == resource.data.status);
+            && request.resource.data.status == resource.data.status));
         allow delete: if canManageTeam(teamId)
           || (isSelf(uid) && resource.data.role != 'admin');
       }
@@ -399,18 +416,22 @@ service cloud.firestore {
       }
 
       match /invites/{inviteId} {
-        allow read, create, update: if canManageTeam(teamId);
+        allow read: if canManageTeam(teamId);
+        allow create, update: if canManageTeam(teamId)
+          && hasUnlockedIdentity(request.resource.data);
         allow delete: if false;
       }
 
       match /joinRequests/{requestId} {
         allow create: if signedIn()
+          && isDeletionUnlocked(request.auth.uid)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.status == 'pending'
           && exists(/databases/$(database)/documents/teams/$(teamId)/invites/$(request.resource.data.inviteId))
           && get(/databases/$(database)/documents/teams/$(teamId)/invites/$(request.resource.data.inviteId)).data.disabledAt == null;
         allow read: if canManageTeam(teamId) || (signedIn() && resource.data.uid == request.auth.uid);
-        allow update: if canManageTeam(teamId);
+        allow update: if canManageTeam(teamId)
+          && hasUnlockedIdentity(request.resource.data);
         allow delete: if false;
       }
     }

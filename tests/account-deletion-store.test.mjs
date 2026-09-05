@@ -23,7 +23,10 @@ let db;
 function team(overrides = {}) {
   return {
     name: 'Team', createdBy: 'admin', memberUids: ['admin', 'deleted'],
-    settings: { assignOwnerUids: ['deleted'], assignPermission: 'owner_set' },
+    settings: {
+      assignOwnerUids: ['deleted'], assignedUids: ['deleted'], assigneeUids: ['deleted'],
+      assignPermission: 'owner_set',
+    },
     ...overrides,
   };
 }
@@ -44,7 +47,7 @@ async function seedLeaveTeam(teamId = 'team-a') {
   await db.doc(`teams/${teamId}/memberNotes/deleted`).set({ uid: 'deleted', note: 'secret' });
   await db.doc(`teams/${teamId}/payouts/deleted`).set({ uid: 'deleted', payoutAccount: 'secret' });
   await db.doc(`teams/${teamId}/projects/project-1`).set({
-    id: 'project-1', name: 'Shared project', assignedUids: ['deleted'], assigneeUids: ['deleted'],
+    id: 'project-1', name: 'Shared project', assignedUids: ['deleted'],
     updatedBy: 'deleted', createdBy: 'admin',
   });
   await db.doc(`teams/${teamId}/settings/main`).set({
@@ -142,8 +145,10 @@ test('member leave preserves shared records and removes identity only from its t
   const activity = (await db.doc('teams/team-a/activity/activity-1').get()).data();
   assert.deepEqual(teamA.memberUids, ['admin']);
   assert.deepEqual(teamA.settings.assignOwnerUids, []);
-  assert.deepEqual(project.assigneeUids, []);
+  assert.deepEqual(teamA.settings.assignedUids, []);
+  assert.deepEqual(teamA.settings.assigneeUids, []);
   assert.deepEqual(project.assignedUids, []);
+  assert.equal(Object.hasOwn(project, 'assigneeUids'), false);
   assert.deepEqual((await db.doc('teams/team-a/settings/main').get()).data().assignOwnerUids, ['admin']);
   assert.deepEqual((await db.doc('teams/team-a/settings/main').get()).data().assignedUids, []);
   assert.equal(project.updatedBy, 'deleted-user');
@@ -167,10 +172,13 @@ test('member leave preserves shared records and removes identity only from its t
 test('admin transfer atomically aligns creator, roles, membership and permissions', async () => {
   await db.doc('teams/transfer-team').set(team({
     createdBy: 'deleted', memberUids: ['deleted', 'successor'],
-    settings: { assignOwnerUids: ['deleted'], assignPermission: 'owner_set' },
+    settings: { assignOwnerUids: ['deleted'], adminUids: ['deleted'], assignPermission: 'owner_set' },
   }));
   await db.doc('teams/transfer-team/members/deleted').set(member('deleted', 'admin'));
   await db.doc('teams/transfer-team/members/successor').set(member('successor'));
+  await db.doc('teams/transfer-team/settings/main').set({
+    ownerUid: 'deleted', assignOwnerUids: ['deleted'], adminUids: ['deleted'],
+  });
   const ctx = await begin([{ teamId: 'transfer-team', action: 'transfer', transferToUid: 'successor' }]);
 
   await applyTeamDecision(db, 'deleted', {
@@ -180,9 +188,65 @@ test('admin transfer atomically aligns creator, roles, membership and permission
   const transferred = (await db.doc('teams/transfer-team').get()).data();
   assert.equal(transferred.createdBy, 'successor');
   assert.deepEqual(transferred.memberUids, ['successor']);
-  assert.deepEqual(transferred.settings.assignOwnerUids, []);
+  assert.deepEqual(transferred.settings.assignOwnerUids, ['successor']);
+  assert.deepEqual(transferred.settings.adminUids, ['successor']);
+  const transferredSettings = (await db.doc('teams/transfer-team/settings/main').get()).data();
+  assert.equal(transferredSettings.ownerUid, 'successor');
+  assert.deepEqual(transferredSettings.assignOwnerUids, ['successor']);
+  assert.deepEqual(transferredSettings.adminUids, ['successor']);
   assert.equal((await db.doc('teams/transfer-team/members/successor').get()).data().role, 'admin');
   assert.equal((await db.doc('teams/transfer-team/members/deleted').get()).exists, false);
+});
+
+test('jobs never persist display names or verified email identifiers', async () => {
+  await seedLeaveTeam();
+  await db.doc('teams/team-a/members/deleted').update({ displayName: '山田花子' });
+  const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
+  await applyTeamDecision(db, 'deleted', { teamId: 'team-a', action: 'leave' }, ctx);
+  const serialized = JSON.stringify((await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data());
+  assert.doesNotMatch(serialized, /山田花子|deleted@example\.com|knownIdentifiers/);
+});
+
+test('identity arrays fail closed and legacy project alias is changed only when present', async () => {
+  await seedLeaveTeam();
+  await db.doc('teams/team-a/projects/legacy').set({
+    id: 'legacy', assignedUids: ['admin'], assigneeUids: ['deleted', 'admin'],
+  });
+  const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
+  await applyTeamDecision(db, 'deleted', { teamId: 'team-a', action: 'leave' }, ctx);
+  await removeUserIdentityFromTeam(db, 'deleted', 'team-a', ctx);
+  const legacy = (await db.doc('teams/team-a/projects/legacy').get()).data();
+  assert.deepEqual(legacy.assignedUids, ['admin']);
+  assert.deepEqual(legacy.assigneeUids, ['admin']);
+
+  await db.doc('teams/broken').set(team({
+    createdBy: 'admin', memberUids: ['admin', 'broken-user'],
+    settings: { assignOwnerUids: 'broken-user' },
+  }));
+  await db.doc('teams/broken/members/admin').set(member('admin', 'admin'));
+  await db.doc('teams/broken/members/broken-user').set(member('broken-user'));
+  const brokenContext = context({ requestId: 'request_323456789012345678901234' });
+  await beginAccountDeletionJob(db, 'broken-user', brokenContext.requestId, planHash, [{ teamId: 'broken', action: 'leave' }]);
+  await assert.rejects(
+    () => applyTeamDecision(db, 'broken-user', { teamId: 'broken', action: 'leave' }, brokenContext),
+    /invalid-identity-array/,
+  );
+});
+
+test('transfer rejects malformed management arrays without partially changing ownership', async () => {
+  await db.doc('teams/broken-transfer').set(team({
+    createdBy: 'deleted', memberUids: ['deleted', 'successor'],
+    settings: { assignOwnerUids: ['deleted'], adminUids: 'deleted' },
+  }));
+  await db.doc('teams/broken-transfer/members/deleted').set(member('deleted', 'admin'));
+  await db.doc('teams/broken-transfer/members/successor').set(member('successor'));
+  await db.doc('teams/broken-transfer/settings/main').set({ ownerUid: 'deleted', assignOwnerUids: ['deleted'] });
+  const ctx = await begin([{ teamId: 'broken-transfer', action: 'transfer', transferToUid: 'successor' }]);
+  await assert.rejects(() => applyTeamDecision(db, 'deleted', {
+    teamId: 'broken-transfer', action: 'transfer', transferToUid: 'successor',
+  }, ctx), /invalid-identity-array/);
+  assert.equal((await db.doc('teams/broken-transfer').get()).data().createdBy, 'deleted');
+  assert.equal((await db.doc('teams/broken-transfer/members/deleted').get()).exists, true);
 });
 
 test('dissolve requires a sole effective admin and deletes only that team subtree', async () => {
@@ -257,6 +321,12 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
     audit: { memberUid: 'deleted', email: 'deleted@example.com', safeFact: '承認済み' },
     unknownPrivate: { raw: 'uid=deleted' },
   });
+  await db.doc('teams/team-a/activity/unstructured').set({
+    actorUid: 'admin', actorName: '山田花子', action: 'updateRecord',
+    targetName: '山田花子', coreText: '「山田花子」を更新しました',
+    text: '山田花子さんが「山田花子」を更新しました', createdAt: 457,
+    legacyNote: 'deleted@example.com was shown historically',
+  });
   const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
   await applyTeamDecision(db, 'deleted', { teamId: 'team-a', action: 'leave' }, ctx);
   await removeUserIdentityFromTeam(db, 'deleted', 'team-a', ctx);
@@ -269,6 +339,10 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
   assert.equal(activity.projectName, '共有案件');
   assert.equal(activity.createdAt, 456);
   assert.doesNotMatch(JSON.stringify(activity), /deleted@example\.com|uid=deleted|"deleted"/);
+  const unstructured = (await db.doc('teams/team-a/activity/unstructured').get()).data();
+  assert.equal(unstructured.actorName, '山田花子');
+  assert.equal(unstructured.targetName, '山田花子');
+  assert.equal(unstructured.legacyNote, 'deleted@example.com was shown historically');
 });
 
 test('non-member pending requests and UID or verified-email invitations are deleted globally', async () => {
@@ -289,4 +363,26 @@ test('non-member pending requests and UID or verified-email invitations are dele
   assert.equal((await db.doc('teams/pending-team/joinRequests/other').get()).exists, true);
   assert.equal((await db.doc('teams/pending-team/invites/other').get()).exists, true);
   assert.equal((await db.doc('teamInviteCodes/OTHERCODE').get()).exists, true);
+});
+
+test('ready reruns personal and pending identity cleanup instead of trusting a boolean checkpoint', async () => {
+  const ctx = await begin([]);
+  await deletePersonalCloudData(db, 'deleted', ctx);
+  await db.doc('users/deleted/projects/late').set({ ownerUid: 'deleted' });
+  await db.doc('teams/pending/invites/late').set({ invitedUid: 'deleted' });
+  await markDeletionJobReadyForAuthDelete(db, 'deleted', ctx);
+  assert.equal((await db.doc('users/deleted/projects/late').get()).exists, false);
+  assert.equal((await db.doc('teams/pending/invites/late').get()).exists, false);
+});
+
+test('identity query pagination removes more than one page without skipping duplicate document IDs', async () => {
+  const writes = [];
+  for (let index = 0; index < 205; index += 1) {
+    writes.push(db.doc(`teams/pending-${index}/invites/shared`).set({ invitedUid: 'deleted' }));
+  }
+  await Promise.all(writes);
+  const ctx = await begin([]);
+  await deletePersonalCloudData(db, 'deleted', ctx);
+  const remaining = await db.collectionGroup('invites').where('invitedUid', '==', 'deleted').get();
+  assert.equal(remaining.empty, true);
 });
