@@ -4,9 +4,12 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
-    "test": "node --test tests/team-model.test.mjs tests/auth-state.test.mjs tests/personal-cloud-store.test.mjs tests/team-security-model.test.mjs",
+    "test": "node --test tests/team-model.test.mjs tests/auth-state.test.mjs tests/personal-cloud-store.test.mjs tests/team-security-model.test.mjs tests/account-deletion-config.test.mjs",
     "test:rules": "firebase emulators:exec --only firestore \"node --test tests/firestore-rules.test.mjs\"",
-    "check:js": "node --check www/js/auth-state.mjs && node --check www/js/firebase-auth.mjs && node --check www/js/firestore-core.mjs && node --check www/js/personal-cloud-backup.mjs && node --check www/js/personal-cloud-store.mjs && node --check www/js/team-model.mjs && node --check www/js/team-cloud.mjs",
+    "test:account-deletion": "node --test tests/account-deletion-config.test.mjs",
+    "test:account-deletion:emulator": "firebase emulators:exec --only auth,firestore,functions \"node --test tests/account-deletion-config.test.mjs\"",
+    "test:emulators": "firebase emulators:start --only auth,firestore,functions",
+    "check:js": "node --check www/js/auth-state.mjs && node --check www/js/firebase-auth.mjs && node --check www/js/firestore-core.mjs && node --check www/js/personal-cloud-backup.mjs && node --check www/js/personal-cloud-store.mjs && node --check www/js/team-model.mjs && node --check www/js/team-cloud.mjs && node --check functions/index.mjs",
     "check:html": "node --check www/i18n.js"
   },
   "dependencies": {
