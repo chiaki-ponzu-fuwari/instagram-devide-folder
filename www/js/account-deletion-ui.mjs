@@ -83,6 +83,13 @@ export function setTeamDecision(state, teamId, action, transferToUid = '') {
   return { ...state, teamDecisions, choicesComplete: decisionsComplete(state.teams, teamDecisions) };
 }
 
+export function clearTeamDecision(state, teamId) {
+  const team = state.teams.find((entry) => entry.teamId === teamId);
+  if (!team || team.requiredAction === 'leave') fail('invalid-team-decision');
+  const teamDecisions = state.teamDecisions.filter((entry) => entry.teamId !== teamId);
+  return { ...state, teamDecisions, choicesComplete: decisionsComplete(state.teams, teamDecisions) };
+}
+
 export function buildDeletionRequest(state) {
   if (!state?.choicesComplete) fail('team-decisions-required');
   if (state.typedConfirmation !== confirmPhrase(state.language)) fail('confirmation-required');

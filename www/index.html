@@ -5257,7 +5257,11 @@ async function renderAccountDeletionPlan(uiModule) {
           select.appendChild(option);
         });
         select.addEventListener('change', () => {
-          if (!select.value) return;
+          if (!select.value) {
+            accountDeletionState = uiModule.clearTeamDecision(accountDeletionState, team.teamId);
+            updateAccountDeletionSubmit();
+            return;
+          }
           try { accountDeletionState = uiModule.setTeamDecision(accountDeletionState, team.teamId, 'transfer', select.value); } catch {}
           dissolveCheckbox.checked = false;
           updateAccountDeletionSubmit();
@@ -5269,14 +5273,15 @@ async function renderAccountDeletionPlan(uiModule) {
         const dissolveCheckbox = document.createElement('input');
         dissolveCheckbox.type = 'checkbox';
         const dissolveText = document.createElement('span');
-        dissolveText.textContent = tt('account_delete_dissolve');
+        dissolveText.textContent = tt('account_delete_dissolve_impact', {
+          team: team.teamName || '', count: (team.eligibleSuccessors || []).length,
+        });
         dissolveCheckbox.addEventListener('change', () => {
           if (dissolveCheckbox.checked) {
             select.value = '';
             accountDeletionState = uiModule.setTeamDecision(accountDeletionState, team.teamId, 'dissolve');
           } else {
-            accountDeletionState.teamDecisions = accountDeletionState.teamDecisions.filter((decision) => decision.teamId !== team.teamId);
-            accountDeletionState.choicesComplete = false;
+            accountDeletionState = uiModule.clearTeamDecision(accountDeletionState, team.teamId);
           }
           updateAccountDeletionSubmit();
         });
@@ -5288,13 +5293,12 @@ async function renderAccountDeletionPlan(uiModule) {
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         const text = document.createElement('span');
-        text.textContent = tt('account_delete_dissolve');
+        text.textContent = tt('account_delete_dissolve_impact', {
+          team: team.teamName || '', count: (team.eligibleSuccessors || []).length,
+        });
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) accountDeletionState = uiModule.setTeamDecision(accountDeletionState, team.teamId, 'dissolve');
-          else {
-            accountDeletionState.teamDecisions = accountDeletionState.teamDecisions.filter((decision) => decision.teamId !== team.teamId);
-            accountDeletionState.choicesComplete = false;
-          }
+          else accountDeletionState = uiModule.clearTeamDecision(accountDeletionState, team.teamId);
           updateAccountDeletionSubmit();
         });
         label.append(checkbox, text);

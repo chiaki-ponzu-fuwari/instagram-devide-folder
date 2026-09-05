@@ -2,14 +2,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import {
+import * as accountDeletionUi from '../www/js/account-deletion-ui.mjs';
+
+const {
   AccountDeletionUiError,
   buildDeletionRequest,
+  clearTeamDecision,
   clearScopedLocalData,
   createAccountDeletionFlow,
   createDeletionFormState,
   setTeamDecision,
-} from '../www/js/account-deletion-ui.mjs';
+} = accountDeletionUi;
 
 const html = readFileSync(new URL('../www/index.html', import.meta.url), 'utf8');
 const i18n = readFileSync(new URL('../www/i18n.js', import.meta.url), 'utf8');
@@ -42,7 +45,7 @@ test('Japanese and English copy covers cloud, team, device, resume, providers, a
     'account_delete_resume', 'account_delete_reauth_google', 'account_delete_reauth_apple',
     'account_delete_error_reauth', 'account_delete_error_cancelled',
     'account_delete_error_network', 'account_delete_error_in_progress',
-    'account_delete_error_signout',
+    'account_delete_error_signout', 'account_delete_dissolve_impact',
   ]) assert.equal((i18n.match(new RegExp(`\\b${key}:`, 'g')) || []).length, 2, key);
   assert.match(i18n, /account_delete_phrase:\s*'削除'/);
   assert.match(i18n, /account_delete_phrase:\s*'DELETE'/);
@@ -73,6 +76,27 @@ test('shared-team admins can explicitly choose transfer or dissolve', () => {
   assert.deepEqual(state.teamDecisions.find((entry) => entry.teamId === 'admin-team'), {
     teamId: 'admin-team', action: 'transfer', transferToUid: 'active-user',
   });
+});
+
+test('clearing a transfer removes the stale decision and makes choices incomplete', () => {
+  assert.equal(typeof clearTeamDecision, 'function');
+  let state = createDeletionFormState({ plan, language: 'ja' });
+  state = setTeamDecision(state, 'admin-team', 'transfer', 'active-user');
+  state = setTeamDecision(state, 'solo-team', 'dissolve');
+  assert.equal(state.choicesComplete, true);
+  state = clearTeamDecision(state, 'admin-team');
+  assert.equal(state.teamDecisions.some((entry) => entry.teamId === 'admin-team'), false);
+  assert.equal(state.choicesComplete, false);
+
+  assert.match(html, /if \(!select\.value\) \{\s*accountDeletionState = uiModule\.clearTeamDecision\(accountDeletionState, team\.teamId\)/);
+  assert.match(html, /dissolveCheckbox\.checked = false/);
+  assert.match(html, /select\.value = ''/);
+});
+
+test('dissolve confirmation names the team and active members affected', () => {
+  assert.match(html, /tt\('account_delete_dissolve_impact', \{\s*team: team\.teamName \|\| '',\s*count: \(team\.eligibleSuccessors \|\| \[\]\)\.length/);
+  assert.match(i18n, /account_delete_dissolve_impact:\s*'「\{team\}」.*影響するほかのメンバー：\{count\}人/);
+  assert.match(i18n, /account_delete_dissolve_impact:\s*'.*\{team\}.*other active team members affected: \{count\}/);
 });
 
 test('typed confirmation is exact and local data defaults to keep', () => {
