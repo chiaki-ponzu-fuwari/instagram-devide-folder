@@ -103,6 +103,7 @@ test('account deletion jobs are inaccessible to every client including the owner
   try {
     await env.withSecurityRulesDisabled(async (context) => {
       await context.firestore().doc('accountDeletionJobs/u1_request').set({ uid: 'u1' });
+      await context.firestore().doc('accountDeletionLocks/u1').set({ uid: 'u1' });
     });
     const owner = env.authenticatedContext('u1').firestore();
     const other = env.authenticatedContext('u2').firestore();
@@ -110,6 +111,26 @@ test('account deletion jobs are inaccessible to every client including the owner
     for (const client of [owner, other, anonymous]) {
       await assertFails(client.doc('accountDeletionJobs/u1_request').get());
       await assertFails(client.doc('accountDeletionJobs/u1_request').set({ uid: 'u1' }));
+      await assertFails(client.doc('accountDeletionLocks/u1').get());
+      await assertFails(client.doc('accountDeletionLocks/u1').set({ uid: 'u1' }));
+    }
+  } finally { await env.cleanup(); }
+});
+
+test('owners cannot physically delete their user root or any known personal collection document', async () => {
+  const env = await createEnv();
+  try {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('users/u1').set({ uid: 'u1' });
+      for (const name of ['folders', 'accounts', 'projects', 'templates', 'settings']) {
+        await db.doc(`users/u1/${name}/one`).set({ revision: 1, updatedAt: 1, updatedBy: 'u1' });
+      }
+    });
+    const owner = env.authenticatedContext('u1').firestore();
+    await assertFails(owner.doc('users/u1').delete());
+    for (const name of ['folders', 'accounts', 'projects', 'templates', 'settings']) {
+      await assertFails(owner.doc(`users/u1/${name}/one`).delete());
     }
   } finally { await env.cleanup(); }
 });

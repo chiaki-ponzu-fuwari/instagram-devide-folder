@@ -1,6 +1,7 @@
 import { anonymizeActivityRecord } from './account-deletion-core.mjs';
 
 const DELETED_UID = 'deleted-user';
+const DELETED_LABEL = '削除済みユーザー';
 const PAGE_SIZE = 200;
 const TEAM_COLLECTIONS = [
   'members', 'memberEmails', 'memberNotes', 'payouts',
@@ -14,6 +15,15 @@ const SHARED_RECORD_COLLECTIONS = [
 ];
 const PERSONAL_COLLECTIONS = ['folders', 'accounts', 'projects', 'templates', 'settings'];
 const IDENTITY_METADATA_FIELDS = ['createdBy', 'updatedBy', 'deletedBy', 'ownerUid', 'approvedBy'];
+const UID_FIELDS = new Set([
+  'uid', 'actorUid', 'targetUid', 'memberUid', 'createdBy', 'updatedBy',
+  'deletedBy', 'ownerUid', 'approvedBy', 'invitedUid',
+]);
+const UID_ARRAY_FIELDS = new Set([
+  'assignedUids', 'assigneeUids', 'memberUids', 'assignOwnerUids',
+]);
+const PERSON_NAME_FIELDS = new Set(['actorName', 'targetName', 'memberName', 'displayName']);
+const DROP = Symbol('drop');
 
 export class AccountDeletionStoreError extends Error {
   constructor(code, details = undefined) {
@@ -30,12 +40,8 @@ function fail(code, details) {
 
 function requireId(value, label) {
   if (
-    typeof value !== 'string'
-    || value.length < 1
-    || value.length > 128
-    || value === '.'
-    || value === '..'
-    || /[\/\u0000-\u001f\u007f]/u.test(value)
+    typeof value !== 'string' || value.length < 1 || value.length > 128
+    || value === '.' || value === '..' || /[\/\u0000-\u001f\u007f]/u.test(value)
   ) fail(`invalid-${label}`);
   return value;
 }
@@ -44,6 +50,11 @@ function jobRef(db, uid, requestId) {
   requireId(uid, 'uid');
   requireId(requestId, 'request-id');
   return db.doc(`accountDeletionJobs/${uid}_${requestId}`);
+}
+
+function lockRef(db, uid) {
+  requireId(uid, 'uid');
+  return db.doc(`accountDeletionLocks/${uid}`);
 }
 
 function checkpointKey(teamId) {
@@ -56,7 +67,15 @@ function checkpointFor(job, teamId) {
 
 function assertJob(job, uid, requestId, planHash) {
   if (!job || job.uid !== uid || job.requestId !== requestId) fail('deletion-job-mismatch');
-  if (planHash !== undefined && job.planHash !== planHash) fail('plan-hash-mismatch');
+  if (job.planHash !== planHash) fail('plan-hash-mismatch');
+}
+
+function contextIds(context) {
+  if (!context || typeof context !== 'object') fail('deletion-job-context-required');
+  return {
+    requestId: requireId(context.requestId, 'request-id'),
+    planHash: requireId(context.planHash, 'plan-hash'),
+  };
 }
 
 function withoutUid(values, uid) {
@@ -78,129 +97,13 @@ function teamPatchWithoutUid(team, uid) {
     settings: {
       ...settings,
       assignOwnerUids: withoutUid(settings.assignOwnerUids, uid),
+      assignedUids: withoutUid(settings.assignedUids, uid),
+      assigneeUids: withoutUid(settings.assigneeUids, uid),
     },
     updatedAt: Date.now(),
   };
   if (team?.updatedBy === uid) patch.updatedBy = DELETED_UID;
   return patch;
-}
-
-async function pagedCollection(collectionRef, visit) {
-  let lastId = null;
-  while (true) {
-    let query = collectionRef.orderBy('__name__').limit(PAGE_SIZE);
-    if (lastId !== null) query = query.startAfter(lastId);
-    const snapshot = await query.get();
-    if (snapshot.empty) return;
-    await visit(snapshot.docs);
-    lastId = snapshot.docs.at(-1).id;
-    if (snapshot.size < PAGE_SIZE) return;
-  }
-}
-
-async function commitMutations(db, documents, mutate) {
-  for (let start = 0; start < documents.length; start += 400) {
-    const batch = db.batch();
-    for (const snapshot of documents.slice(start, start + 400)) mutate(batch, snapshot);
-    await batch.commit();
-  }
-}
-
-async function readCandidateTeam(db, teamId, uid) {
-  const teamSnapshot = await db.doc(`teams/${teamId}`).get();
-  if (!teamSnapshot.exists) fail('orphan-membership', { teamId });
-  const membersSnapshot = await db.collection(`teams/${teamId}/members`).get();
-  const own = membersSnapshot.docs.find((row) => row.id === uid);
-  const team = { id: teamId, ...teamSnapshot.data() };
-  assertMembershipConsistency(team, membersSnapshot.docs);
-  const listed = team.memberUids.includes(uid);
-  const creator = team.createdBy === uid;
-  if (!own || own.data().uid !== uid || own.data().status !== 'active') {
-    fail('inconsistent-membership', { teamId });
-  }
-  if (!['admin', 'member'].includes(own.data().role)) fail('inconsistent-membership', { teamId });
-  if (!listed) fail('inconsistent-membership', { teamId });
-  if (creator && own.data().role !== 'admin') fail('inconsistent-membership', { teamId });
-  return {
-    team,
-    memberships: membersSnapshot.docs.map((row) => ({
-      teamId,
-      uid: row.data().uid || row.id,
-      ...row.data(),
-    })),
-  };
-}
-
-function assertMembershipConsistency(team, memberDocuments) {
-  if (!Array.isArray(team?.memberUids) || new Set(team.memberUids).size !== team.memberUids.length) {
-    fail('inconsistent-membership');
-  }
-  const activeUids = [];
-  for (const snapshot of memberDocuments) {
-    const data = snapshot.data();
-    if (
-      data.uid !== snapshot.id
-      || !['admin', 'member'].includes(data.role)
-      || !['active', 'pending', 'blocked'].includes(data.status)
-    ) fail('inconsistent-membership');
-    if (data.status === 'active') activeUids.push(snapshot.id);
-  }
-  const listed = [...team.memberUids].sort();
-  if (listed.join('\n') !== activeUids.sort().join('\n')) fail('inconsistent-membership');
-  const creator = memberDocuments.find((snapshot) => snapshot.id === team.createdBy);
-  if (!creator || creator.data().status !== 'active' || creator.data().role !== 'admin') {
-    fail('inconsistent-admin-state');
-  }
-}
-
-export async function loadAccountDeletionSnapshot(db, uid) {
-  requireId(uid, 'uid');
-  const [listedTeams, createdTeams, ownMemberships] = await Promise.all([
-    db.collection('teams').where('memberUids', 'array-contains', uid).get(),
-    db.collection('teams').where('createdBy', '==', uid).get(),
-    db.collectionGroup('members').where('uid', '==', uid).get(),
-  ]);
-  const teamIds = new Set([
-    ...listedTeams.docs.map((row) => row.id),
-    ...createdTeams.docs.map((row) => row.id),
-  ]);
-  for (const membership of ownMemberships.docs) {
-    const teamId = membership.ref.parent.parent?.id;
-    if (!teamId) fail('orphan-membership');
-    teamIds.add(teamId);
-  }
-
-  const teams = [];
-  const memberships = [];
-  for (const teamId of [...teamIds].sort()) {
-    const candidate = await readCandidateTeam(db, teamId, uid);
-    teams.push(candidate.team);
-    memberships.push(...candidate.memberships);
-  }
-  return { uid, teams, memberships };
-}
-
-export async function beginAccountDeletionJob(db, uid, requestId, planHash) {
-  requireId(planHash, 'plan-hash');
-  const ref = jobRef(db, uid, requestId);
-  await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (snapshot.exists) {
-      assertJob(snapshot.data(), uid, requestId, planHash);
-      return;
-    }
-    transaction.create(ref, {
-      uid,
-      requestId,
-      planHash,
-      phase: 'started',
-      teamCheckpoints: {},
-      verificationPassed: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-  });
-  return ref;
 }
 
 function validateDecision(decision) {
@@ -213,125 +116,360 @@ function validateDecision(decision) {
   if (decision.action !== 'transfer' && Object.hasOwn(decision, 'transferToUid')) fail('invalid-team-decision');
 }
 
+function normalizedDecisions(decisions) {
+  if (!Array.isArray(decisions)) fail('invalid-team-decisions');
+  const seen = new Set();
+  return decisions.map((decision) => {
+    validateDecision(decision);
+    if (seen.has(decision.teamId)) fail('duplicate-team-decision');
+    seen.add(decision.teamId);
+    return {
+      teamId: decision.teamId,
+      action: decision.action,
+      transferToUid: decision.transferToUid || null,
+    };
+  }).sort((left, right) => left.teamId.localeCompare(right.teamId));
+}
+
+function decisionsEqual(left, right) {
+  return JSON.stringify(left || []) === JSON.stringify(right || []);
+}
+
+async function getBoundJob(db, uid, context) {
+  const { requestId, planHash } = contextIds(context);
+  const [jobSnapshot, lockSnapshot] = await Promise.all([
+    jobRef(db, uid, requestId).get(), lockRef(db, uid).get(),
+  ]);
+  if (!jobSnapshot.exists) fail('deletion-job-not-found');
+  assertJob(jobSnapshot.data(), uid, requestId, planHash);
+  if (!lockSnapshot.exists) fail('deletion-lock-not-found');
+  assertJob(lockSnapshot.data(), uid, requestId, planHash);
+  return { ref: jobSnapshot.ref, data: jobSnapshot.data(), requestId, planHash };
+}
+
+async function pagedCollection(collectionRef, visit) {
+  let lastDocument = null;
+  while (true) {
+    let query = collectionRef.orderBy('__name__').limit(PAGE_SIZE);
+    if (lastDocument !== null) query = query.startAfter(lastDocument);
+    const snapshot = await query.get();
+    if (snapshot.empty) return;
+    await visit(snapshot.docs);
+    lastDocument = snapshot.docs.at(-1);
+    if (snapshot.size < PAGE_SIZE) return;
+  }
+}
+
+async function commitMutations(db, documents, mutate) {
+  for (let start = 0; start < documents.length; start += 400) {
+    const batch = db.batch();
+    for (const snapshot of documents.slice(start, start + 400)) mutate(batch, snapshot);
+    await batch.commit();
+  }
+}
+
+function assertMembershipConsistency(team, memberDocuments) {
+  if (!Array.isArray(team?.memberUids) || new Set(team.memberUids).size !== team.memberUids.length) {
+    fail('inconsistent-membership');
+  }
+  const activeUids = [];
+  for (const snapshot of memberDocuments) {
+    const data = snapshot.data();
+    if (
+      data.uid !== snapshot.id || !['admin', 'member'].includes(data.role)
+      || !['active', 'pending', 'blocked'].includes(data.status)
+    ) fail('inconsistent-membership');
+    if (data.status === 'active') activeUids.push(snapshot.id);
+  }
+  if ([...team.memberUids].sort().join('\n') !== activeUids.sort().join('\n')) {
+    fail('inconsistent-membership');
+  }
+  const creator = memberDocuments.find((snapshot) => snapshot.id === team.createdBy);
+  if (!creator || creator.data().status !== 'active' || creator.data().role !== 'admin') {
+    fail('inconsistent-admin-state');
+  }
+}
+
+async function readCandidateTeam(db, teamId, uid) {
+  const teamSnapshot = await db.doc(`teams/${teamId}`).get();
+  if (!teamSnapshot.exists) fail('orphan-membership', { teamId });
+  const membersSnapshot = await db.collection(`teams/${teamId}/members`).get();
+  const own = membersSnapshot.docs.find((row) => row.id === uid);
+  const team = { id: teamId, ...teamSnapshot.data() };
+  assertMembershipConsistency(team, membersSnapshot.docs);
+  if (
+    !own || own.data().uid !== uid || own.data().status !== 'active'
+    || !['admin', 'member'].includes(own.data().role) || !team.memberUids.includes(uid)
+    || (team.createdBy === uid && own.data().role !== 'admin')
+  ) fail('inconsistent-membership', { teamId });
+  return {
+    team,
+    memberships: membersSnapshot.docs.map((row) => ({ teamId, uid: row.data().uid || row.id, ...row.data() })),
+  };
+}
+
+export async function loadAccountDeletionSnapshot(db, uid) {
+  requireId(uid, 'uid');
+  const [listedTeams, createdTeams, ownMemberships] = await Promise.all([
+    db.collection('teams').where('memberUids', 'array-contains', uid).get(),
+    db.collection('teams').where('createdBy', '==', uid).get(),
+    db.collectionGroup('members').where('uid', '==', uid).get(),
+  ]);
+  const teamIds = new Set([
+    ...listedTeams.docs.map((row) => row.id), ...createdTeams.docs.map((row) => row.id),
+  ]);
+  for (const membership of ownMemberships.docs) {
+    const teamId = membership.ref.parent.parent?.id;
+    if (!teamId) fail('orphan-membership');
+    teamIds.add(teamId);
+  }
+  const teams = [];
+  const memberships = [];
+  for (const teamId of [...teamIds].sort()) {
+    const candidate = await readCandidateTeam(db, teamId, uid);
+    teams.push(candidate.team);
+    memberships.push(...candidate.memberships);
+  }
+  return { uid, teams, memberships };
+}
+
+export async function beginAccountDeletionJob(db, uid, requestId, planHash, decisions = []) {
+  requireId(planHash, 'plan-hash');
+  const expectedTeams = normalizedDecisions(decisions);
+  const ref = jobRef(db, uid, requestId);
+  const lock = lockRef(db, uid);
+  await db.runTransaction(async (transaction) => {
+    const [lockSnapshot, jobSnapshot] = await Promise.all([
+      transaction.get(lock), transaction.get(ref),
+    ]);
+    if (lockSnapshot.exists) {
+      const lockData = lockSnapshot.data();
+      if (lockData.requestId !== requestId) fail('account-deletion-in-progress');
+      if (lockData.planHash !== planHash) fail('plan-hash-mismatch');
+    }
+    if (jobSnapshot.exists) {
+      const data = jobSnapshot.data();
+      assertJob(data, uid, requestId, planHash);
+      if (!decisionsEqual(data.expectedTeams, expectedTeams)) fail('team-plan-mismatch');
+      if (!lockSnapshot.exists) transaction.create(lock, { uid, requestId, planHash, phase: data.phase });
+      return;
+    }
+    const teamCheckpoints = {};
+    for (const decision of expectedTeams) {
+      teamCheckpoints[checkpointKey(decision.teamId)] = {
+        ...decision, decisionApplied: false, identityRemoved: false, status: 'pending',
+      };
+    }
+    const now = Date.now();
+    transaction.create(ref, {
+      uid, requestId, planHash, phase: 'started', expectedTeams, teamCheckpoints,
+      personalDataDeleted: false, verificationPassed: false, createdAt: now, updatedAt: now,
+    });
+    if (!lockSnapshot.exists) transaction.create(lock, { uid, requestId, planHash, phase: 'started', updatedAt: now });
+  });
+  return ref;
+}
+
+function identifiersFrom(memberData, emailData, context) {
+  const values = [
+    memberData?.displayName, memberData?.name, memberData?.email,
+    emailData?.email, context?.verifiedEmail,
+  ].filter((value) => typeof value === 'string' && value.trim());
+  return [...new Set(values)];
+}
+
 export async function applyTeamDecision(db, uid, decision, context = {}) {
   requireId(uid, 'uid');
   validateDecision(decision);
+  const { requestId, planHash } = contextIds(context);
   const { teamId, action } = decision;
-  const { requestId, planHash } = context;
   const job = jobRef(db, uid, requestId);
+  const lock = lockRef(db, uid);
   const team = db.doc(`teams/${teamId}`);
   const ownMember = db.doc(`teams/${teamId}/members/${uid}`);
+  const ownEmail = db.doc(`teams/${teamId}/memberEmails/${uid}`);
   const membersQuery = db.collection(`teams/${teamId}/members`);
 
-  let shouldRecursiveDelete = false;
-  await db.runTransaction(async (transaction) => {
-    const jobSnapshot = await transaction.get(job);
-    if (!jobSnapshot.exists) fail('deletion-job-not-found');
+  const result = await db.runTransaction(async (transaction) => {
+    const [jobSnapshot, lockSnapshot] = await Promise.all([
+      transaction.get(job), transaction.get(lock),
+    ]);
+    if (!jobSnapshot.exists || !lockSnapshot.exists) fail('deletion-job-not-found');
     const jobData = jobSnapshot.data();
     assertJob(jobData, uid, requestId, planHash);
+    assertJob(lockSnapshot.data(), uid, requestId, planHash);
     const previous = checkpointFor(jobData, teamId);
-    if (previous?.decisionApplied) {
-      if (previous.action !== action || previous.transferToUid !== (decision.transferToUid || null)) {
-        fail('team-decision-mismatch', { teamId });
-      }
-      return;
+    if (!previous) fail('unexpected-team-decision', { teamId });
+    if (previous.action !== action || previous.transferToUid !== (decision.transferToUid || null)) {
+      fail('team-decision-mismatch', { teamId });
     }
+    if (previous.status === 'complete' || previous.decisionApplied) return { done: true };
+    if (action === 'dissolve' && previous.status === 'dissolving') return { dissolve: true };
 
-    const teamSnapshot = await transaction.get(team);
-    if (!teamSnapshot.exists) {
-      if (action === 'dissolve' && previous?.status === 'dissolving') {
-        const checkpoints = { ...(jobData.teamCheckpoints || {}) };
-        checkpoints[checkpointKey(teamId)] = { ...previous, decisionApplied: true, status: 'complete' };
-        transaction.update(job, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
-        return;
-      }
-      fail('team-not-found', { teamId });
-    }
-    const ownSnapshot = await transaction.get(ownMember);
+    const [teamSnapshot, ownSnapshot, emailSnapshot, members] = await Promise.all([
+      transaction.get(team), transaction.get(ownMember), transaction.get(ownEmail), transaction.get(membersQuery),
+    ]);
+    if (!teamSnapshot.exists) fail('team-not-found', { teamId });
     if (!ownSnapshot.exists) fail('membership-not-found', { teamId });
     const teamData = teamSnapshot.data();
     const ownData = ownSnapshot.data();
-    const members = await transaction.get(membersQuery);
     assertMembershipConsistency(teamData, members.docs);
-    if (ownData.uid !== uid || ownData.status !== 'active' || !['admin', 'member'].includes(ownData.role)) {
-      fail('inconsistent-membership', { teamId });
-    }
-    if (!Array.isArray(teamData.memberUids) || !teamData.memberUids.includes(uid)) {
-      fail('inconsistent-membership', { teamId });
-    }
+    if (
+      ownData.uid !== uid || ownData.status !== 'active' || !['admin', 'member'].includes(ownData.role)
+      || !teamData.memberUids.includes(uid)
+    ) fail('inconsistent-membership', { teamId });
     const effectiveAdmin = ownData.role === 'admin' || teamData.createdBy === uid;
     if (teamData.createdBy === uid && ownData.role !== 'admin') fail('inconsistent-admin-state', { teamId });
-
+    const identifiers = identifiersFrom(ownData, emailSnapshot.exists ? emailSnapshot.data() : null, context);
     const checkpoints = { ...(jobData.teamCheckpoints || {}) };
-    const checkpoint = {
-      teamId,
-      action,
-      transferToUid: decision.transferToUid || null,
-      decisionApplied: action !== 'dissolve',
-      status: action === 'dissolve' ? 'dissolving' : 'decision-applied',
-    };
+    const next = { ...previous, knownIdentifiers: identifiers };
 
     if (action === 'leave') {
       if (effectiveAdmin || ownData.role !== 'member') fail('admin-cannot-leave', { teamId });
       transaction.update(team, teamPatchWithoutUid(teamData, uid));
       transaction.delete(ownMember);
+      next.decisionApplied = true;
+      next.status = 'decision-applied';
     } else if (action === 'transfer') {
       if (!effectiveAdmin) fail('admin-required', { teamId });
       if (decision.transferToUid === uid) fail('invalid-successor', { teamId });
       const successorRef = db.doc(`teams/${teamId}/members/${decision.transferToUid}`);
       const successorSnapshot = await transaction.get(successorRef);
       if (
-        !successorSnapshot.exists
-        || successorSnapshot.data().uid !== decision.transferToUid
+        !successorSnapshot.exists || successorSnapshot.data().uid !== decision.transferToUid
         || successorSnapshot.data().status !== 'active'
         || !['admin', 'member'].includes(successorSnapshot.data().role)
         || !teamData.memberUids.includes(decision.transferToUid)
       ) fail('invalid-successor', { teamId });
-      transaction.update(successorRef, {
-        role: 'admin',
-        updatedAt: Date.now(),
-        updatedBy: decision.transferToUid,
-      });
+      transaction.update(successorRef, { role: 'admin', updatedAt: Date.now(), updatedBy: decision.transferToUid });
       transaction.update(team, {
         ...teamPatchWithoutUid(teamData, uid),
         createdBy: teamData.createdBy === uid ? decision.transferToUid : teamData.createdBy,
       });
       transaction.delete(ownMember);
+      next.decisionApplied = true;
+      next.status = 'decision-applied';
     } else {
       if (!effectiveAdmin) fail('admin-required', { teamId });
       if (teamData.createdBy !== uid) fail('not-sole-effective-admin', { teamId });
-      const otherActive = members.docs.some((row) => row.id !== uid && row.data().status === 'active');
-      if (otherActive) fail('active-members-remain', { teamId });
-      shouldRecursiveDelete = true;
+      if (members.docs.some((row) => row.id !== uid && row.data().status === 'active')) {
+        fail('active-members-remain', { teamId });
+      }
+      next.status = 'dissolving';
     }
-    checkpoints[checkpointKey(teamId)] = checkpoint;
+    checkpoints[checkpointKey(teamId)] = next;
     transaction.update(job, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
+    return action === 'dissolve' ? { dissolve: true } : { done: true };
   });
 
-  if (shouldRecursiveDelete) {
-    await db.recursiveDelete(team);
-    await db.runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(job);
-      if (!snapshot.exists) fail('deletion-job-not-found');
-      const data = snapshot.data();
-      assertJob(data, uid, requestId, planHash);
-      const checkpoints = { ...(data.teamCheckpoints || {}) };
-      checkpoints[checkpointKey(teamId)] = {
-        ...(checkpoints[checkpointKey(teamId)] || {}),
-        decisionApplied: true,
-        status: 'complete',
-      };
-      transaction.update(job, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
-    });
-  }
+  if (!result?.dissolve) return;
+  const recursiveDelete = context.recursiveDelete || ((reference) => db.recursiveDelete(reference));
+  await recursiveDelete(team);
+  await db.runTransaction(async (transaction) => {
+    const [snapshot, lockSnapshot] = await Promise.all([
+      transaction.get(job), transaction.get(lock),
+    ]);
+    if (!snapshot.exists || !lockSnapshot.exists) fail('deletion-job-not-found');
+    const data = snapshot.data();
+    assertJob(data, uid, requestId, planHash);
+    assertJob(lockSnapshot.data(), uid, requestId, planHash);
+    const current = checkpointFor(data, teamId);
+    if (!current || current.action !== 'dissolve') fail('unexpected-team-decision', { teamId });
+    const checkpoints = { ...(data.teamCheckpoints || {}) };
+    checkpoints[checkpointKey(teamId)] = {
+      ...current, decisionApplied: true, identityRemoved: true, status: 'complete',
+    };
+    transaction.update(job, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
+  });
 }
 
-export async function removeUserIdentityFromTeam(db, uid, teamId) {
+function replaceKnown(value, uid, identifiers) {
+  let next = value.split(uid).join(DELETED_LABEL);
+  for (const identifier of identifiers) next = next.split(identifier).join(DELETED_LABEL);
+  return next;
+}
+
+function containsIdentity(value, uid, identifiers) {
+  if (typeof value === 'string') {
+    if (value === DELETED_UID || value === DELETED_LABEL) return false;
+    return value.includes(uid) || identifiers.some((item) => value.includes(item));
+  }
+  if (Array.isArray(value)) return value.some((item) => containsIdentity(item, uid, identifiers));
+  if (value && typeof value === 'object') return Object.values(value).some((item) => containsIdentity(item, uid, identifiers));
+  return false;
+}
+
+function sanitizeActivityValue(value, uid, identifiers, field = '', personContext = false) {
+  if (Array.isArray(value)) {
+    if (UID_ARRAY_FIELDS.has(field)) return value.filter((item) => item !== uid);
+    return value.map((item) => sanitizeActivityValue(item, uid, identifiers, '', personContext)).filter((item) => item !== DROP);
+  }
+  if (value && typeof value === 'object') {
+    const localPerson = personContext || [...UID_FIELDS].some((key) => value[key] === uid);
+    const output = {};
+    for (const [key, item] of Object.entries(value)) {
+      let relatedPerson = localPerson;
+      if (key === 'actorName') relatedPerson = value.actorUid === uid;
+      if (key === 'targetName') relatedPerson = value.targetUid === uid;
+      if (key === 'memberName') relatedPerson = value.memberUid === uid || value.uid === uid;
+      const sanitized = sanitizeActivityValue(item, uid, identifiers, key, relatedPerson);
+      if (sanitized !== DROP) output[key] = sanitized;
+    }
+    return output;
+  }
+  if (typeof value !== 'string') return value;
+  if (UID_FIELDS.has(field) && value === uid) return DELETED_UID;
+  if (PERSON_NAME_FIELDS.has(field) && (personContext || identifiers.includes(value))) return DELETED_LABEL;
+  if (/email/i.test(field) && identifiers.includes(value)) return DROP;
+  if (field === 'projectName') return value;
+  if (containsIdentity(value, uid, identifiers)) {
+    if (['text', 'coreText', 'message', 'description', 'targetName'].includes(field)) {
+      return replaceKnown(value, uid, identifiers);
+    }
+    return DROP;
+  }
+  return value;
+}
+
+function sanitizeActivity(data, uid, identifiers) {
+  const actorSanitized = data?.actorUid === uid ? anonymizeActivityRecord(data, uid) : data;
+  return sanitizeActivityValue(actorSanitized, uid, identifiers);
+}
+
+async function updateBoundCheckpoint(db, uid, context, teamId, update) {
+  const { requestId, planHash } = contextIds(context);
+  const ref = jobRef(db, uid, requestId);
+  const lock = lockRef(db, uid);
+  await db.runTransaction(async (transaction) => {
+    const [snapshot, lockSnapshot] = await Promise.all([transaction.get(ref), transaction.get(lock)]);
+    if (!snapshot.exists || !lockSnapshot.exists) fail('deletion-job-not-found');
+    const data = snapshot.data();
+    assertJob(data, uid, requestId, planHash);
+    assertJob(lockSnapshot.data(), uid, requestId, planHash);
+    const current = checkpointFor(data, teamId);
+    if (!current) fail('unexpected-team-decision', { teamId });
+    const checkpoints = { ...(data.teamCheckpoints || {}) };
+    checkpoints[checkpointKey(teamId)] = { ...current, ...update };
+    transaction.update(ref, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
+  });
+}
+
+export async function removeUserIdentityFromTeam(db, uid, teamId, context = {}) {
   requireId(uid, 'uid');
   requireId(teamId, 'team-id');
+  const bound = await getBoundJob(db, uid, context);
+  const checkpoint = checkpointFor(bound.data, teamId);
+  if (!checkpoint) fail('unexpected-team-decision', { teamId });
+  if (checkpoint.action === 'dissolve') {
+    if (checkpoint.status !== 'complete') fail('team-decision-incomplete', { teamId });
+    return;
+  }
+  if (!checkpoint.decisionApplied) fail('team-decision-incomplete', { teamId });
+  if (checkpoint.identityRemoved) return;
+  const identifiers = [...new Set([...(checkpoint.knownIdentifiers || []), context.verifiedEmail].filter(Boolean))];
   const team = db.doc(`teams/${teamId}`);
   const teamSnapshot = await team.get();
-  if (!teamSnapshot.exists) return;
+  if (!teamSnapshot.exists) fail('team-not-found', { teamId });
   if (teamSnapshot.data().createdBy === uid) fail('admin-transfer-required', { teamId });
   await team.update(teamPatchWithoutUid(teamSnapshot.data(), uid));
 
@@ -345,17 +483,24 @@ export async function removeUserIdentityFromTeam(db, uid, teamId) {
     await pagedCollection(db.collection(`teams/${teamId}/${collectionName}`), async (documents) => {
       await commitMutations(db, documents, (batch, snapshot) => {
         const data = sanitizedMetadata(snapshot.data(), uid);
-        if (collectionName === 'projects') data.assigneeUids = withoutUid(data.assigneeUids, uid);
+        if (collectionName === 'projects') {
+          data.assignedUids = withoutUid(data.assignedUids, uid);
+          data.assigneeUids = withoutUid(data.assigneeUids, uid);
+        }
+        if (collectionName === 'settings') {
+          data.assignOwnerUids = withoutUid(data.assignOwnerUids, uid);
+          data.assignedUids = withoutUid(data.assignedUids, uid);
+          data.assigneeUids = withoutUid(data.assigneeUids, uid);
+        }
         batch.set(snapshot.ref, data);
       });
     });
   }
 
   await pagedCollection(db.collection(`teams/${teamId}/activity`), async (documents) => {
-    await commitMutations(db, documents, (batch, snapshot) => {
-      const data = anonymizeActivityRecord(snapshot.data(), uid);
-      if (data !== snapshot.data()) batch.set(snapshot.ref, data);
-    });
+    await commitMutations(db, documents, (batch, snapshot) => batch.set(
+      snapshot.ref, sanitizeActivity(snapshot.data(), uid, identifiers),
+    ));
   });
 
   for (const collectionName of [
@@ -366,144 +511,178 @@ export async function removeUserIdentityFromTeam(db, uid, teamId) {
       await commitMutations(db, documents, (batch, snapshot) => {
         const data = snapshot.data();
         const belongsToUser = (
-          data.uid === uid
-          || data.memberUid === uid
-          || data.actorUid === uid
-          || data.invitedUid === uid
-          || data.createdBy === uid
-          || snapshot.id === uid
+          data.uid === uid || data.memberUid === uid || data.actorUid === uid
+          || data.invitedUid === uid || data.createdBy === uid || snapshot.id === uid
+          || (context.verifiedEmail && data.email === context.verifiedEmail)
         );
-        if (belongsToUser) {
-          batch.delete(snapshot.ref);
-        } else {
-          batch.set(snapshot.ref, sanitizedMetadata(data, uid));
-        }
+        if (belongsToUser) batch.delete(snapshot.ref);
+        else batch.set(snapshot.ref, sanitizedMetadata(data, uid));
       });
     });
   }
 
   const inviteCodes = await db.collection('teamInviteCodes').where('createdBy', '==', uid).get();
   const matchingCodes = inviteCodes.docs.filter((snapshot) => snapshot.data().teamId === teamId);
-  if (matchingCodes.length) {
-    await commitMutations(db, matchingCodes, (batch, snapshot) => batch.delete(snapshot.ref));
-  }
-
-  const jobs = await db.collection('accountDeletionJobs').where('uid', '==', uid).get();
-  const applicableJobs = jobs.docs.filter((snapshot) => checkpointFor(snapshot.data(), teamId));
-  if (applicableJobs.length) {
-    await commitMutations(db, applicableJobs, (batch, snapshot) => {
-      const data = snapshot.data();
-      const checkpoints = { ...(data.teamCheckpoints || {}) };
-      checkpoints[checkpointKey(teamId)] = {
-        ...checkpoints[checkpointKey(teamId)],
-        identityRemoved: true,
-        status: 'identity-removed',
-      };
-      batch.update(snapshot.ref, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
-    });
-  }
+  if (matchingCodes.length) await commitMutations(db, matchingCodes, (batch, snapshot) => batch.delete(snapshot.ref));
+  await updateBoundCheckpoint(db, uid, context, teamId, { identityRemoved: true, status: 'complete' });
 }
 
-export async function deletePersonalCloudData(db, uid) {
-  requireId(uid, 'uid');
-  const userRef = db.doc(`users/${uid}`);
-  await db.recursiveDelete(userRef);
-  const jobs = await db.collection('accountDeletionJobs').where('uid', '==', uid).get();
-  if (!jobs.empty) {
-    await commitMutations(db, jobs.docs, (batch, snapshot) => batch.update(snapshot.ref, {
-      personalDataDeleted: true,
-      updatedAt: Date.now(),
-    }));
+async function identityQueryDocuments(db, uid, verifiedEmail) {
+  const queries = [
+    db.collectionGroup('joinRequests').where('uid', '==', uid),
+    db.collectionGroup('joinRequests').where('createdBy', '==', uid),
+    db.collectionGroup('invites').where('uid', '==', uid),
+    db.collectionGroup('invites').where('invitedUid', '==', uid),
+    db.collectionGroup('invites').where('createdBy', '==', uid),
+    db.collection('teamInviteCodes').where('uid', '==', uid),
+    db.collection('teamInviteCodes').where('invitedUid', '==', uid),
+    db.collection('teamInviteCodes').where('createdBy', '==', uid),
+  ];
+  if (verifiedEmail) {
+    queries.push(
+      db.collectionGroup('joinRequests').where('email', '==', verifiedEmail),
+      db.collectionGroup('invites').where('email', '==', verifiedEmail),
+      db.collection('teamInviteCodes').where('email', '==', verifiedEmail),
+    );
   }
+  const snapshots = await Promise.all(queries.map((query) => query.get()));
+  const documents = new Map();
+  for (const snapshot of snapshots) {
+    for (const document of snapshot.docs) documents.set(document.ref.path, document);
+  }
+  return [...documents.values()];
+}
+
+async function deletePendingIdentityReferences(db, uid, verifiedEmail) {
+  const documents = await identityQueryDocuments(db, uid, verifiedEmail);
+  const codeRefs = new Map();
+  for (const document of documents) {
+    if (document.ref.parent.id !== 'invites') continue;
+    const code = document.data().code;
+    if (typeof code === 'string' && code) {
+      const ref = db.doc(`teamInviteCodes/${code}`);
+      codeRefs.set(ref.path, { ref });
+    }
+    const linked = await db.collection('teamInviteCodes').where('inviteId', '==', document.id).get();
+    for (const candidate of linked.docs) {
+      if (candidate.data().teamId === document.ref.parent.parent?.id) codeRefs.set(candidate.ref.path, candidate);
+    }
+  }
+  const all = new Map(documents.map((document) => [document.ref.path, document]));
+  for (const document of codeRefs.values()) all.set(document.ref.path, document);
+  if (all.size) await commitMutations(db, [...all.values()], (batch, document) => batch.delete(document.ref));
+}
+
+export async function deletePersonalCloudData(db, uid, context = {}) {
+  requireId(uid, 'uid');
+  const bound = await getBoundJob(db, uid, context);
+  if (bound.data.personalDataDeleted) return;
+  await deletePendingIdentityReferences(db, uid, context.verifiedEmail);
+  const recursiveDelete = context.recursiveDelete || ((reference) => db.recursiveDelete(reference));
+  await recursiveDelete(db.doc(`users/${uid}`));
+  const current = await getBoundJob(db, uid, context);
+  await current.ref.update({ personalDataDeleted: true, updatedAt: Date.now() });
 }
 
 async function queryHasDocument(query) {
   return !(await query.limit(1).get()).empty;
 }
 
-export async function verifyNoProtectedReferences(db, uid) {
+function jobIdentifiers(job, context) {
+  const values = [context.verifiedEmail];
+  for (const checkpoint of Object.values(job.teamCheckpoints || {})) {
+    values.push(...(checkpoint.knownIdentifiers || []));
+  }
+  return [...new Set(values.filter(Boolean))];
+}
+
+export async function verifyNoProtectedReferences(db, uid, context = {}) {
   requireId(uid, 'uid');
+  const bound = await getBoundJob(db, uid, context);
+  if (!context.verifiedEmail) fail('verified-email-required');
   const checks = [
     db.collection('teams').where('memberUids', 'array-contains', uid),
     db.collection('teams').where('createdBy', '==', uid),
     db.collection('teams').where('settings.assignOwnerUids', 'array-contains', uid),
+    db.collection('teams').where('settings.assignedUids', 'array-contains', uid),
     db.collectionGroup('members').where('uid', '==', uid),
     db.collectionGroup('memberEmails').where('uid', '==', uid),
     db.collectionGroup('memberNotes').where('uid', '==', uid),
     db.collectionGroup('payouts').where('uid', '==', uid),
     db.collectionGroup('projectRewardShares').where('memberUid', '==', uid),
     db.collectionGroup('projectRewardShares').where('uid', '==', uid),
+    db.collectionGroup('projects').where('assignedUids', 'array-contains', uid),
     db.collectionGroup('projects').where('assigneeUids', 'array-contains', uid),
-    db.collectionGroup('joinRequests').where('uid', '==', uid),
+    db.collectionGroup('settings').where('assignOwnerUids', 'array-contains', uid),
+    db.collectionGroup('settings').where('assignedUids', 'array-contains', uid),
+    db.collectionGroup('settings').where('assigneeUids', 'array-contains', uid),
     db.collectionGroup('operations').where('actorUid', '==', uid),
-    db.collectionGroup('activity').where('actorUid', '==', uid),
     db.collection('teamInviteCodes').where('createdBy', '==', uid),
   ];
-  for (const field of ['updatedBy', 'deletedBy', 'ownerUid']) {
-    checks.push(db.collection('teams').where(field, '==', uid));
-  }
+  for (const field of ['updatedBy', 'deletedBy', 'ownerUid']) checks.push(db.collection('teams').where(field, '==', uid));
   for (const collectionName of SHARED_RECORD_COLLECTIONS) {
-    for (const field of IDENTITY_METADATA_FIELDS) {
-      checks.push(db.collectionGroup(collectionName).where(field, '==', uid));
-    }
+    for (const field of IDENTITY_METADATA_FIELDS) checks.push(db.collectionGroup(collectionName).where(field, '==', uid));
   }
-  for (const collectionName of [
-    'members', 'memberEmails', 'memberNotes', 'payouts',
-    'projectRewardShares', 'joinRequests', 'invites',
-  ]) {
-    for (const field of IDENTITY_METADATA_FIELDS) {
-      checks.push(db.collectionGroup(collectionName).where(field, '==', uid));
-    }
+  for (const collectionName of ['members', 'memberEmails', 'memberNotes', 'payouts', 'projectRewardShares', 'joinRequests', 'invites']) {
+    for (const field of IDENTITY_METADATA_FIELDS) checks.push(db.collectionGroup(collectionName).where(field, '==', uid));
   }
-  for (const query of checks) {
-    if (await queryHasDocument(query)) fail('protected-references-remain');
-  }
+  for (const query of checks) if (await queryHasDocument(query)) fail('protected-references-remain');
+  if ((await identityQueryDocuments(db, uid, context.verifiedEmail)).length) fail('protected-references-remain');
 
+  const identifiers = jobIdentifiers(bound.data, context);
+  await pagedCollection(db.collectionGroup('activity'), async (activities) => {
+    for (const activity of activities) {
+      if (containsIdentity(activity.data(), uid, identifiers)) fail('protected-references-remain');
+    }
+  });
   const userRef = db.doc(`users/${uid}`);
   if ((await userRef.get()).exists) fail('protected-references-remain');
   for (const collectionName of PERSONAL_COLLECTIONS) {
-    if (!(await userRef.collection(collectionName).limit(1).get()).empty) {
-      fail('protected-references-remain');
-    }
+    if (!(await userRef.collection(collectionName).limit(1).get()).empty) fail('protected-references-remain');
   }
-  const remainingSubcollections = await userRef.listCollections();
-  for (const collection of remainingSubcollections) {
+  for (const collection of await userRef.listCollections()) {
     if (!(await collection.limit(1).get()).empty) fail('protected-references-remain');
   }
   return { verified: true };
 }
 
-export async function markDeletionJobReadyForAuthDelete(db, uid, requestId) {
-  await verifyNoProtectedReferences(db, uid);
-  const ref = jobRef(db, uid, requestId);
-  await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (!snapshot.exists) fail('deletion-job-not-found');
-    assertJob(snapshot.data(), uid, requestId);
-    transaction.update(ref, {
-      phase: 'ready-for-auth-delete',
-      verificationPassed: true,
-      verifiedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+export async function markDeletionJobReadyForAuthDelete(db, uid, context = {}) {
+  const bound = await getBoundJob(db, uid, context);
+  const incomplete = Object.values(bound.data.teamCheckpoints || {}).some((checkpoint) => (
+    checkpoint.status !== 'complete' || !checkpoint.decisionApplied || !checkpoint.identityRemoved
+  ));
+  if (incomplete) fail('team-cleanup-incomplete');
+  if (!bound.data.personalDataDeleted) fail('personal-cleanup-incomplete');
+  await verifyNoProtectedReferences(db, uid, context);
+  const current = await getBoundJob(db, uid, context);
+  await current.ref.update({
+    phase: 'ready-for-auth-delete', verificationPassed: true,
+    verifiedAt: Date.now(), updatedAt: Date.now(),
   });
+  await lockRef(db, uid).update({ phase: 'ready-for-auth-delete', updatedAt: Date.now() });
 }
 
-export async function markDeletionJobComplete(db, uid, requestId) {
+export async function markDeletionJobComplete(db, uid, context = {}) {
+  if (context.authDeletionSucceeded !== true) fail('auth-deletion-required');
+  const { requestId, planHash } = contextIds(context);
   const ref = jobRef(db, uid, requestId);
+  const lock = lockRef(db, uid);
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (!snapshot.exists) fail('deletion-job-not-found');
+    const [snapshot, lockSnapshot] = await Promise.all([transaction.get(ref), transaction.get(lock)]);
+    if (!snapshot.exists || !lockSnapshot.exists) fail('deletion-job-not-found');
     const data = snapshot.data();
-    assertJob(data, uid, requestId);
+    assertJob(data, uid, requestId, planHash);
+    assertJob(lockSnapshot.data(), uid, requestId, planHash);
     if (!data.verificationPassed || !['ready-for-auth-delete', 'complete'].includes(data.phase)) {
       fail('verification-required');
     }
-    transaction.update(ref, {
-      phase: 'complete',
-      completedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+    const checkpoints = Object.fromEntries(Object.entries(data.teamCheckpoints || {}).map(([key, value]) => {
+      const { knownIdentifiers, ...safe } = value;
+      return [key, safe];
+    }));
+    const now = Date.now();
+    transaction.update(ref, { phase: 'complete', teamCheckpoints: checkpoints, completedAt: now, updatedAt: now });
+    transaction.update(lock, { phase: 'complete', updatedAt: now });
   });
 }
 

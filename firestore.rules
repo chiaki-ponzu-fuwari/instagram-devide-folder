@@ -236,27 +236,38 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /accountDeletionLocks/{uid} {
+      allow read, write: if false;
+    }
+
     match /users/{uid} {
-      allow read, write: if isSelf(uid);
+      allow read: if isSelf(uid);
+      allow create, update: if isSelf(uid);
+      allow delete: if false;
 
       match /folders/{folderId} {
-        allow read, write: if isSelf(uid);
+        allow read, create, update: if isSelf(uid);
+        allow delete: if false;
       }
 
       match /accounts/{accountId} {
-        allow read, write: if isSelf(uid);
+        allow read, create, update: if isSelf(uid);
+        allow delete: if false;
       }
 
       match /projects/{projectId} {
-        allow read, write: if isSelf(uid);
+        allow read, create, update: if isSelf(uid);
+        allow delete: if false;
       }
 
       match /templates/{templateId} {
-        allow read, write: if isSelf(uid);
+        allow read, create, update: if isSelf(uid);
+        allow delete: if false;
       }
 
       match /settings/{settingId} {
-        allow read, write: if isSelf(uid);
+        allow read, create, update: if isSelf(uid);
+        allow delete: if false;
       }
     }
 
