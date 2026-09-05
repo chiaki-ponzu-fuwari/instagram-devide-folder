@@ -13,6 +13,12 @@ export {
 } from './firestore-core.mjs';
 
 export {
+  fetchAccountDeletionPlan,
+  reauthenticateForAccountDeletion,
+  deleteCurrentAccount,
+} from './account-deletion.mjs';
+
+export {
   getLoginUiState,
   shouldOpenLogoutSheet,
 } from './auth-state.mjs';

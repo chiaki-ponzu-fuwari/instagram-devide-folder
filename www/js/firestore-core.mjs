@@ -12,6 +12,8 @@ import {
   getRedirectResult,
   signInWithPopup,
   signInWithCredential,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   signOut,
   onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
@@ -48,6 +50,10 @@ function isNative() {
   } catch {
     return false;
   }
+}
+
+export function isNativePlatform() {
+  return isNative();
 }
 
 function withTimeout(promise, label, ms = 15000) {
@@ -232,6 +238,73 @@ export async function signInWithApple() {
   const credential = provider.credential({ idToken: identityToken, rawNonce });
   await withTimeout(signInWithCredential(core.auth, credential), 'Firebase Apple sign-in');
   setLastLoginProvider('apple.com');
+}
+
+export async function getFreshGoogleReauthenticationCredential(currentUser) {
+  if (!currentUser?.uid) throw new Error('No current Firebase user');
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  if (isNative()) {
+    const plugin = window.Capacitor?.Plugins?.GoogleSignIn;
+    if (!plugin?.initialize || !plugin?.signIn) {
+      throw new Error('Google reauthentication is unavailable');
+    }
+    const clientId = googleWebClientId();
+    if (!clientId) throw new Error('Google reauthentication is unavailable');
+    await plugin.initialize({ clientId });
+    const result = await plugin.signIn();
+    const idToken = result?.idToken;
+    if (!idToken) throw new Error('Google reauthentication did not return a credential');
+    return GoogleAuthProvider.credential(idToken);
+  }
+
+  const result = await reauthenticateWithPopup(
+    currentUser,
+    provider,
+    browserPopupRedirectResolver,
+  );
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  if (!credential) throw new Error('Google reauthentication did not return a credential');
+  return credential;
+}
+
+export async function getFreshAppleReauthenticationCredential(currentUser) {
+  if (!isNative()) throw new Error('Apple reauthentication is available on iPhone only');
+  const plugin = window.Capacitor?.Plugins?.SignInWithApple;
+  if (!plugin?.authorize) throw new Error('Apple reauthentication is unavailable');
+  const rawNonce = randomNonce();
+  const hashedNonce = await sha256Hex(rawNonce);
+  const result = await plugin.authorize({
+    clientId: 'com.chiaki.dmmanager',
+    redirectURI: 'https://localhost/login',
+    scopes: 'email name',
+    state: String(Date.now()),
+    nonce: hashedNonce,
+  });
+  const identityToken = result?.response?.identityToken;
+  const authorizationCode = result?.response?.authorizationCode;
+  if (!identityToken) throw new Error('Apple reauthentication did not return a credential');
+  if (typeof authorizationCode !== 'string' || !authorizationCode.trim()) {
+    throw new Error('Apple reauthentication did not return an authorization code');
+  }
+  const provider = new OAuthProvider('apple.com');
+  return {
+    credential: provider.credential({ idToken: identityToken, rawNonce }),
+    authorizationCode,
+    nativeCredential: {
+      identityToken,
+      rawNonce,
+      expectedUid: currentUser?.uid,
+    },
+  };
+}
+
+export async function reauthenticateCurrentUser(currentUser, credential) {
+  if (!currentUser?.uid || !credential) throw new Error('Reauthentication credential missing');
+  return withTimeout(
+    reauthenticateWithCredential(currentUser, credential),
+    'Firebase reauthentication',
+  );
 }
 
 export async function signOutGoogle() {

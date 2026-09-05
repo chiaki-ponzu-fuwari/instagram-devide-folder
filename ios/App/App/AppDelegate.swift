@@ -1,6 +1,8 @@
 import UIKit
 import AuthenticationServices
 import Capacitor
+import FirebaseCore
+import FirebaseAuth
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -9,6 +11,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
         return true
     }
 
@@ -55,9 +60,12 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin, ASAuthorizationContro
     public let jsName = "SignInWithApple"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "prepareAuthorizationRevocation", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "revokeAuthorizationCode", returnType: CAPPluginReturnPromise),
     ]
 
     private let callbackIdKey = "com.chiaki.dmmanager.signinwithapple.callbackId"
+    private var preparedRevocationUid: String?
 
     @objc public func authorize(_ call: CAPPluginCall) {
         let request = ASAuthorizationAppleIDProvider().createRequest()
@@ -72,6 +80,79 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin, ASAuthorizationContro
         controller.delegate = self
         controller.presentationContextProvider = self
         controller.performRequests()
+    }
+
+    @objc public func revokeAuthorizationCode(_ call: CAPPluginCall) {
+        guard let authorizationCode = call.getString("authorizationCode")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !authorizationCode.isEmpty else {
+            DispatchQueue.main.async {
+                call.reject("Apple authorization could not be revoked.")
+            }
+            return
+        }
+        guard let currentUser = Auth.auth().currentUser,
+              let preparedRevocationUid,
+              currentUser.uid == preparedRevocationUid else {
+            DispatchQueue.main.async {
+                call.reject("Apple authorization could not be revoked.")
+            }
+            return
+        }
+        self.preparedRevocationUid = nil
+
+        Task {
+            do {
+                try await Auth.auth().revokeToken(withAuthorizationCode: authorizationCode)
+                DispatchQueue.main.async {
+                    call.resolve()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    call.reject("Apple authorization could not be revoked.")
+                }
+            }
+        }
+    }
+
+    @objc public func prepareAuthorizationRevocation(_ call: CAPPluginCall) {
+        preparedRevocationUid = nil
+        guard let identityToken = call.getString("identityToken")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let rawNonce = call.getString("rawNonce")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let expectedUid = call.getString("expectedUid")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !identityToken.isEmpty,
+              !rawNonce.isEmpty,
+              !expectedUid.isEmpty else {
+            DispatchQueue.main.async {
+                call.reject("Apple authorization could not be prepared.")
+            }
+            return
+        }
+
+        let credential = OAuthProvider.credential(
+            providerID: .apple,
+            idToken: identityToken,
+            rawNonce: rawNonce
+        )
+        Task {
+            do {
+                let result = try await Auth.auth().signIn(with: credential)
+                guard result.user.uid == expectedUid else {
+                    try? Auth.auth().signOut()
+                    DispatchQueue.main.async {
+                        call.reject("Apple authorization could not be prepared.")
+                    }
+                    return
+                }
+                DispatchQueue.main.async {
+                    self.preparedRevocationUid = expectedUid
+                    call.resolve()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    call.reject("Apple authorization could not be prepared.")
+                }
+            }
+        }
     }
 
     private func requestedScopes(from call: CAPPluginCall) -> [ASAuthorization.Scope]? {
