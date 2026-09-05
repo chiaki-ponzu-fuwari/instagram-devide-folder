@@ -170,6 +170,28 @@ test('member leave preserves shared records and removes identity only from its t
   assert.deepEqual((await db.doc('teams/team-b/projects/project-1').get()).data().assignedUids, ['deleted']);
 });
 
+test('team cleanup pages through more than 200 invite codes created by the deleted member', async () => {
+  await seedLeaveTeam('team-a');
+  const batch = db.batch();
+  for (let index = 0; index < 205; index += 1) {
+    batch.set(db.doc(`teamInviteCodes/created-${String(index).padStart(3, '0')}`), {
+      createdBy: 'deleted', teamId: 'team-a',
+    });
+  }
+  batch.set(db.doc('teamInviteCodes/other-team-created'), {
+    createdBy: 'deleted', teamId: 'other-team',
+  });
+  await batch.commit();
+  const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
+  await applyTeamDecision(db, 'deleted', { teamId: 'team-a', action: 'leave' }, ctx);
+  await removeUserIdentityFromTeam(db, 'deleted', 'team-a', ctx);
+
+  const remaining = await db.collection('teamInviteCodes')
+    .where('createdBy', '==', 'deleted').where('teamId', '==', 'team-a').get();
+  assert.equal(remaining.empty, true);
+  assert.equal((await db.doc('teamInviteCodes/other-team-created').get()).exists, true);
+});
+
 test('admin transfer atomically aligns creator, roles, membership and permissions', async () => {
   await db.doc('teams/transfer-team').set(team({
     createdBy: 'deleted', memberUids: ['deleted', 'successor'],

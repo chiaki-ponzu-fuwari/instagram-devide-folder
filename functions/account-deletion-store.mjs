@@ -644,9 +644,13 @@ export async function removeUserIdentityFromTeam(db, uid, teamId, context = {}) 
   for (const ref of directPrivateRefs) directBatch.delete(ref);
   await directBatch.commit();
 
-  const inviteCodes = await db.collection('teamInviteCodes').where('createdBy', '==', uid).get();
-  const matchingCodes = inviteCodes.docs.filter((snapshot) => snapshot.data().teamId === teamId);
-  if (matchingCodes.length) await commitMutations(db, matchingCodes, (batch, snapshot) => batch.delete(snapshot.ref));
+  await pagedCollection(
+    db.collection('teamInviteCodes').where('createdBy', '==', uid),
+    async (page) => {
+      const matchingCodes = page.filter((snapshot) => snapshot.data().teamId === teamId);
+      await commitMutations(db, matchingCodes, (batch, snapshot) => batch.delete(snapshot.ref));
+    },
+  );
   await updateBoundCheckpoint(db, uid, context, teamId, { identityRemoved: true, status: 'complete' });
 }
 

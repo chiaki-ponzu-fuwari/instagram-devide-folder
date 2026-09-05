@@ -481,7 +481,9 @@ service cloud.firestore {
 
       match /settings/{settingId} {
         allow read: if canManageTeam(teamId);
-        allow create, update: if canWriteTeamData() && canManageTeam(teamId);
+        allow create, update: if canWriteTeamData()
+          && canManageTeam(teamId)
+          && settingsUidArraysAreMembers(request.resource.data, getAfter(teamPath(teamId)).data.memberUids);
         allow delete: if false;
       }
 

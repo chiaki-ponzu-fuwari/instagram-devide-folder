@@ -160,6 +160,14 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
         createdAt: 1, updatedAt: 1, updatedBy: 'u2',
       });
       await db.doc('teams/tLock/invites/open').set({ disabledAt: null });
+      await db.doc('teams/tSettings').set({
+        createdBy: 'u2', memberUids: ['u2'], securitySchemaVersion: 1,
+        securityMigrationState: 'locked', rewardVisibility: 'admin_only',
+      });
+      await db.doc('teams/tSettings/members/u2').set({
+        uid: 'u2', role: 'admin', status: 'active', displayName: 'Admin',
+        createdAt: 1, updatedAt: 1, updatedBy: 'u2',
+      });
     });
     const locked = env.authenticatedContext('uLocked').firestore();
     const admin = env.authenticatedContext('u2').firestore();
@@ -195,6 +203,12 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
     }));
     await assertFails(admin.doc('teams/tLock').update({
       settings: { assignOwnerUids: ['uLocked'] },
+    }));
+    await assertFails(admin.doc('teams/tSettings/settings/main').set({
+      assignOwnerUids: ['uLocked'],
+    }));
+    await assertSucceeds(admin.doc('teams/tSettings/settings/main').set({
+      assignOwnerUids: ['u2'],
     }));
     const approval = admin.batch();
     approval.set(admin.doc('teams/tLock/members/u3'), {
