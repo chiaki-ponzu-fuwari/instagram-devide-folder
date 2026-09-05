@@ -1,8 +1,39 @@
 import UIKit
 import AuthenticationServices
+import StoreKit
 import Capacitor
 import FirebaseCore
 import FirebaseAuth
+
+private enum PendingDeepLink {
+    static let key = "com.chiaki.dmmanager.pendingDeepLinkUrl"
+    static let inviteHosts = ["dm-management-ecc1f.web.app", "dm-management-ecc1f.firebaseapp.com"]
+
+    static func shouldHandle(_ url: URL) -> Bool {
+        if url.scheme == "dmmanager" {
+            return true
+        }
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              let host = url.host,
+              inviteHosts.contains(host) else {
+            return false
+        }
+        return URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .contains(where: { $0.name == "team_join" }) == true
+    }
+
+    static func save(_ url: URL) {
+        guard shouldHandle(url) else { return }
+        UserDefaults.standard.set(url.absoluteString, forKey: key)
+    }
+
+    static func consume() -> String? {
+        let url = UserDefaults.standard.string(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        return url
+    }
+}
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -42,6 +73,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         // Called when the app was launched with a url. Feel free to add additional processing here,
         // but if you want the App API to support tracking app url opens, make sure to keep this call
+        PendingDeepLink.save(url)
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
@@ -49,9 +81,28 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Called when the app was launched with an activity, including Universal Links.
         // Feel free to add additional processing here, but if you want the App API to support
         // tracking app url opens, make sure to keep this call
+        if userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+           let url = userActivity.webpageURL {
+            PendingDeepLink.save(url)
+        }
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+@objc(DeepLink)
+public class DeepLink: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "DeepLink"
+    public let jsName = "DeepLink"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "consumePendingUrl", returnType: CAPPluginReturnPromise),
+    ]
+
+    @objc public func consumePendingUrl(_ call: CAPPluginCall) {
+        call.resolve([
+            "url": PendingDeepLink.consume() ?? NSNull()
+        ])
+    }
 }
 
 @objc(SignInWithApple)
@@ -218,5 +269,23 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin, ASAuthorizationContro
         guard let call = bridge?.savedCall(withID: id) else { return }
         call.reject(error.localizedDescription)
         bridge?.releaseCall(call)
+    }
+}
+
+@objc(AppReview)
+public class AppReview: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "AppReview"
+    public let jsName = "AppReview"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "requestReview", returnType: CAPPluginReturnPromise),
+    ]
+
+    @objc public func requestReview(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+                SKStoreReviewController.requestReview(in: scene)
+            }
+            call.resolve()
+        }
     }
 }

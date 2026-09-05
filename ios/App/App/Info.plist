@@ -30,6 +30,16 @@
 				<string>com.googleusercontent.apps.533885644660-5utkou93pqoek6eej051t4m4sg0sm1af</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>com.chiaki.dmmanager.invite</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dmmanager</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>

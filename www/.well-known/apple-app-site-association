@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "5H25CFKC7N.com.chiaki.dmmanager"
+        ],
+        "components": [
+          {
+            "/": "/",
+            "?": {
+              "team_join": "*",
+              "token": "*"
+            },
+            "comment": "Open team invite links in the iOS app."
+          }
+        ]
+      }
+    ]
+  }
+}
