@@ -1,7 +1,9 @@
 import { initializeApp } from "firebase-admin/app";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall } from "firebase-functions/v2/https";
 
 import {
+  createAccountDeletionJobUpdatedHandler,
   createDeleteAccountHandler,
   createGetAccountDeletionPlanHandler,
 } from "./account-deletion-functions.mjs";
@@ -26,14 +28,27 @@ export const deleteAccount = onCall(
   createDeleteAccountHandler(),
 );
 
+export const finalizeAccountDeletion = onDocumentUpdated({
+  document: "accountDeletionJobs/{jobId}",
+  region: "asia-northeast1",
+  retry: true,
+  timeoutSeconds: 540,
+  memory: "512MiB",
+  maxInstances: 5,
+}, createAccountDeletionJobUpdatedHandler());
+
 export {
+  abortPendingAccountDeletionJob,
   applyTeamDecision,
   beginAccountDeletionJob,
   deletePersonalCloudData,
+  loadActiveAccountDeletionJob,
   loadAccountDeletionJob,
   loadAccountDeletionSnapshot,
   markDeletionJobComplete,
   markDeletionJobReadyForAuthDelete,
+  preflightAccountDeletionDecisions,
+  requestAuthDeletion,
   reverifyDeletionBeforeAuthDelete,
   removeUserIdentityFromTeam,
   verifyNoProtectedReferences,

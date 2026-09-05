@@ -7,10 +7,15 @@ import { getFirestore } from 'firebase-admin/firestore';
 import {
   createDeleteAccountHandler,
   createGetAccountDeletionPlanHandler,
+  createAccountDeletionJobUpdatedHandler,
+  finalizeRequestedAccountDeletion,
 } from '../functions/account-deletion-functions.mjs';
 import {
   applyTeamDecision,
   beginAccountDeletionJob,
+  deletePersonalCloudData,
+  markDeletionJobReadyForAuthDelete,
+  requestAuthDeletion,
   removeUserIdentityFromTeam,
 } from '../functions/account-deletion-store.mjs';
 
@@ -59,8 +64,13 @@ function baseDeps(overrides = {}) {
     HttpsError: TestHttpsError,
     db: {},
     nowSeconds: () => 1_100,
+    loadActiveAccountDeletionJob: async () => null,
     loadAccountDeletionJob: async () => null,
     loadAccountDeletionSnapshot: async () => snapshot(),
+    preflightAccountDeletionDecisions: async () => {},
+    abortPendingAccountDeletionJob: async () => {},
+    requestAuthDeletion: async () => {},
+    finalizeRequestedAccountDeletion: async () => {},
     ...overrides,
   };
 }
@@ -113,6 +123,103 @@ test('plan rejects unknown request input', async () => {
   );
 });
 
+test('plan returns a safe active-job recovery payload without rebuilding a snapshot', async () => {
+  const getPlan = createGetAccountDeletionPlanHandler(baseDeps({
+    loadActiveAccountDeletionJob: async () => ({
+      requestId: REQUEST_ID,
+      planHash: 'saved-plan-hash',
+      phase: 'started',
+      expectedTeams: [
+        { teamId: 'team-a', action: 'leave', transferToUid: null },
+        { teamId: 'team-b', action: 'transfer', transferToUid: 'successor' },
+      ],
+    }),
+    loadAccountDeletionSnapshot: async () => {
+      throw new Error('active job must not rebuild a plan');
+    },
+  }));
+  assert.deepEqual(await getPlan({ data: {}, auth: auth() }), {
+    teams: [],
+    planHash: 'saved-plan-hash',
+    resumeRequestId: REQUEST_ID,
+    teamDecisions: [
+      { teamId: 'team-a', action: 'leave' },
+      { teamId: 'team-b', action: 'transfer', transferToUid: 'successor' },
+    ],
+  });
+});
+
+test('initial delete preflights every decision before creating a job', async () => {
+  let began = false;
+  let aborted = false;
+  const handler = createDeleteAccountHandler(baseDeps({
+    preflightAccountDeletionDecisions: async () => {
+      throw Object.assign(new Error('invalid successor'), { code: 'invalid-successor' });
+    },
+    beginAccountDeletionJob: async () => { began = true; },
+    abortPendingAccountDeletionJob: async () => { aborted = true; },
+  }));
+  await assert.rejects(() => handler({
+    auth: auth(),
+    data: {
+      requestId: REQUEST_ID,
+      teamDecisions: [{ teamId: 'team-a', action: 'transfer', transferToUid: 'successor' }],
+    },
+  }), (error) => error.details.reason === 'invalid-successor');
+  assert.equal(began, false);
+  assert.equal(aborted, false);
+});
+
+test('finalizer is retry-safe when Auth deletion succeeds before completion marking', async () => {
+  let authExists = true;
+  let marks = 0;
+  const deps = {
+    db: {},
+    loadAccountDeletionJob: async () => ({
+      requestId: REQUEST_ID, planHash: 'saved-plan-hash', phase: 'auth-delete-requested', expectedTeams: [],
+    }),
+    reverifyDeletionBeforeAuthDelete: async () => {},
+    deleteAuthUser: async () => {
+      if (!authExists) throw Object.assign(new Error('missing'), { code: 'auth/user-not-found' });
+      authExists = false;
+    },
+    markDeletionJobComplete: async () => {
+      marks += 1;
+      if (marks === 1) throw new Error('transient mark failure');
+    },
+  };
+  await assert.rejects(
+    () => finalizeRequestedAccountDeletion({ uid: 'user-a', requestId: REQUEST_ID }, deps),
+    /transient mark failure/,
+  );
+  await finalizeRequestedAccountDeletion({ uid: 'user-a', requestId: REQUEST_ID }, deps);
+  assert.equal(authExists, false);
+  assert.equal(marks, 2);
+});
+
+test('Firestore finalizer handler runs only for a transition to auth-delete-requested', async () => {
+  const calls = [];
+  const handler = createAccountDeletionJobUpdatedHandler({
+    finalizeRequestedAccountDeletion: async (identity) => calls.push(identity),
+  });
+  const event = (before, after) => ({
+    data: {
+      before: { data: () => before },
+      after: { data: () => after },
+    },
+  });
+  await handler(event({ phase: 'started' }, { phase: 'ready-for-auth-delete' }));
+  await handler(event(
+    { phase: 'ready-for-auth-delete' },
+    { phase: 'auth-delete-requested', uid: 'user-a', requestId: REQUEST_ID },
+  ));
+  await handler(event(
+    { phase: 'auth-delete-requested' },
+    { phase: 'auth-delete-requested', uid: 'user-a', requestId: REQUEST_ID },
+  ));
+  assert.deepEqual(calls, [{ uid: 'user-a', requestId: REQUEST_ID }]);
+});
+
 test('delete validates decisions and runs cleanup in stable order with Auth deletion last', async () => {
   const calls = [];
   const deps = baseDeps({
@@ -123,10 +230,8 @@ test('delete validates decisions and runs cleanup in stable order with Auth dele
     removeUserIdentityFromTeam: async (_db, _uid, teamId) => calls.push(['remove', teamId]),
     deletePersonalCloudData: async () => calls.push(['personal']),
     markDeletionJobReadyForAuthDelete: async () => calls.push(['ready']),
-    reverifyDeletionBeforeAuthDelete: async () => calls.push(['reverify']),
-    deleteAuthUser: async () => calls.push(['auth-delete']),
-    markDeletionJobComplete: async () => calls.push(['complete']),
-    sleep: async () => {},
+    requestAuthDeletion: async () => calls.push(['request-auth-delete']),
+    finalizeRequestedAccountDeletion: async () => calls.push(['finalize']),
   });
   const handler = createDeleteAccountHandler(deps);
   const result = await handler({
@@ -138,7 +243,7 @@ test('delete validates decisions and runs cleanup in stable order with Auth dele
   });
   assert.deepEqual(result, { deleted: true, requestId: REQUEST_ID });
   assert.deepEqual(calls.map((entry) => entry[0]), [
-    'begin', 'apply', 'remove', 'personal', 'ready', 'reverify', 'auth-delete', 'complete',
+    'begin', 'apply', 'remove', 'personal', 'ready', 'request-auth-delete', 'finalize',
   ]);
   assert.equal(calls[0][3][0].teamId, 'team-a');
 });
@@ -169,10 +274,8 @@ test('delete resumes from the saved plan without loading a changed snapshot', as
     removeUserIdentityFromTeam: async (_db, _uid, teamId) => calls.push(['remove', teamId]),
     deletePersonalCloudData: async () => calls.push(['personal']),
     markDeletionJobReadyForAuthDelete: async () => calls.push(['ready']),
-    reverifyDeletionBeforeAuthDelete: async () => calls.push(['reverify']),
-    deleteAuthUser: async () => calls.push(['auth-delete']),
-    markDeletionJobComplete: async () => calls.push(['complete']),
-    sleep: async () => {},
+    requestAuthDeletion: async () => calls.push(['request-auth-delete']),
+    finalizeRequestedAccountDeletion: async () => calls.push(['finalize']),
   }));
 
   const result = await handler({
@@ -237,9 +340,11 @@ test('delete rejects a mismatched decision before creating a job or deleting Aut
 
 test('a cleanup failure never deletes the Auth user', async () => {
   let authDeleted = false;
+  let aborted = false;
   const handler = createDeleteAccountHandler(baseDeps({
     beginAccountDeletionJob: async () => {},
     applyTeamDecision: async () => { throw new Error('cleanup failed'); },
+    abortPendingAccountDeletionJob: async () => { aborted = true; },
     deleteAuthUser: async () => { authDeleted = true; },
   }));
   await assert.rejects(() => handler({
@@ -250,38 +355,35 @@ test('a cleanup failure never deletes the Auth user', async () => {
     },
   }), (error) => error.code === 'internal');
   assert.equal(authDeleted, false);
+  assert.equal(aborted, true);
 });
 
-test('mark-complete retries three times but returns deletion success without logging PII', async () => {
-  let attempts = 0;
-  const logs = [];
+test('delete returns unavailable instead of claiming success when durable finalization fails', async () => {
   const handler = createDeleteAccountHandler(baseDeps({
     beginAccountDeletionJob: async () => {},
     applyTeamDecision: async () => {},
     removeUserIdentityFromTeam: async () => {},
     deletePersonalCloudData: async () => {},
     markDeletionJobReadyForAuthDelete: async () => {},
-    reverifyDeletionBeforeAuthDelete: async () => {},
-    deleteAuthUser: async () => {},
-    markDeletionJobComplete: async () => {
-      attempts += 1;
+    requestAuthDeletion: async () => {},
+    finalizeRequestedAccountDeletion: async () => {
       throw new Error('private@example.com 安全なチーム名');
     },
-    sleep: async () => {},
-    logError: (event) => logs.push(event),
   }));
-  assert.deepEqual(await handler({
+  await assert.rejects(() => handler({
     auth: auth(),
     data: {
       requestId: REQUEST_ID,
       teamDecisions: [{ teamId: 'team-a', action: 'transfer', transferToUid: 'successor' }],
     },
-  }), { deleted: true, requestId: REQUEST_ID });
-  assert.equal(attempts, 3);
-  assert.doesNotMatch(JSON.stringify(logs), /private@example\.com|安全なチーム名|user-a/);
+  }), (error) => (
+    error.code === 'unavailable'
+    && error.details.reason === 'auth-deletion-pending'
+    && !JSON.stringify(error).includes('private@example.com')
+  ));
 });
 
-test('Auth user-not-found is idempotent success for the same ready job', async () => {
+test('a complete saved job uses the idempotent finalizer path without rebuilding its plan', async () => {
   let completed = false;
   const handler = createDeleteAccountHandler(baseDeps({
     loadAccountDeletionJob: async () => ({
@@ -298,10 +400,8 @@ test('Auth user-not-found is idempotent success for the same ready job', async (
     removeUserIdentityFromTeam: async () => {},
     deletePersonalCloudData: async () => {},
     markDeletionJobReadyForAuthDelete: async () => {},
-    reverifyDeletionBeforeAuthDelete: async () => {},
-    deleteAuthUser: async () => { throw Object.assign(new Error('missing'), { code: 'auth/user-not-found' }); },
-    markDeletionJobComplete: async () => { completed = true; },
-    sleep: async () => {},
+    requestAuthDeletion: async () => {},
+    finalizeRequestedAccountDeletion: async () => { completed = true; },
   }));
   const result = await handler({
     auth: auth(),
@@ -321,10 +421,8 @@ test('unverified email is never passed to cleanup while UID-only deletion remain
     beginAccountDeletionJob: async () => {},
     deletePersonalCloudData: async (_db, _uid, context) => contexts.push(context),
     markDeletionJobReadyForAuthDelete: async () => {},
-    reverifyDeletionBeforeAuthDelete: async () => {},
-    deleteAuthUser: async () => {},
-    markDeletionJobComplete: async () => {},
-    sleep: async () => {},
+    requestAuthDeletion: async () => {},
+    finalizeRequestedAccountDeletion: async () => {},
   }));
   await handler({
     auth: auth({ email_verified: false }),
@@ -345,6 +443,11 @@ test('index exports both v2 callables with bounded production options', async ()
     assert.equal(callable.__endpoint.maxInstances, 5);
     assert.notEqual(callable.__endpoint.callableTrigger.enforceAppCheck, true);
   }
+  const trigger = entrypoint.finalizeAccountDeletion;
+  assert.equal(typeof trigger, 'function');
+  assert.equal(trigger.__endpoint.platform, 'gcfv2');
+  assert.deepEqual(trigger.__endpoint.region, ['asia-northeast1']);
+  assert.equal(trigger.__endpoint.eventTrigger.retry, true);
 });
 
 const emulatorAvailable = Boolean(
@@ -473,6 +576,12 @@ test('emulator callable completes fresh and partially-applied account deletion j
   await removeUserIdentityFromTeam(db, resumeUid, 'resume-a', resumeContext);
   assert.equal((await db.doc(`teams/resume-a/members/${resumeUid}`).get()).exists, false);
 
+  const recoveryPlanResponse = await invoke('getAccountDeletionPlan', {}, resumeUser.idToken);
+  assert.equal(recoveryPlanResponse.ok, true, await recoveryPlanResponse.clone().text());
+  const recoveryPlan = (await recoveryPlanResponse.json()).result;
+  assert.equal(recoveryPlan.resumeRequestId, resumeRequestId);
+  assert.deepEqual(recoveryPlan.teamDecisions, resumeDecisions);
+
   const resumedResponse = await invoke('deleteAccount', {
     requestId: resumeRequestId,
     teamDecisions: [...resumeDecisions].reverse(),
@@ -489,6 +598,31 @@ test('emulator callable completes fresh and partially-applied account deletion j
   );
   await assert.rejects(
     () => adminAuth.getUser(resumeUid),
+    (error) => error.code === 'auth/user-not-found',
+  );
+
+  const triggerSignupResponse = await fetch(`${authBase}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'trigger-test@example.com', password: 'password123', returnSecureToken: true }),
+  });
+  const triggerUser = await triggerSignupResponse.json();
+  const triggerRequestId = 'trigger_request_12345678901234567';
+  const triggerContext = { requestId: triggerRequestId, planHash: 'trigger-plan-hash' };
+  await beginAccountDeletionJob(db, triggerUser.localId, triggerRequestId, triggerContext.planHash, []);
+  await deletePersonalCloudData(db, triggerUser.localId, triggerContext);
+  await markDeletionJobReadyForAuthDelete(db, triggerUser.localId, triggerContext);
+  await requestAuthDeletion(db, triggerUser.localId, triggerContext);
+  const triggerJobRef = db.doc(`accountDeletionJobs/${triggerUser.localId}_${triggerRequestId}`);
+  let triggerPhase;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    triggerPhase = (await triggerJobRef.get()).data()?.phase;
+    if (triggerPhase === 'complete') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(triggerPhase, 'complete');
+  await assert.rejects(
+    () => adminAuth.getUser(triggerUser.localId),
     (error) => error.code === 'auth/user-not-found',
   );
 });

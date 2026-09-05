@@ -319,6 +319,44 @@ export async function loadAccountDeletionJob(db, uid, requestId) {
   };
 }
 
+export async function loadActiveAccountDeletionJob(db, uid) {
+  requireId(uid, 'uid');
+  const lockSnapshot = await lockRef(db, uid).get();
+  if (!lockSnapshot.exists) return null;
+  const lock = lockSnapshot.data();
+  const requestId = requireId(lock?.requestId, 'request-id');
+  const job = await loadAccountDeletionJob(db, uid, requestId);
+  if (!job || ['aborted', 'complete'].includes(job.phase)) return null;
+  return job;
+}
+
+export async function preflightAccountDeletionDecisions(db, uid, decisions, verifiedEmail = undefined) {
+  requireId(uid, 'uid');
+  void verifiedEmail;
+  const expectedTeams = normalizedDecisions(decisions);
+  for (const storedDecision of expectedTeams) {
+    const decision = storedDecision.action === 'transfer'
+      ? storedDecision
+      : { teamId: storedDecision.teamId, action: storedDecision.action };
+    const { teamId, action } = decision;
+    const team = db.doc(`teams/${teamId}`);
+    const ownMember = db.doc(`teams/${teamId}/members/${uid}`);
+    const settingsRef = db.doc(`teams/${teamId}/settings/main`);
+    const membersQuery = db.collection(`teams/${teamId}/members`);
+    const successorRef = action === 'transfer'
+      ? db.doc(`teams/${teamId}/members/${decision.transferToUid}`)
+      : null;
+    const [teamSnapshot, ownSnapshot, settingsSnapshot, members, successorSnapshot] = await Promise.all([
+      team.get(), ownMember.get(), settingsRef.get(), membersQuery.get(),
+      successorRef ? successorRef.get() : Promise.resolve(null),
+    ]);
+    validateTeamDecisionState(uid, decision, {
+      teamSnapshot, ownSnapshot, settingsSnapshot, members, successorSnapshot,
+    });
+  }
+  return { verified: true };
+}
+
 export async function beginAccountDeletionJob(db, uid, requestId, planHash, decisions = []) {
   requireId(planHash, 'plan-hash');
   const expectedTeams = normalizedDecisions(decisions);
@@ -356,6 +394,39 @@ export async function beginAccountDeletionJob(db, uid, requestId, planHash, deci
   return ref;
 }
 
+export async function abortPendingAccountDeletionJob(db, uid, context = {}) {
+  requireId(uid, 'uid');
+  const { requestId, planHash } = contextIds(context);
+  const job = jobRef(db, uid, requestId);
+  const lock = lockRef(db, uid);
+  return db.runTransaction(async (transaction) => {
+    const [jobSnapshot, lockSnapshot] = await Promise.all([
+      transaction.get(job), transaction.get(lock),
+    ]);
+    if (!jobSnapshot.exists) return { aborted: false };
+    const data = jobSnapshot.data();
+    assertJob(data, uid, requestId, planHash);
+    if (!lockSnapshot.exists) {
+      if (data.phase === 'aborted') return { aborted: true };
+      fail('deletion-lock-not-found');
+    }
+    assertJob(lockSnapshot.data(), uid, requestId, planHash);
+    const checkpoints = Object.values(data.teamCheckpoints || {});
+    const untouched = checkpoints.every((checkpoint) => (
+      checkpoint.status === 'pending'
+      && checkpoint.decisionApplied === false
+      && checkpoint.identityRemoved === false
+    ));
+    if (data.phase !== 'started' || data.personalDataDeleted !== false || !untouched) {
+      fail('deletion-job-not-abortable');
+    }
+    const now = Date.now();
+    transaction.update(job, { phase: 'aborted', abortedAt: now, updatedAt: now });
+    transaction.delete(lock);
+    return { aborted: true };
+  });
+}
+
 function assertCheckpointDecision(jobData, teamId, decision) {
   const previous = checkpointFor(jobData, teamId);
   if (!previous) fail('unexpected-team-decision', { teamId });
@@ -378,10 +449,11 @@ function validateTeamDecisionState(uid, decision, snapshots) {
   ) fail('inconsistent-membership', { teamId });
   const effectiveAdmin = ownData.role === 'admin' || teamData.createdBy === uid;
   if (teamData.createdBy === uid && ownData.role !== 'admin') fail('inconsistent-admin-state', { teamId });
+  const removalPatch = teamPatchWithoutUid(teamData, uid);
 
   if (action === 'leave') {
     if (effectiveAdmin || ownData.role !== 'member') fail('admin-cannot-leave', { teamId });
-    return { teamPatch: teamPatchWithoutUid(teamData, uid), ownData };
+    return { teamPatch: removalPatch, ownData };
   }
   if (action === 'transfer') {
     if (!effectiveAdmin) fail('admin-required', { teamId });
@@ -808,7 +880,7 @@ async function hasPendingIdentityReferences(db, uid, verifiedEmail) {
 
 export async function verifyNoProtectedReferences(db, uid, context = {}) {
   requireId(uid, 'uid');
-  await getBoundJob(db, uid, context);
+  const bound = await getBoundJob(db, uid, context);
   const checks = [
     db.collection('teams').where('memberUids', 'array-contains', uid),
     db.collection('teams').where('createdBy', '==', uid),
@@ -838,11 +910,13 @@ export async function verifyNoProtectedReferences(db, uid, context = {}) {
   for (const query of checks) if (await queryHasDocument(query)) fail('protected-references-remain');
   if (await hasPendingIdentityReferences(db, uid, context.verifiedEmail)) fail('protected-references-remain');
 
-  await pagedCollection(db.collectionGroup('activity'), async (activities) => {
-    for (const activity of activities) {
-      if (containsIdentity(activity.data(), uid)) fail('protected-references-remain');
-    }
-  });
+  for (const decision of bound.data.expectedTeams || []) {
+    await pagedCollection(db.collection(`teams/${decision.teamId}/activity`), async (activities) => {
+      for (const activity of activities) {
+        if (containsIdentity(activity.data(), uid)) fail('protected-references-remain');
+      }
+    });
+  }
   const userRef = db.doc(`users/${uid}`);
   if ((await userRef.get()).exists) fail('protected-references-remain');
   for (const collectionName of PERSONAL_COLLECTIONS) {
@@ -874,13 +948,38 @@ export async function reverifyDeletionBeforeAuthDelete(db, uid, context = {}) {
 }
 
 export async function markDeletionJobReadyForAuthDelete(db, uid, context = {}) {
-  await reverifyDeletionBeforeAuthDelete(db, uid, context);
   const current = await getBoundJob(db, uid, context);
+  const checkpoints = Object.values(current.data.teamCheckpoints || {});
+  const incomplete = checkpoints.some((checkpoint) => (
+    checkpoint.status !== 'complete' || !checkpoint.decisionApplied || !checkpoint.identityRemoved
+  ));
+  if (incomplete) fail('team-cleanup-incomplete');
+  if (!current.data.personalDataDeleted) fail('personal-cleanup-incomplete');
   await current.ref.update({
-    phase: 'ready-for-auth-delete', verificationPassed: true,
-    verifiedAt: Date.now(), updatedAt: Date.now(),
+    phase: 'ready-for-auth-delete', updatedAt: Date.now(),
   });
   await lockRef(db, uid).update({ phase: 'ready-for-auth-delete', updatedAt: Date.now() });
+}
+
+export async function requestAuthDeletion(db, uid, context = {}) {
+  requireId(uid, 'uid');
+  const { requestId, planHash } = contextIds(context);
+  const job = jobRef(db, uid, requestId);
+  const lock = lockRef(db, uid);
+  await db.runTransaction(async (transaction) => {
+    const [jobSnapshot, lockSnapshot] = await Promise.all([
+      transaction.get(job), transaction.get(lock),
+    ]);
+    if (!jobSnapshot.exists || !lockSnapshot.exists) fail('deletion-job-not-found');
+    const data = jobSnapshot.data();
+    assertJob(data, uid, requestId, planHash);
+    assertJob(lockSnapshot.data(), uid, requestId, planHash);
+    if (data.phase === 'auth-delete-requested') return;
+    if (data.phase !== 'ready-for-auth-delete') fail('verification-required');
+    const now = Date.now();
+    transaction.update(job, { phase: 'auth-delete-requested', updatedAt: now });
+    transaction.update(lock, { phase: 'auth-delete-requested', updatedAt: now });
+  });
 }
 
 export async function markDeletionJobComplete(db, uid, context = {}) {
@@ -894,7 +993,7 @@ export async function markDeletionJobComplete(db, uid, context = {}) {
     const data = snapshot.data();
     assertJob(data, uid, requestId, planHash);
     assertJob(lockSnapshot.data(), uid, requestId, planHash);
-    if (!data.verificationPassed || !['ready-for-auth-delete', 'complete'].includes(data.phase)) {
+    if (!['auth-delete-requested', 'complete'].includes(data.phase)) {
       fail('verification-required');
     }
     const checkpoints = Object.fromEntries(Object.entries(data.teamCheckpoints || {}).map(([key, value]) => {

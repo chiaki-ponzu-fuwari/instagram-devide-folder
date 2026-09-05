@@ -4,13 +4,17 @@ import { deleteApp, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 import {
+  abortPendingAccountDeletionJob,
   applyTeamDecision,
   beginAccountDeletionJob,
   deletePersonalCloudData,
+  loadActiveAccountDeletionJob,
   loadAccountDeletionJob,
   loadAccountDeletionSnapshot,
   markDeletionJobComplete,
   markDeletionJobReadyForAuthDelete,
+  preflightAccountDeletionDecisions,
+  requestAuthDeletion,
   reverifyDeletionBeforeAuthDelete,
   removeUserIdentityFromTeam,
   verifyNoProtectedReferences,
@@ -165,6 +169,63 @@ test('job loading returns only resumable state and verifies the deletion lock', 
     () => loadAccountDeletionJob(db, 'deleted', requestId),
     /plan-hash-mismatch/,
   );
+});
+
+test('preflight validates every team without creating a job or lock', async () => {
+  await db.doc('teams/preflight').set(team({
+    createdBy: 'deleted', memberUids: ['deleted'],
+  }));
+  await db.doc('teams/preflight/members/deleted').set(member('deleted', 'admin'));
+  await assert.rejects(
+    () => preflightAccountDeletionDecisions(db, 'deleted', [{
+      teamId: 'preflight', action: 'transfer', transferToUid: 'missing',
+    }]),
+    /invalid-successor/,
+  );
+  await db.doc('teams/preflight').update({
+    memberUids: ['deleted', 'successor'],
+    settings: { assignOwnerUids: 'malformed' },
+  });
+  await db.doc('teams/preflight/members/successor').set(member('successor'));
+  await assert.rejects(
+    () => preflightAccountDeletionDecisions(db, 'deleted', [{
+      teamId: 'preflight', action: 'transfer', transferToUid: 'successor',
+    }]),
+    /invalid-identity-array/,
+  );
+  assert.equal((await db.collection('accountDeletionJobs').get()).empty, true);
+  assert.equal((await db.collection('accountDeletionLocks').get()).empty, true);
+});
+
+test('pending jobs can abort and unlock, while processing jobs remain recoverable', async () => {
+  const ctx = await begin([]);
+  assert.equal((await loadActiveAccountDeletionJob(db, 'deleted')).requestId, requestId);
+  await abortPendingAccountDeletionJob(db, 'deleted', ctx);
+  assert.equal((await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data().phase, 'aborted');
+  assert.equal((await db.doc('accountDeletionLocks/deleted').get()).exists, false);
+  assert.equal(await loadActiveAccountDeletionJob(db, 'deleted'), null);
+
+  await seedLeaveTeam('processing');
+  const processingRequest = 'request_processing_12345678901234';
+  const processingContext = context({ requestId: processingRequest });
+  await beginAccountDeletionJob(db, 'deleted', processingRequest, planHash, [{ teamId: 'processing', action: 'leave' }]);
+  await db.doc(`accountDeletionJobs/deleted_${processingRequest}`).update({
+    [`teamCheckpoints.${Buffer.from('processing').toString('base64url')}.status`]: 'processing',
+  });
+  await assert.rejects(
+    () => abortPendingAccountDeletionJob(db, 'deleted', processingContext),
+    /deletion-job-not-abortable/,
+  );
+  assert.equal((await loadActiveAccountDeletionJob(db, 'deleted')).requestId, processingRequest);
+});
+
+test('auth deletion request is durable and idempotent after ready', async () => {
+  const ctx = await begin([]);
+  await deletePersonalCloudData(db, 'deleted', ctx);
+  await markDeletionJobReadyForAuthDelete(db, 'deleted', ctx);
+  await requestAuthDeletion(db, 'deleted', ctx);
+  await requestAuthDeletion(db, 'deleted', ctx);
+  assert.equal((await loadAccountDeletionJob(db, 'deleted', requestId)).phase, 'auth-delete-requested');
 });
 
 test('member leave preserves shared records and removes identity only from its team', async () => {
@@ -380,7 +441,7 @@ test('personal cloud deletion removes the user document and every nested documen
   assert.equal((await db.doc('users/other/projects/one').get()).exists, true);
 });
 
-test('ready and complete checkpoints require protected-reference verification', async () => {
+test('ready checkpoints require cleanup and final verification precedes completion', async () => {
   await seedLeaveTeam();
   const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
   await assert.rejects(() => verifyNoProtectedReferences(db, 'deleted', ctx), /protected-references-remain/);
@@ -398,6 +459,7 @@ test('ready and complete checkpoints require protected-reference verification', 
   assert.equal((await db.doc('teams/team-a/memberEmails/deleted').get()).exists, false);
   assert.deepEqual((await db.doc('teams/team-a/projects/project-1').get()).data().assignedUids, []);
   await assert.rejects(() => markDeletionJobComplete(db, 'deleted', ctx), /auth-deletion-required/);
+  await requestAuthDeletion(db, 'deleted', ctx);
   await markDeletionJobComplete(db, 'deleted', { ...ctx, authDeletionSucceeded: true });
   assert.equal((await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data().phase, 'complete');
 });
@@ -497,12 +559,15 @@ test('non-member pending requests and UID or verified-email invitations are dele
   assert.equal((await db.doc('teamInviteCodes/OTHERCODE').get()).exists, true);
 });
 
-test('ready reruns personal and pending identity cleanup instead of trusting a boolean checkpoint', async () => {
+test('final reverify reruns cleanup after the lightweight ready checkpoint', async () => {
   const ctx = await begin([]);
   await deletePersonalCloudData(db, 'deleted', ctx);
   await db.doc('users/deleted/projects/late').set({ ownerUid: 'deleted' });
   await db.doc('teams/pending/invites/late').set({ invitedUid: 'deleted' });
   await markDeletionJobReadyForAuthDelete(db, 'deleted', ctx);
+  assert.equal((await db.doc('users/deleted/projects/late').get()).exists, true);
+  await requestAuthDeletion(db, 'deleted', ctx);
+  await reverifyDeletionBeforeAuthDelete(db, 'deleted', ctx);
   assert.equal((await db.doc('users/deleted/projects/late').get()).exists, false);
   assert.equal((await db.doc('teams/pending/invites/late').get()).exists, false);
 });
@@ -513,7 +578,35 @@ test('UID-only deletion can become ready when the token has no verified email', 
   await markDeletionJobReadyForAuthDelete(db, 'deleted', ctx);
   const job = (await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data();
   assert.equal(job.phase, 'ready-for-auth-delete');
-  assert.equal(job.verificationPassed, true);
+  assert.equal(job.verificationPassed, false);
+});
+
+test('protected activity verification scans expected teams only', async () => {
+  await db.doc('teams/unrelated/activity/private').set({
+    actorUid: 'deleted', actorName: 'unrelated identity', action: 'updateRecord',
+  });
+  const ctx = await begin([]);
+  await deletePersonalCloudData(db, 'deleted', ctx);
+  await reverifyDeletionBeforeAuthDelete(db, 'deleted', ctx);
+
+  const expectedUid = 'expected-user';
+  const expectedRequest = 'request_expected_123456789012345';
+  const expectedContext = { requestId: expectedRequest, planHash };
+  await beginAccountDeletionJob(db, expectedUid, expectedRequest, planHash, [{ teamId: 'expected', action: 'leave' }]);
+  const key = Buffer.from('expected').toString('base64url');
+  await db.doc(`accountDeletionJobs/${expectedUid}_${expectedRequest}`).update({
+    personalDataDeleted: true,
+    [`teamCheckpoints.${key}.status`]: 'complete',
+    [`teamCheckpoints.${key}.decisionApplied`]: true,
+    [`teamCheckpoints.${key}.identityRemoved`]: true,
+  });
+  await db.doc('teams/expected/activity/private').set({
+    actorUid: expectedUid, actorName: 'expected identity', action: 'updateRecord',
+  });
+  await assert.rejects(
+    () => verifyNoProtectedReferences(db, expectedUid, expectedContext),
+    /protected-references-remain/,
+  );
 });
 
 test('identity query pagination streams 450 matches without skipping duplicate document IDs', async () => {

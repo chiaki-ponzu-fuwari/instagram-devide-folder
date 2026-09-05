@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
-import { logger } from 'firebase-functions';
 
 import {
   AccountDeletionError,
@@ -14,13 +13,17 @@ import {
 } from './account-deletion-core.mjs';
 import {
   AccountDeletionStoreError,
+  abortPendingAccountDeletionJob,
   applyTeamDecision,
   beginAccountDeletionJob,
   deletePersonalCloudData,
+  loadActiveAccountDeletionJob,
   loadAccountDeletionJob,
   loadAccountDeletionSnapshot,
   markDeletionJobComplete,
   markDeletionJobReadyForAuthDelete,
+  preflightAccountDeletionDecisions,
+  requestAuthDeletion,
   removeUserIdentityFromTeam,
   reverifyDeletionBeforeAuthDelete,
 } from './account-deletion-store.mjs';
@@ -34,10 +37,6 @@ const ABORTED_CODES = new Set([
   'plan-hash-mismatch', 'team-plan-mismatch',
 ]);
 const PERMISSION_DENIED_CODES = new Set(['permission-denied', 'admin-required']);
-const TRANSIENT_AUTH_CODES = new Set([
-  'auth/internal-error', 'auth/network-request-failed', 'auth/too-many-requests',
-  'auth/unavailable', 'unavailable', 'deadline-exceeded',
-]);
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -127,16 +126,18 @@ function defaults() {
     HttpsError,
     db: undefined,
     nowSeconds: () => Date.now() / 1000,
-    sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
-    logError: (event) => logger.error(event),
     deleteAuthUser: (uid) => getAuth().deleteUser(uid),
+    abortPendingAccountDeletionJob,
     applyTeamDecision,
     beginAccountDeletionJob,
     deletePersonalCloudData,
+    loadActiveAccountDeletionJob,
     loadAccountDeletionJob,
     loadAccountDeletionSnapshot,
     markDeletionJobComplete,
     markDeletionJobReadyForAuthDelete,
+    preflightAccountDeletionDecisions,
+    requestAuthDeletion,
     removeUserIdentityFromTeam,
     reverifyDeletionBeforeAuthDelete,
   };
@@ -153,6 +154,15 @@ export function createGetAccountDeletionPlanHandler(overrides = {}) {
       const uid = requireCaller(request, deps);
       validatePlanRequest(request.data);
       const db = deps.db ?? getFirestore();
+      const activeJob = await deps.loadActiveAccountDeletionJob(db, uid);
+      if (activeJob) {
+        return {
+          teams: [],
+          planHash: activeJob.planHash,
+          resumeRequestId: activeJob.requestId,
+          teamDecisions: operationalDecisions(canonicalDecisions(activeJob.expectedTeams)),
+        };
+      }
       const snapshot = await deps.loadAccountDeletionSnapshot(db, uid);
       const plan = buildAccountDeletionPlan(snapshot);
       return { teams: publicPlan(plan, snapshot), planHash: hashPlan(plan) };
@@ -162,24 +172,12 @@ export function createGetAccountDeletionPlanHandler(overrides = {}) {
   };
 }
 
-async function retry(operation, { attempts, sleep, retryable = () => true }) {
-  let lastError;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-      if (attempt === attempts - 1 || !retryable(error)) throw error;
-      await sleep(25 * (2 ** attempt));
-    }
-  }
-  throw lastError;
-}
-
 export function createDeleteAccountHandler(overrides = {}) {
   const deps = dependencies(overrides);
   return async function deleteAccountHandler(request) {
     let requestId;
+    let deletionContext;
+    let jobBegan = false;
     try {
       const uid = requireCaller(request, deps);
       const normalized = normalizeDeletionRequest(request.data);
@@ -201,10 +199,15 @@ export function createDeleteAccountHandler(overrides = {}) {
         const plan = buildAccountDeletionPlan(snapshot);
         decisions = validateTeamDecisions(plan, normalized.teamDecisions);
         planHash = hashPlan(plan);
+        await deps.preflightAccountDeletionDecisions(
+          db, uid, decisions, verifiedEmail(request),
+        );
       }
       const context = { requestId, planHash, verifiedEmail: verifiedEmail(request) };
+      deletionContext = { db, uid, context };
 
       await deps.beginAccountDeletionJob(db, uid, requestId, planHash, decisions);
+      jobBegan = true;
       for (const decision of decisions) {
         await deps.applyTeamDecision(db, uid, decision, context);
         if (decision.action !== 'dissolve') {
@@ -213,38 +216,64 @@ export function createDeleteAccountHandler(overrides = {}) {
       }
       await deps.deletePersonalCloudData(db, uid, context);
       await deps.markDeletionJobReadyForAuthDelete(db, uid, context);
-
-      await retry(async () => {
-        await deps.reverifyDeletionBeforeAuthDelete(db, uid, context);
-        try {
-          await deps.deleteAuthUser(uid);
-        } catch (error) {
-          if (errorCode(error) !== 'auth/user-not-found') throw error;
-        }
-      }, {
-        attempts: 3,
-        sleep: deps.sleep,
-        retryable: (error) => TRANSIENT_AUTH_CODES.has(errorCode(error)),
-      });
-
+      await deps.requestAuthDeletion(db, uid, context);
       try {
-        await retry(
-          () => deps.markDeletionJobComplete(db, uid, {
-            ...context, authDeletionSucceeded: true,
-          }),
-          { attempts: 3, sleep: deps.sleep },
+        await (deps.finalizeRequestedAccountDeletion || finalizeRequestedAccountDeletion)(
+          { uid, requestId }, deps,
         );
       } catch (error) {
-        deps.logError({
-          event: 'account-deletion-completion-checkpoint-failed',
-          requestId,
-          reason: errorCode(error),
+        throw new deps.HttpsError('unavailable', 'Account deletion is still being finalized.', {
+          reason: 'auth-deletion-pending',
         });
       }
       return { deleted: true, requestId };
     } catch (error) {
+      if (jobBegan && deletionContext) {
+        try {
+          await deps.abortPendingAccountDeletionJob(
+            deletionContext.db, deletionContext.uid, deletionContext.context,
+          );
+        } catch {
+          // A job with any durable progress must remain locked and recoverable.
+        }
+      }
       throw mapError(error, deps);
     }
+  };
+}
+
+export async function finalizeRequestedAccountDeletion({ uid, requestId }, overrides = {}) {
+  const deps = dependencies(overrides);
+  const db = deps.db ?? getFirestore();
+  const job = await deps.loadAccountDeletionJob(db, uid, requestId);
+  if (!job) throw new AccountDeletionStoreError('deletion-job-not-found');
+  if (job.phase === 'complete') return { completed: true };
+  if (job.phase !== 'auth-delete-requested') {
+    throw new AccountDeletionStoreError('verification-required');
+  }
+  const context = { requestId, planHash: job.planHash };
+  await deps.reverifyDeletionBeforeAuthDelete(db, uid, context);
+  try {
+    await deps.deleteAuthUser(uid);
+  } catch (error) {
+    if (errorCode(error) !== 'auth/user-not-found') throw error;
+  }
+  await deps.markDeletionJobComplete(db, uid, {
+    ...context, authDeletionSucceeded: true,
+  });
+  return { completed: true };
+}
+
+export function createAccountDeletionJobUpdatedHandler(overrides = {}) {
+  const finalize = overrides.finalizeRequestedAccountDeletion || finalizeRequestedAccountDeletion;
+  return async function accountDeletionJobUpdatedHandler(event) {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (
+      after?.phase !== 'auth-delete-requested'
+      || before?.phase === 'auth-delete-requested'
+    ) return;
+    await finalize({ uid: after.uid, requestId: after.requestId });
   };
 }
 
