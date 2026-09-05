@@ -148,11 +148,15 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
       await db.doc('accountDeletionLocks/uLocked').set({ uid: 'uLocked', phase: 'started' });
       await db.doc('users/uLocked').set({ uid: 'uLocked' });
       await db.doc('teams/tLock').set({
-        createdBy: 'u2', memberUids: ['u2'], securitySchemaVersion: 2,
+        createdBy: 'u2', memberUids: ['u2', 'uLocked'], securitySchemaVersion: 2,
         securityMigrationState: 'ready', rewardVisibility: 'admin_only',
       });
       await db.doc('teams/tLock/members/u2').set({
         uid: 'u2', role: 'admin', status: 'active', displayName: 'Admin',
+        createdAt: 1, updatedAt: 1, updatedBy: 'u2',
+      });
+      await db.doc('teams/tLock/members/uLocked').set({
+        uid: 'uLocked', role: 'member', status: 'active', displayName: 'Locked',
         createdAt: 1, updatedAt: 1, updatedBy: 'u2',
       });
       await db.doc('teams/tLock/invites/open').set({ disabledAt: null });
@@ -164,10 +168,26 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
     await assertFails(locked.doc('teams/tLock/joinRequests/uLocked').set({
       uid: 'uLocked', status: 'pending', inviteId: 'open',
     }));
+    await assertFails(locked.doc('teams/new-locked').set({
+      createdBy: 'uLocked', deletedAt: null, rewardVisibility: 'admin_only',
+    }));
+    await assertFails(locked.doc('teams/tLock/folders/locked-write').set({ name: 'blocked' }));
     await assertFails(admin.doc('teams/tLock/invites/locked').set({ invitedUid: 'uLocked' }));
     await assertFails(admin.doc('teams/tLock/members/uLocked').set({
       uid: 'uLocked', role: 'member', status: 'active', displayName: 'Locked',
       createdAt: 2, updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(admin.doc('teams/tLock/memberEmails/uLocked').set({
+      uid: 'uLocked', email: 'locked@example.com', updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(admin.doc('teams/tLock/memberNotes/uLocked').set({
+      uid: 'uLocked', note: 'locked', updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(admin.doc('teams/tLock/payouts/uLocked').set({
+      uid: 'uLocked', payoutName: 'Locked', updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(admin.doc('teams/tLock/projectRewardShares/p1_uLocked').set({
+      projectId: 'p1', uid: 'uLocked', rewardYen: 0, updatedAt: 2, updatedBy: 'u2',
     }));
     await assertSucceeds(admin.doc('users/u2').set({ uid: 'u2' }));
     await assertSucceeds(admin.doc('teams/tLock/invites/other').set({ invitedUid: 'u3' }));

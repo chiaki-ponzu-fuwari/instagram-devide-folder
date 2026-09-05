@@ -10,9 +10,17 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
-    function isDeletionUnlocked(uid) {
+    function isUidDeletionLocked(uid) {
       return uid is string
-        && !exists(/databases/$(database)/documents/accountDeletionLocks/$(uid));
+        && exists(/databases/$(database)/documents/accountDeletionLocks/$(uid));
+    }
+
+    function isDeletionUnlocked(uid) {
+      return uid is string && !isUidDeletionLocked(uid);
+    }
+
+    function canWriteTeamData() {
+      return signedIn() && isDeletionUnlocked(request.auth.uid);
     }
 
     function hasUnlockedIdentity(data) {
@@ -291,6 +299,7 @@ service cloud.firestore {
       allow get: if signedIn() && resource.data.disabledAt == null;
       allow list: if false;
       allow create, update: if signedIn()
+        && canWriteTeamData()
         && hasUnlockedIdentity(request.resource.data)
         && request.resource.data.code == code
         && request.resource.data.teamId is string
@@ -302,17 +311,18 @@ service cloud.firestore {
 
     match /teams/{teamId} {
       allow create: if signedIn()
+        && canWriteTeamData()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.deletedAt == null
         && request.resource.data.rewardVisibility in ['admin_only', 'all_members', 'selected_members'];
       allow read: if (signedIn() && resource.data.memberUids.hasAny([request.auth.uid])) || isApprovedMember(teamId) || isTeamCreator(teamId);
-      allow update: if canManageTeam(teamId);
+      allow update: if canWriteTeamData() && canManageTeam(teamId);
       allow delete: if false;
 
       match /members/{uid} {
         allow read: if canManageTeam(teamId)
           || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicMemberShape());
-        allow create: if isDeletionUnlocked(uid) && ((canManageTeam(teamId) && validPublicMember(uid))
+        allow create: if canWriteTeamData() && isDeletionUnlocked(uid) && ((canManageTeam(teamId) && validPublicMember(uid))
           || (signedIn()
             && uid == request.auth.uid
             && isTeamCreator(teamId)
@@ -320,104 +330,108 @@ service cloud.firestore {
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'active'
             && validPublicMember(uid)));
-        allow update: if isDeletionUnlocked(uid) && ((canManageTeam(teamId) && validPublicMember(uid))
+        allow update: if canWriteTeamData() && isDeletionUnlocked(uid) && ((canManageTeam(teamId) && validPublicMember(uid))
           || (isMigrationReady(teamId) && isSelf(uid) && validPublicMember(uid)
             && request.resource.data.role == resource.data.role
             && request.resource.data.status == resource.data.status));
-        allow delete: if canManageTeam(teamId)
-          || (isSelf(uid) && resource.data.role != 'admin');
+        allow delete: if canWriteTeamData() && (canManageTeam(teamId)
+          || (isSelf(uid) && resource.data.role != 'admin'));
       }
 
       // 振込先(機微情報)は本人・管理者、またはチーム設定で公開された承認済みメンバーだけ読める
       match /payouts/{uid} {
         allow read: if canReadPayout(teamId, uid);
-        allow create, update: if (canManageTeam(teamId)
+        allow create, update: if canWriteTeamData() && isDeletionUnlocked(uid) && (canManageTeam(teamId)
           || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid)))
           && validPayout(uid);
-        allow delete: if canManageTeam(teamId)
-          || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid));
+        allow delete: if canWriteTeamData() && (canManageTeam(teamId)
+          || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid)));
       }
 
       // Private profile fields are intentionally separate from public member docs.
       match /memberEmails/{uid} {
         allow read: if canReadPrivateField(teamId, uid, 'memberEmailVisibility');
-        allow create, update: if (canManageTeam(teamId)
+        allow create, update: if canWriteTeamData() && isDeletionUnlocked(uid) && (canManageTeam(teamId)
           || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid)))
           && request.resource.data.keys().hasOnly(['uid', 'email', 'updatedAt', 'updatedBy'])
           && request.resource.data.uid == uid && request.resource.data.updatedBy == request.auth.uid;
-        allow delete: if canManageTeam(teamId)
-          || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid));
+        allow delete: if canWriteTeamData() && (canManageTeam(teamId)
+          || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid)));
       }
 
       match /memberNotes/{uid} {
         allow read: if canReadPrivateField(teamId, uid, 'memberNoteVisibility');
-        allow create, update: if (canManageTeam(teamId)
+        allow create, update: if canWriteTeamData() && isDeletionUnlocked(uid) && (canManageTeam(teamId)
           || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid)))
           && request.resource.data.keys().hasOnly(['uid', 'note', 'updatedAt', 'updatedBy'])
           && request.resource.data.uid == uid && request.resource.data.updatedBy == request.auth.uid;
-        allow delete: if canManageTeam(teamId)
-          || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid));
+        allow delete: if canWriteTeamData() && (canManageTeam(teamId)
+          || (isMigrationReady(teamId) && isApprovedMember(teamId) && isSelf(uid)));
       }
 
       match /folders/{folderId} {
-        allow read, create, update: if canReadReadyPublicTeam(teamId);
+        allow read: if canReadReadyPublicTeam(teamId);
+        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId);
         allow delete: if false;
       }
 
       match /accounts/{accountId} {
         allow read: if canManageTeam(teamId)
           || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicAccountShape());
-        allow create, update: if canReadReadyPublicTeam(teamId) && validPublicAccount(accountId);
+        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId) && validPublicAccount(accountId);
         allow delete: if false;
       }
 
       match /projects/{projectId} {
         allow read: if canManageTeam(teamId)
           || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicProjectShape());
-        allow create, update: if canReadReadyPublicTeam(teamId) && validPublicProject(projectId);
+        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId) && validPublicProject(projectId);
         allow delete: if false;
       }
 
       match /projectRewardTotals/{projectId} {
         allow read: if canReadRewardTotal(teamId);
-        allow create, update: if canManageTeam(teamId) && validRewardTotal(projectId);
-        allow delete: if canManageTeam(teamId);
+        allow create, update: if canWriteTeamData() && canManageTeam(teamId) && validRewardTotal(projectId);
+        allow delete: if canWriteTeamData() && canManageTeam(teamId);
       }
 
       match /projectRewardShares/{shareId} {
         allow read: if canReadReward(teamId, resource.data.uid);
-        allow create, update: if canManageTeam(teamId)
+        allow create, update: if canWriteTeamData() && canManageTeam(teamId)
+          && hasUnlockedIdentity(request.resource.data)
           && shareId == request.resource.data.projectId + '_' + request.resource.data.uid
           && validRewardShare(request.resource.data.projectId, request.resource.data.uid);
-        allow delete: if canManageTeam(teamId);
+        allow delete: if canWriteTeamData() && canManageTeam(teamId);
       }
 
       match /projectCosts/{projectId} {
         allow read: if canManageTeam(teamId);
-        allow create, update: if canManageTeam(teamId) && validProjectCost(projectId);
-        allow delete: if canManageTeam(teamId);
+        allow create, update: if canWriteTeamData() && canManageTeam(teamId) && validProjectCost(projectId);
+        allow delete: if canWriteTeamData() && canManageTeam(teamId);
       }
 
       match /templates/{templateId} {
-        allow read, create, update: if canReadReadyPublicTeam(teamId);
+        allow read: if canReadReadyPublicTeam(teamId);
+        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId);
         allow delete: if false;
       }
 
       match /settings/{settingId} {
-        allow read, create, update: if canManageTeam(teamId);
+        allow read: if canManageTeam(teamId);
+        allow create, update: if canWriteTeamData() && canManageTeam(teamId);
         allow delete: if false;
       }
 
       match /activity/{activityId} {
         allow read: if canReadReadyPublicTeam(teamId);
-        allow create: if canReadReadyPublicTeam(teamId)
+        allow create: if canWriteTeamData() && canReadReadyPublicTeam(teamId)
           && (isValidProjectActivity() || isValidLegacyActivity(teamId));
         allow update, delete: if false;
       }
 
       match /invites/{inviteId} {
         allow read: if canManageTeam(teamId);
-        allow create, update: if canManageTeam(teamId)
+        allow create, update: if canWriteTeamData() && canManageTeam(teamId)
           && hasUnlockedIdentity(request.resource.data);
         allow delete: if false;
       }
@@ -430,7 +444,7 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/teams/$(teamId)/invites/$(request.resource.data.inviteId))
           && get(/databases/$(database)/documents/teams/$(teamId)/invites/$(request.resource.data.inviteId)).data.disabledAt == null;
         allow read: if canManageTeam(teamId) || (signedIn() && resource.data.uid == request.auth.uid);
-        allow update: if canManageTeam(teamId)
+        allow update: if canWriteTeamData() && canManageTeam(teamId)
           && hasUnlockedIdentity(request.resource.data);
         allow delete: if false;
       }

@@ -299,6 +299,68 @@ export async function beginAccountDeletionJob(db, uid, requestId, planHash, deci
   return ref;
 }
 
+function assertCheckpointDecision(jobData, teamId, decision) {
+  const previous = checkpointFor(jobData, teamId);
+  if (!previous) fail('unexpected-team-decision', { teamId });
+  if (previous.action !== decision.action || previous.transferToUid !== (decision.transferToUid || null)) {
+    fail('team-decision-mismatch', { teamId });
+  }
+  return previous;
+}
+
+function validateTeamDecisionState(uid, decision, snapshots) {
+  const { teamId, action } = decision;
+  const { teamSnapshot, ownSnapshot, settingsSnapshot, members, successorSnapshot } = snapshots;
+  if (!teamSnapshot.exists) fail('team-not-found', { teamId });
+  if (!ownSnapshot.exists) fail('membership-not-found', { teamId });
+  const teamData = teamSnapshot.data();
+  const ownData = ownSnapshot.data();
+  assertMembershipConsistency(teamData, members.docs);
+  if (
+    ownData.uid !== uid || ownData.status !== 'active' || !['admin', 'member'].includes(ownData.role)
+    || !teamData.memberUids.includes(uid)
+  ) fail('inconsistent-membership', { teamId });
+  const effectiveAdmin = ownData.role === 'admin' || teamData.createdBy === uid;
+  if (teamData.createdBy === uid && ownData.role !== 'admin') fail('inconsistent-admin-state', { teamId });
+
+  if (action === 'leave') {
+    if (effectiveAdmin || ownData.role !== 'member') fail('admin-cannot-leave', { teamId });
+    return { teamPatch: teamPatchWithoutUid(teamData, uid), ownData };
+  }
+  if (action === 'transfer') {
+    if (!effectiveAdmin) fail('admin-required', { teamId });
+    if (decision.transferToUid === uid) fail('invalid-successor', { teamId });
+    if (
+      !successorSnapshot?.exists || successorSnapshot.data().uid !== decision.transferToUid
+      || successorSnapshot.data().status !== 'active'
+      || !['admin', 'member'].includes(successorSnapshot.data().role)
+      || !teamData.memberUids.includes(decision.transferToUid)
+    ) fail('invalid-successor', { teamId });
+    const transferredSettings = transferManagementFields(teamData.settings || {}, uid, decision.transferToUid);
+    const transferredTeam = transferManagementFields(teamData, uid, decision.transferToUid);
+    const settingsPatch = settingsSnapshot.exists
+      ? transferManagementFields(settingsSnapshot.data(), uid, decision.transferToUid)
+      : null;
+    return {
+      ownData,
+      settingsPatch,
+      teamPatch: {
+        ...transferredTeam,
+        memberUids: withoutUid(teamData, 'memberUids', uid),
+        settings: transferredSettings,
+        createdBy: teamData.createdBy === uid ? decision.transferToUid : teamData.createdBy,
+        updatedAt: Date.now(),
+      },
+    };
+  }
+  if (!effectiveAdmin) fail('admin-required', { teamId });
+  if (teamData.createdBy !== uid) fail('not-sole-effective-admin', { teamId });
+  if (members.docs.some((row) => row.id !== uid && row.data().status === 'active')) {
+    fail('active-members-remain', { teamId });
+  }
+  return { ownData };
+}
+
 export async function applyTeamDecision(db, uid, decision, context = {}) {
   requireId(uid, 'uid');
   validateDecision(decision);
@@ -314,17 +376,7 @@ export async function applyTeamDecision(db, uid, decision, context = {}) {
     ? db.doc(`teams/${teamId}/members/${decision.transferToUid}`)
     : null;
 
-  const bound = await getBoundJob(db, uid, context);
-  const planned = checkpointFor(bound.data, teamId);
-  if (!planned) fail('unexpected-team-decision', { teamId });
-  if (planned.action !== action || planned.transferToUid !== (decision.transferToUid || null)) {
-    fail('team-decision-mismatch', { teamId });
-  }
-  if (!planned.decisionApplied && action !== 'dissolve') {
-    await sanitizeTeamActivities(db, teamId, uid);
-  }
-
-  const result = await db.runTransaction(async (transaction) => {
+  const preflight = await db.runTransaction(async (transaction) => {
     const [jobSnapshot, lockSnapshot] = await Promise.all([
       transaction.get(job), transaction.get(lock),
     ]);
@@ -332,77 +384,79 @@ export async function applyTeamDecision(db, uid, decision, context = {}) {
     const jobData = jobSnapshot.data();
     assertJob(jobData, uid, requestId, planHash);
     assertJob(lockSnapshot.data(), uid, requestId, planHash);
-    const previous = checkpointFor(jobData, teamId);
-    if (!previous) fail('unexpected-team-decision', { teamId });
-    if (previous.action !== action || previous.transferToUid !== (decision.transferToUid || null)) {
-      fail('team-decision-mismatch', { teamId });
-    }
+    const previous = assertCheckpointDecision(jobData, teamId, decision);
     if (previous.status === 'complete' || previous.decisionApplied) return { done: true };
-    if (action === 'dissolve' && previous.status === 'dissolving') return { dissolve: true };
+    // A recursive team delete may have removed part of the tree before a retry.
+    // `processing` proves the original transaction validated the whole decision,
+    // so a dissolve retry must resume deletion instead of requiring those docs.
+    if (action === 'dissolve' && previous.status === 'processing') {
+      return { done: false, identityNames: [] };
+    }
 
     const [teamSnapshot, ownSnapshot, settingsSnapshot, members, successorSnapshot] = await Promise.all([
       transaction.get(team), transaction.get(ownMember), transaction.get(settingsRef), transaction.get(membersQuery),
       successorRef ? transaction.get(successorRef) : Promise.resolve(null),
     ]);
-    if (!teamSnapshot.exists) fail('team-not-found', { teamId });
-    if (!ownSnapshot.exists) fail('membership-not-found', { teamId });
-    const teamData = teamSnapshot.data();
-    const ownData = ownSnapshot.data();
-    assertMembershipConsistency(teamData, members.docs);
-    if (
-      ownData.uid !== uid || ownData.status !== 'active' || !['admin', 'member'].includes(ownData.role)
-      || !teamData.memberUids.includes(uid)
-    ) fail('inconsistent-membership', { teamId });
-    const effectiveAdmin = ownData.role === 'admin' || teamData.createdBy === uid;
-    if (teamData.createdBy === uid && ownData.role !== 'admin') fail('inconsistent-admin-state', { teamId });
+    const state = validateTeamDecisionState(uid, decision, {
+      teamSnapshot, ownSnapshot, settingsSnapshot, members, successorSnapshot,
+    });
     const checkpoints = { ...(jobData.teamCheckpoints || {}) };
-    const next = { ...previous };
-
-    if (action === 'leave') {
-      if (effectiveAdmin || ownData.role !== 'member') fail('admin-cannot-leave', { teamId });
-      transaction.update(team, teamPatchWithoutUid(teamData, uid));
-      transaction.delete(ownMember);
-      next.decisionApplied = true;
-      next.status = 'decision-applied';
-    } else if (action === 'transfer') {
-      if (!effectiveAdmin) fail('admin-required', { teamId });
-      if (decision.transferToUid === uid) fail('invalid-successor', { teamId });
-      if (
-        !successorSnapshot.exists || successorSnapshot.data().uid !== decision.transferToUid
-        || successorSnapshot.data().status !== 'active'
-        || !['admin', 'member'].includes(successorSnapshot.data().role)
-        || !teamData.memberUids.includes(decision.transferToUid)
-      ) fail('invalid-successor', { teamId });
-      transaction.update(successorRef, { role: 'admin', updatedAt: Date.now(), updatedBy: decision.transferToUid });
-      const transferredSettings = transferManagementFields(teamData.settings || {}, uid, decision.transferToUid);
-      const transferredTeam = transferManagementFields(teamData, uid, decision.transferToUid);
-      transaction.update(team, {
-        ...transferredTeam,
-        memberUids: withoutUid(teamData, 'memberUids', uid),
-        settings: transferredSettings,
-        createdBy: teamData.createdBy === uid ? decision.transferToUid : teamData.createdBy,
-        updatedAt: Date.now(),
-      });
-      if (settingsSnapshot.exists) {
-        transaction.set(settingsRef, transferManagementFields(settingsSnapshot.data(), uid, decision.transferToUid));
-      }
-      transaction.delete(ownMember);
-      next.decisionApplied = true;
-      next.status = 'decision-applied';
-    } else {
-      if (!effectiveAdmin) fail('admin-required', { teamId });
-      if (teamData.createdBy !== uid) fail('not-sole-effective-admin', { teamId });
-      if (members.docs.some((row) => row.id !== uid && row.data().status === 'active')) {
-        fail('active-members-remain', { teamId });
-      }
-      next.status = 'dissolving';
+    if (previous.status !== 'processing') {
+      checkpoints[checkpointKey(teamId)] = {
+        ...previous,
+        status: 'processing',
+        processingAction: action,
+        processingTransferToUid: decision.transferToUid || null,
+      };
+      transaction.update(job, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
     }
-    checkpoints[checkpointKey(teamId)] = next;
-    transaction.update(job, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
-    return action === 'dissolve' ? { dissolve: true } : { done: true };
+    const identityNames = [state.ownData?.displayName, state.ownData?.name]
+      .filter((value) => typeof value === 'string' && value.trim());
+    return { done: false, identityNames: [...new Set(identityNames)] };
   });
 
-  if (!result?.dissolve) return;
+  if (preflight.done) return;
+  if (action !== 'dissolve') {
+    await sanitizeTeamActivities(db, teamId, uid, {
+      names: preflight.identityNames,
+      verifiedEmail: context.verifiedEmail,
+    });
+  }
+
+  if (action !== 'dissolve') {
+    await db.runTransaction(async (transaction) => {
+      const [jobSnapshot, lockSnapshot] = await Promise.all([
+        transaction.get(job), transaction.get(lock),
+      ]);
+      if (!jobSnapshot.exists || !lockSnapshot.exists) fail('deletion-job-not-found');
+      const jobData = jobSnapshot.data();
+      assertJob(jobData, uid, requestId, planHash);
+      assertJob(lockSnapshot.data(), uid, requestId, planHash);
+      const previous = assertCheckpointDecision(jobData, teamId, decision);
+      if (previous.status === 'complete' || previous.decisionApplied) return;
+      if (previous.status !== 'processing') fail('team-decision-not-processing', { teamId });
+      const [teamSnapshot, ownSnapshot, settingsSnapshot, members, successorSnapshot] = await Promise.all([
+        transaction.get(team), transaction.get(ownMember), transaction.get(settingsRef), transaction.get(membersQuery),
+        successorRef ? transaction.get(successorRef) : Promise.resolve(null),
+      ]);
+      const state = validateTeamDecisionState(uid, decision, {
+        teamSnapshot, ownSnapshot, settingsSnapshot, members, successorSnapshot,
+      });
+      if (action === 'transfer') {
+        transaction.update(successorRef, { role: 'admin', updatedAt: Date.now(), updatedBy: decision.transferToUid });
+        if (state.settingsPatch) transaction.set(settingsRef, state.settingsPatch);
+      }
+      transaction.update(team, state.teamPatch);
+      transaction.delete(ownMember);
+      const checkpoints = { ...(jobData.teamCheckpoints || {}) };
+      checkpoints[checkpointKey(teamId)] = {
+        ...previous, decisionApplied: true, status: 'decision-applied',
+      };
+      transaction.update(job, { teamCheckpoints: checkpoints, updatedAt: Date.now() });
+    });
+    return;
+  }
+
   const recursiveDelete = context.recursiveDelete || ((reference) => db.recursiveDelete(reference));
   await recursiveDelete(team);
   await db.runTransaction(async (transaction) => {
@@ -433,22 +487,23 @@ function containsIdentity(value, uid) {
   return false;
 }
 
-function sanitizeActivityValue(value, uid, field = '', personContext = false) {
+function sanitizeActivityValue(value, uid, identity, field = '', personContext = false) {
   if (Array.isArray(value)) {
     if (UID_ARRAY_FIELDS.has(field)) return value.filter((item) => item !== uid);
-    return value.map((item) => sanitizeActivityValue(item, uid, '', personContext)).filter((item) => item !== DROP);
+    return value.map((item) => sanitizeActivityValue(item, uid, identity, '', personContext)).filter((item) => item !== DROP);
   }
   if (value && typeof value === 'object') {
     const localPerson = personContext || [...UID_FIELDS].some((key) => value[key] === uid);
     const output = {};
     for (const [key, item] of Object.entries(value)) {
       if (localPerson && /email/i.test(key)) continue;
-      const sanitized = sanitizeActivityValue(item, uid, key, localPerson);
+      const sanitized = sanitizeActivityValue(item, uid, identity, key, localPerson);
       if (sanitized !== DROP) output[key] = sanitized;
     }
     return output;
   }
   if (typeof value !== 'string') return value;
+  if (identity.verifiedEmail && value.includes(identity.verifiedEmail)) return DROP;
   if (UID_FIELDS.has(field) && value === uid) return DELETED_UID;
   if (personContext && ['displayName', 'memberName'].includes(field)) return DELETED_LABEL;
   if (value === uid || value.includes(`uid=${uid}`)) return DROP;
@@ -456,20 +511,29 @@ function sanitizeActivityValue(value, uid, field = '', personContext = false) {
 }
 
 function targetCoreText(action) {
+  if (action === 'joinTeam') return 'チームに参加しました';
+  if (action === 'leaveTeam') return 'チームから退出しました';
   if (action === 'removeMember') return `${DELETED_LABEL}さんを外しました`;
   if (action === 'approveMember') return `${DELETED_LABEL}さんを承認しました`;
   if (action === 'rejectMember') return `${DELETED_LABEL}さんの申請を却下しました`;
   return null;
 }
 
-function sanitizeActivity(data, uid) {
-  const actorWasDeleted = data?.actorUid === uid;
-  const targetWasDeleted = data?.targetUid === uid || data?.memberUid === uid;
+function sanitizeActivity(data, uid, identity = {}) {
+  const names = new Set((identity.names || []).filter((value) => typeof value === 'string' && value));
+  const isKnownName = (value) => typeof value === 'string' && names.has(value);
+  const actorPersonAction = data?.action === 'joinTeam' || data?.action === 'leaveTeam';
+  const actorWasDeleted = data?.actorUid === uid
+    || (actorPersonAction && (isKnownName(data?.actorName) || isKnownName(data?.targetName)));
+  const targetWasDeleted = data?.targetUid === uid || data?.memberUid === uid
+    || (PERSON_TARGET_ACTIONS.has(data?.action) && (isKnownName(data?.targetName) || isKnownName(data?.memberName)))
+    || (actorPersonAction && isKnownName(data?.targetName));
   let next = actorWasDeleted ? anonymizeActivityRecord(data, uid) : { ...(data || {}) };
+  if (actorWasDeleted && data?.actorUid !== uid) next.actorName = DELETED_LABEL;
   if (targetWasDeleted) {
     if (next.targetUid === uid) next.targetUid = DELETED_UID;
     if (next.memberUid === uid) next.memberUid = DELETED_UID;
-    if (PERSON_TARGET_ACTIONS.has(next.action)) {
+    if (PERSON_TARGET_ACTIONS.has(next.action) || actorPersonAction) {
       next.targetName = DELETED_LABEL;
       const coreText = targetCoreText(next.action);
       if (coreText) {
@@ -479,14 +543,21 @@ function sanitizeActivity(data, uid) {
       }
     }
   }
-  next = sanitizeActivityValue(next, uid);
+  if (actorWasDeleted && actorPersonAction) {
+    const coreText = targetCoreText(next.action);
+    if (coreText) {
+      next.coreText = coreText;
+      next.text = `${DELETED_LABEL}さんが${coreText}`;
+    }
+  }
+  next = sanitizeActivityValue(next, uid, identity);
   return next;
 }
 
-async function sanitizeTeamActivities(db, teamId, uid) {
+async function sanitizeTeamActivities(db, teamId, uid, identity = {}) {
   await pagedCollection(db.collection(`teams/${teamId}/activity`), async (documents) => {
     await commitMutations(db, documents, (batch, snapshot) => {
-      batch.set(snapshot.ref, sanitizeActivity(snapshot.data(), uid));
+      batch.set(snapshot.ref, sanitizeActivity(snapshot.data(), uid, identity));
     });
   });
 }
@@ -520,7 +591,7 @@ export async function removeUserIdentityFromTeam(db, uid, teamId, context = {}) 
     return;
   }
   if (!checkpoint.decisionApplied) fail('team-decision-incomplete', { teamId });
-  if (checkpoint.identityRemoved) return;
+  if (checkpoint.identityRemoved && context.forceIdentityCleanup !== true) return;
   const team = db.doc(`teams/${teamId}`);
   const teamSnapshot = await team.get();
   if (!teamSnapshot.exists) fail('team-not-found', { teamId });
@@ -545,7 +616,10 @@ export async function removeUserIdentityFromTeam(db, uid, teamId, context = {}) 
     });
   }
 
-  await sanitizeTeamActivities(db, teamId, uid);
+  await sanitizeTeamActivities(db, teamId, uid, {
+    names: context.identityNames || [],
+    verifiedEmail: context.verifiedEmail,
+  });
 
   for (const collectionName of [
     'members', 'memberEmails', 'memberNotes', 'payouts',
@@ -577,7 +651,7 @@ export async function removeUserIdentityFromTeam(db, uid, teamId, context = {}) 
   await updateBoundCheckpoint(db, uid, context, teamId, { identityRemoved: true, status: 'complete' });
 }
 
-async function identityQueryDocuments(db, uid, verifiedEmail) {
+function identityQueries(db, uid, verifiedEmail) {
   const queries = [
     db.collectionGroup('joinRequests').where('uid', '==', uid),
     db.collectionGroup('joinRequests').where('createdBy', '==', uid),
@@ -595,33 +669,42 @@ async function identityQueryDocuments(db, uid, verifiedEmail) {
       db.collection('teamInviteCodes').where('email', '==', verifiedEmail),
     );
   }
-  const documents = new Map();
-  for (const query of queries) {
-    await pagedCollection(query, async (page) => {
-      for (const document of page) documents.set(document.ref.path, document);
-    });
-  }
-  return [...documents.values()];
+  return queries;
 }
 
 async function deletePendingIdentityReferences(db, uid, verifiedEmail) {
-  const documents = await identityQueryDocuments(db, uid, verifiedEmail);
-  const codeRefs = new Map();
-  for (const document of documents) {
-    if (document.ref.parent.id !== 'invites') continue;
-    const code = document.data().code;
-    if (typeof code === 'string' && code) {
-      const ref = db.doc(`teamInviteCodes/${code}`);
-      codeRefs.set(ref.path, { ref });
-    }
-    const linked = await db.collection('teamInviteCodes').where('inviteId', '==', document.id).get();
-    for (const candidate of linked.docs) {
-      if (candidate.data().teamId === document.ref.parent.parent?.id) codeRefs.set(candidate.ref.path, candidate);
-    }
+  for (const query of identityQueries(db, uid, verifiedEmail)) {
+    await pagedCollection(query, async (page) => {
+      const pageDocuments = new Map(page.map((document) => [document.ref.path, document]));
+      const inviteTeams = new Map();
+      for (const document of page) {
+        if (document.ref.parent.id !== 'invites') continue;
+        const code = document.data().code;
+        if (typeof code === 'string' && code) {
+          const ref = db.doc(`teamInviteCodes/${code}`);
+          pageDocuments.set(ref.path, { ref });
+        }
+        const teamId = document.ref.parent.parent?.id;
+        if (!teamId) continue;
+        const teamIds = inviteTeams.get(document.id) || new Set();
+        teamIds.add(teamId);
+        inviteTeams.set(document.id, teamIds);
+      }
+      const inviteIds = [...inviteTeams.keys()];
+      for (let start = 0; start < inviteIds.length; start += 10) {
+        const ids = inviteIds.slice(start, start + 10);
+        const linkedQuery = db.collection('teamInviteCodes').where('inviteId', 'in', ids);
+        await pagedCollection(linkedQuery, async (linkedPage) => {
+          for (const candidate of linkedPage) {
+            if (inviteTeams.get(candidate.data().inviteId)?.has(candidate.data().teamId)) {
+              pageDocuments.set(candidate.ref.path, candidate);
+            }
+          }
+        });
+      }
+      await commitMutations(db, [...pageDocuments.values()], (batch, document) => batch.delete(document.ref));
+    });
   }
-  const all = new Map(documents.map((document) => [document.ref.path, document]));
-  for (const document of codeRefs.values()) all.set(document.ref.path, document);
-  if (all.size) await commitMutations(db, [...all.values()], (batch, document) => batch.delete(document.ref));
 }
 
 export async function deletePersonalCloudData(db, uid, context = {}) {
@@ -636,6 +719,13 @@ export async function deletePersonalCloudData(db, uid, context = {}) {
 
 async function queryHasDocument(query) {
   return !(await query.limit(1).get()).empty;
+}
+
+async function hasPendingIdentityReferences(db, uid, verifiedEmail) {
+  for (const query of identityQueries(db, uid, verifiedEmail)) {
+    if (await queryHasDocument(query)) return true;
+  }
+  return false;
 }
 
 export async function verifyNoProtectedReferences(db, uid, context = {}) {
@@ -669,7 +759,7 @@ export async function verifyNoProtectedReferences(db, uid, context = {}) {
     for (const field of IDENTITY_METADATA_FIELDS) checks.push(db.collectionGroup(collectionName).where(field, '==', uid));
   }
   for (const query of checks) if (await queryHasDocument(query)) fail('protected-references-remain');
-  if ((await identityQueryDocuments(db, uid, context.verifiedEmail)).length) fail('protected-references-remain');
+  if (await hasPendingIdentityReferences(db, uid, context.verifiedEmail)) fail('protected-references-remain');
 
   await pagedCollection(db.collectionGroup('activity'), async (activities) => {
     for (const activity of activities) {
@@ -687,15 +777,27 @@ export async function verifyNoProtectedReferences(db, uid, context = {}) {
   return { verified: true };
 }
 
-export async function markDeletionJobReadyForAuthDelete(db, uid, context = {}) {
+export async function reverifyDeletionBeforeAuthDelete(db, uid, context = {}) {
   const bound = await getBoundJob(db, uid, context);
-  const incomplete = Object.values(bound.data.teamCheckpoints || {}).some((checkpoint) => (
+  const checkpoints = Object.values(bound.data.teamCheckpoints || {});
+  const incomplete = checkpoints.some((checkpoint) => (
     checkpoint.status !== 'complete' || !checkpoint.decisionApplied || !checkpoint.identityRemoved
   ));
   if (incomplete) fail('team-cleanup-incomplete');
   if (!bound.data.personalDataDeleted) fail('personal-cleanup-incomplete');
+  for (const checkpoint of checkpoints) {
+    if (checkpoint.action === 'dissolve') continue;
+    await removeUserIdentityFromTeam(db, uid, checkpoint.teamId, {
+      ...context,
+      forceIdentityCleanup: true,
+    });
+  }
   await deletePersonalCloudData(db, uid, context);
-  await verifyNoProtectedReferences(db, uid, context);
+  return verifyNoProtectedReferences(db, uid, context);
+}
+
+export async function markDeletionJobReadyForAuthDelete(db, uid, context = {}) {
+  await reverifyDeletionBeforeAuthDelete(db, uid, context);
   const current = await getBoundJob(db, uid, context);
   await current.ref.update({
     phase: 'ready-for-auth-delete', verificationPassed: true,

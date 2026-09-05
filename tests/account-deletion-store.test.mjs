@@ -10,6 +10,7 @@ import {
   loadAccountDeletionSnapshot,
   markDeletionJobComplete,
   markDeletionJobReadyForAuthDelete,
+  reverifyDeletionBeforeAuthDelete,
   removeUserIdentityFromTeam,
   verifyNoProtectedReferences,
 } from '../functions/account-deletion-store.mjs';
@@ -241,12 +242,35 @@ test('transfer rejects malformed management arrays without partially changing ow
   await db.doc('teams/broken-transfer/members/deleted').set(member('deleted', 'admin'));
   await db.doc('teams/broken-transfer/members/successor').set(member('successor'));
   await db.doc('teams/broken-transfer/settings/main').set({ ownerUid: 'deleted', assignOwnerUids: ['deleted'] });
+  const untouchedActivity = {
+    actorUid: 'deleted', actorName: 'Deleted Admin', action: 'leaveTeam',
+    text: 'Deleted Adminさんがチームから退出しました', createdAt: 1,
+  };
+  await db.doc('teams/broken-transfer/activity/untouched').set(untouchedActivity);
   const ctx = await begin([{ teamId: 'broken-transfer', action: 'transfer', transferToUid: 'successor' }]);
   await assert.rejects(() => applyTeamDecision(db, 'deleted', {
     teamId: 'broken-transfer', action: 'transfer', transferToUid: 'successor',
   }, ctx), /invalid-identity-array/);
   assert.equal((await db.doc('teams/broken-transfer').get()).data().createdBy, 'deleted');
   assert.equal((await db.doc('teams/broken-transfer/members/deleted').get()).exists, true);
+  assert.deepEqual((await db.doc('teams/broken-transfer/activity/untouched').get()).data(), untouchedActivity);
+});
+
+test('invalid successor is rejected before activity anonymization starts', async () => {
+  await db.doc('teams/invalid-successor').set(team({
+    createdBy: 'deleted', memberUids: ['deleted'],
+  }));
+  await db.doc('teams/invalid-successor/members/deleted').set(member('deleted', 'admin'));
+  const untouchedActivity = {
+    actorUid: 'deleted', actorName: 'Deleted Admin', action: 'leaveTeam',
+    text: 'Deleted Adminさんがチームから退出しました', createdAt: 1,
+  };
+  await db.doc('teams/invalid-successor/activity/untouched').set(untouchedActivity);
+  const ctx = await begin([{ teamId: 'invalid-successor', action: 'transfer', transferToUid: 'missing' }]);
+  await assert.rejects(() => applyTeamDecision(db, 'deleted', {
+    teamId: 'invalid-successor', action: 'transfer', transferToUid: 'missing',
+  }, ctx), /invalid-successor/);
+  assert.deepEqual((await db.doc('teams/invalid-successor/activity/untouched').get()).data(), untouchedActivity);
 });
 
 test('dissolve requires a sole effective admin and deletes only that team subtree', async () => {
@@ -306,7 +330,12 @@ test('ready and complete checkpoints require protected-reference verification', 
   await removeUserIdentityFromTeam(db, 'deleted', 'team-a', ctx);
   await assert.rejects(() => markDeletionJobReadyForAuthDelete(db, 'deleted', ctx), /personal-cleanup-incomplete/);
   await deletePersonalCloudData(db, 'deleted', ctx);
+  await db.doc('teams/team-a/memberEmails/deleted').set({ uid: 'deleted', email: 'deleted@example.com' });
+  await db.doc('teams/team-a/projects/project-1').update({ assignedUids: ['deleted'] });
+  await reverifyDeletionBeforeAuthDelete(db, 'deleted', ctx);
   await markDeletionJobReadyForAuthDelete(db, 'deleted', ctx);
+  assert.equal((await db.doc('teams/team-a/memberEmails/deleted').get()).exists, false);
+  assert.deepEqual((await db.doc('teams/team-a/projects/project-1').get()).data().assignedUids, []);
   await assert.rejects(() => markDeletionJobComplete(db, 'deleted', ctx), /auth-deletion-required/);
   await markDeletionJobComplete(db, 'deleted', { ...ctx, authDeletionSucceeded: true });
   assert.equal((await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data().phase, 'complete');
@@ -327,6 +356,11 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
     text: '山田花子さんが「山田花子」を更新しました', createdAt: 457,
     legacyNote: 'deleted@example.com was shown historically',
   });
+  await db.doc('teams/team-a/activity/legacy-join').set({
+    action: 'joinTeam', actorName: '山田花子', targetName: '山田花子',
+    coreText: 'チームに参加しました', text: '山田花子さんがチームに参加しました',
+    contactEmail: 'deleted@example.com', createdAt: 458,
+  });
   const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
   await applyTeamDecision(db, 'deleted', { teamId: 'team-a', action: 'leave' }, ctx);
   await removeUserIdentityFromTeam(db, 'deleted', 'team-a', ctx);
@@ -342,7 +376,12 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
   const unstructured = (await db.doc('teams/team-a/activity/unstructured').get()).data();
   assert.equal(unstructured.actorName, '山田花子');
   assert.equal(unstructured.targetName, '山田花子');
-  assert.equal(unstructured.legacyNote, 'deleted@example.com was shown historically');
+  assert.equal(unstructured.legacyNote, undefined);
+  const legacyJoin = (await db.doc('teams/team-a/activity/legacy-join').get()).data();
+  assert.equal(legacyJoin.actorName, '削除済みユーザー');
+  assert.equal(legacyJoin.targetName, '削除済みユーザー');
+  assert.equal(legacyJoin.contactEmail, undefined);
+  assert.equal(legacyJoin.text, '削除済みユーザーさんがチームに参加しました');
 });
 
 test('non-member pending requests and UID or verified-email invitations are deleted globally', async () => {
@@ -375,9 +414,9 @@ test('ready reruns personal and pending identity cleanup instead of trusting a b
   assert.equal((await db.doc('teams/pending/invites/late').get()).exists, false);
 });
 
-test('identity query pagination removes more than one page without skipping duplicate document IDs', async () => {
+test('identity query pagination streams 450 matches without skipping duplicate document IDs', async () => {
   const writes = [];
-  for (let index = 0; index < 205; index += 1) {
+  for (let index = 0; index < 450; index += 1) {
     writes.push(db.doc(`teams/pending-${index}/invites/shared`).set({ invitedUid: 'deleted' }));
   }
   await Promise.all(writes);

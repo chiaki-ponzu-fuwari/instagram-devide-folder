@@ -9,6 +9,7 @@ export {
   loadAccountDeletionSnapshot,
   markDeletionJobComplete,
   markDeletionJobReadyForAuthDelete,
+  reverifyDeletionBeforeAuthDelete,
   removeUserIdentityFromTeam,
   verifyNoProtectedReferences,
 } from "./account-deletion-store.mjs";
