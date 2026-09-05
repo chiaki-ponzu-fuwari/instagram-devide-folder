@@ -111,6 +111,34 @@ test("request normalization rejects malformed or over-permissive team decisions"
   }
 });
 
+test("request normalization limits decision count and validates document IDs", () => {
+  const requestId = "a".repeat(32);
+  const validId = `team_${"x".repeat(123)}`;
+  assert.equal(validId.length, 128);
+  assert.deepEqual(normalizeDeletionRequest({
+    requestId,
+    teamDecisions: [{ teamId: validId, action: "transfer", transferToUid: validId }],
+  }).teamDecisions[0], {
+    teamId: validId,
+    action: "transfer",
+    transferToUid: validId,
+  });
+
+  const invalidDecisions = [
+    Array.from({ length: 101 }, (_, index) => ({ teamId: `team-${index}`, action: "leave" })),
+    [{ teamId: "team/child", action: "leave" }],
+    [{ teamId: "x".repeat(129), action: "leave" }],
+    [{ teamId: "team", action: "transfer", transferToUid: "user/child" }],
+    [{ teamId: "team", action: "transfer", transferToUid: "x".repeat(129) }],
+  ];
+  for (const teamDecisions of invalidDecisions) {
+    assert.throws(
+      () => normalizeDeletionRequest({ requestId, teamDecisions }),
+      expectCode("invalid-team-decision"),
+    );
+  }
+});
+
 test("deletion plan includes only the user's active memberships with required actions", () => {
   const memberships = [
     { teamId: "team-transfer", uid: "deleted", role: "admin", status: "active" },
@@ -216,6 +244,33 @@ test("deletion plan treats only active memberships as approved", () => {
   });
 });
 
+test("deletion plan treats a team creator as admin and rejects unknown active roles", () => {
+  assert.deepEqual(buildAccountDeletionPlan({
+    uid: "deleted",
+    memberships: [
+      { teamId: "creator-team", uid: "deleted", role: "member", status: "active" },
+      { teamId: "creator-team", uid: "successor", role: "member", status: "active" },
+    ],
+    teams: [{ id: "creator-team", createdBy: "deleted" }],
+  }), {
+    teams: [{
+      teamId: "creator-team",
+      teamName: "",
+      role: "admin",
+      requiredAction: "transfer",
+      eligibleSuccessorUids: ["successor"],
+    }],
+  });
+
+  assert.throws(() => buildAccountDeletionPlan({
+    uid: "deleted",
+    memberships: [
+      { teamId: "team", uid: "deleted", role: "owner", status: "active" },
+    ],
+    teams: [{ id: "team" }],
+  }), expectCode("invalid-plan-input"));
+});
+
 test("team decision validation accepts a complete matching decision set", () => {
   const plan = {
     teams: [
@@ -316,12 +371,11 @@ test("activity anonymization removes the deleted actor identity and preserves sh
     projectName: "春キャンペーン",
     text: "削除済みユーザーさんが「春キャンペーン」を更新しました",
     createdAt: "2026-09-05T12:00:00.000Z",
-    changes: { status: "完了" },
   });
   assert.deepEqual(activity, before);
 });
 
-test("activity anonymization replaces nested deleted UID references", () => {
+test("activity anonymization drops unstructured changes instead of retaining PII", () => {
   const activity = {
     actorUid: "deleted",
     actorName: "山田",
@@ -331,15 +385,30 @@ test("activity anonymization replaces nested deleted UID references", () => {
     changes: {
       assigneeUid: "deleted",
       assigneeUids: ["member-2", "deleted"],
-      nested: { updatedBy: "deleted", status: "進行中" },
+      before: { Email: "old@example.com", value: "秘密" },
+      after: { PROFILEURL: "https://example.com/private", value: "秘密2" },
+      value: "deleted@example.com",
     },
   };
 
-  assert.deepEqual(anonymizeActivityRecord(activity, "deleted").changes, {
-    assigneeUid: "deleted-user",
-    assigneeUids: ["member-2", "deleted-user"],
-    nested: { updatedBy: "deleted-user", status: "進行中" },
-  });
+  const anonymized = anonymizeActivityRecord(activity, "deleted");
+  assert.equal(Object.hasOwn(anonymized, "changes"), false);
+  assert.doesNotMatch(JSON.stringify(anonymized), /old@example|PROFILEURL|deleted@example|秘密/);
+  assert.equal(anonymized.action, "assignment_updated");
+  assert.equal(anonymized.projectName, "春案件");
+  assert.equal(anonymized.createdAt, "2026-09-05T12:00:00.000Z");
+});
+
+test("activity anonymization retains coreText only when it is a string", () => {
+  const anonymized = anonymizeActivityRecord({
+    actorUid: "deleted",
+    actorName: "山田",
+    action: "updated",
+    coreText: { before: "秘密", Email: "old@example.com" },
+    createdAt: "2026-09-05T12:00:00.000Z",
+  }, "deleted");
+
+  assert.equal(Object.hasOwn(anonymized, "coreText"), false);
 });
 
 test("activity anonymization preserves shared names when they equal the actor name", () => {

@@ -6,6 +6,7 @@ const DELETED_ACTOR_NAME = "削除済みユーザー";
 const REQUEST_FIELDS = new Set(["requestId", "teamDecisions"]);
 const DECISION_FIELDS = new Set(["teamId", "action", "transferToUid"]);
 const DECISION_ACTIONS = new Set(["leave", "transfer", "dissolve"]);
+const MAX_TEAM_DECISIONS = 100;
 const APPROVED_MEMBERSHIP_STATUS = "active";
 const ACTIVITY_SHARED_FIELDS = new Set([
   "id",
@@ -17,7 +18,6 @@ const ACTIVITY_SHARED_FIELDS = new Set([
   "projectName",
   "targetName",
   "createdAt",
-  "changes",
 ]);
 const SENSITIVE_ACTIVITY_FIELD = /(?:email|e-mail|mailaddress|displayname|profile|avatar|photo|image|phone|telephone|contact|address|handle|username|private|personal|identity|secret|token|memo|note|bank|payout|recipient|account)/i;
 
@@ -44,6 +44,17 @@ function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isSafeDocumentId(value) {
+  return (
+    typeof value === "string"
+    && value.length >= 1
+    && value.length <= 128
+    && value !== "."
+    && value !== ".."
+    && !/[\/\u0000-\u001f\u007f]/u.test(value)
+  );
+}
+
 function assertKnownFields(value, allowedFields) {
   for (const field of Object.keys(value)) {
     if (!allowedFields.has(field)) {
@@ -57,12 +68,12 @@ function normalizeTeamDecision(decision) {
     fail("invalid-team-decision", "Each team decision must be a plain object.");
   }
   assertKnownFields(decision, DECISION_FIELDS);
-  if (!isNonEmptyString(decision.teamId) || !DECISION_ACTIONS.has(decision.action)) {
+  if (!isSafeDocumentId(decision.teamId) || !DECISION_ACTIONS.has(decision.action)) {
     fail("invalid-team-decision", "Team decision has an invalid teamId or action.");
   }
 
   if (decision.action === "transfer") {
-    if (!isNonEmptyString(decision.transferToUid)) {
+    if (!isSafeDocumentId(decision.transferToUid)) {
       fail("invalid-team-decision", "A transfer decision requires transferToUid.");
     }
     return {
@@ -120,6 +131,9 @@ export function normalizeDeletionRequest(input) {
   if (input.teamDecisions !== undefined && !Array.isArray(input.teamDecisions)) {
     fail("invalid-team-decision", "teamDecisions must be an array.");
   }
+  if ((input.teamDecisions?.length ?? 0) > MAX_TEAM_DECISIONS) {
+    fail("invalid-team-decision", "teamDecisions cannot contain more than 100 entries.");
+  }
 
   return {
     requestId: input.requestId,
@@ -138,31 +152,46 @@ export function buildAccountDeletionPlan({ uid, memberships, teams } = {}) {
     teamsById.set(team.id, team);
   }
 
-  const approvedMemberships = memberships.filter((membership) => (
-    isPlainObject(membership)
-    && isNonEmptyString(membership.teamId)
-    && isNonEmptyString(membership.uid)
-    && membership.status === APPROVED_MEMBERSHIP_STATUS
-    && teamsById.has(membership.teamId)
-  ));
-
+  const activeUidsByTeam = new Map();
   const ownMembershipsByTeam = new Map();
-  for (const membership of approvedMemberships) {
-    if (membership.uid !== uid) continue;
-    const previous = ownMembershipsByTeam.get(membership.teamId);
-    if (!previous || membership.role === "admin") {
-      ownMembershipsByTeam.set(membership.teamId, membership);
+  for (const membership of memberships) {
+    if (
+      !isPlainObject(membership)
+      || !isNonEmptyString(membership.teamId)
+      || !isNonEmptyString(membership.uid)
+      || membership.status !== APPROVED_MEMBERSHIP_STATUS
+      || !teamsById.has(membership.teamId)
+    ) continue;
+
+    if (!activeUidsByTeam.has(membership.teamId)) {
+      activeUidsByTeam.set(membership.teamId, new Set());
+    }
+    activeUidsByTeam.get(membership.teamId).add(membership.uid);
+
+    if (membership.uid === uid) {
+      if (membership.role !== "admin" && membership.role !== "member") {
+        fail("invalid-plan-input", "Active membership has an unknown role.", {
+          teamId: membership.teamId,
+        });
+      }
+      const previous = ownMembershipsByTeam.get(membership.teamId);
+      if (!previous || membership.role === "admin") {
+        ownMembershipsByTeam.set(membership.teamId, membership);
+      }
     }
   }
 
   const planTeams = [];
-  for (const [teamId, ownMembership] of ownMembershipsByTeam) {
-    const team = teamsById.get(teamId);
-    const role = ownMembership.role === "admin" ? "admin" : "member";
+  for (const [teamId, team] of teamsById) {
+    const ownMembership = ownMembershipsByTeam.get(teamId);
+    const isCreator = team.createdBy === uid;
+    if (!ownMembership && !isCreator) continue;
+
+    const role = isCreator || ownMembership.role === "admin" ? "admin" : "member";
     const eligibleSuccessorUids = role === "admin"
-      ? [...new Set(approvedMemberships
-        .filter((membership) => membership.teamId === teamId && membership.uid !== uid)
-        .map((membership) => membership.uid))].sort()
+      ? [...(activeUidsByTeam.get(teamId) ?? [])]
+        .filter((memberUid) => memberUid !== uid)
+        .sort()
       : [];
 
     planTeams.push({
@@ -311,9 +340,11 @@ export function anonymizeActivityRecord(activity, deletedUid) {
   const sharedFacts = {};
   for (const [key, value] of Object.entries(activity)) {
     if (!ACTIVITY_SHARED_FIELDS.has(key) || key === "text") continue;
-    sharedFacts[key] = key === "coreText"
-      ? value
-      : cloneAndScrubActivityValue(value, deletedUid);
+    if (key === "coreText") {
+      if (typeof value === "string") sharedFacts[key] = value;
+      continue;
+    }
+    sharedFacts[key] = cloneAndScrubActivityValue(value, deletedUid);
   }
   const anonymizedText = anonymizeActivityText(activity);
   if (anonymizedText !== undefined) sharedFacts.text = anonymizedText;
