@@ -5,14 +5,14 @@
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "copy:ios": "cap copy ios && node scripts/ensure-ios-capacitor-plugins.mjs",
-    "test": "node --test tests/team-model.test.mjs tests/auth-state.test.mjs tests/personal-cloud-store.test.mjs tests/team-security-model.test.mjs tests/activity-identity.test.mjs tests/activity-identity-migration-cli.test.mjs tests/account-deletion-config.test.mjs tests/account-deletion-core.test.mjs tests/account-deletion-functions.test.mjs tests/account-deletion-client.test.mjs",
+    "test": "node --test tests/team-model.test.mjs tests/auth-state.test.mjs tests/personal-cloud-store.test.mjs tests/team-security-model.test.mjs tests/activity-identity.test.mjs tests/activity-identity-migration-cli.test.mjs tests/account-deletion-config.test.mjs tests/account-deletion-core.test.mjs tests/account-deletion-functions.test.mjs tests/account-deletion-client.test.mjs tests/account-deletion-ui.test.mjs",
     "test:rules": "firebase emulators:exec --only firestore \"node --test tests/firestore-rules.test.mjs\"",
-    "test:account-deletion": "node --test tests/account-deletion-config.test.mjs tests/account-deletion-core.test.mjs tests/account-deletion-functions.test.mjs tests/account-deletion-client.test.mjs",
+    "test:account-deletion": "node --test tests/account-deletion-config.test.mjs tests/account-deletion-core.test.mjs tests/account-deletion-functions.test.mjs tests/account-deletion-client.test.mjs tests/account-deletion-ui.test.mjs",
     "test:account-deletion:emulator": "firebase emulators:exec --only auth,firestore,functions \"node --test tests/account-deletion-config.test.mjs tests/account-deletion-core.test.mjs tests/account-deletion-functions.test.mjs tests/account-deletion-store.test.mjs tests/firestore-rules.test.mjs\"",
     "test:emulators": "firebase emulators:start --only auth,firestore,functions",
     "migrate:activity-identities:dry": "node scripts/migrate-activity-identity-uids.mjs --dry-run",
     "migrate:activity-identities:apply": "node scripts/migrate-activity-identity-uids.mjs --apply",
-    "check:js": "node --check www/js/auth-state.mjs && node --check www/js/firebase-auth.mjs && node --check www/js/firestore-core.mjs && node --check www/js/account-deletion-core.mjs && node --check www/js/account-deletion.mjs && node --check www/js/personal-cloud-backup.mjs && node --check www/js/personal-cloud-store.mjs && node --check www/js/team-model.mjs && node --check www/js/activity-identity.mjs && node --check www/js/team-cloud.mjs && node --check scripts/activity-identity-migration-core.mjs && node --check scripts/migrate-activity-identity-uids.mjs && node --check functions/account-deletion-functions.mjs && node --check functions/index.mjs",
+    "check:js": "node --check www/js/auth-state.mjs && node --check www/js/firebase-auth.mjs && node --check www/js/firestore-core.mjs && node --check www/js/account-deletion-core.mjs && node --check www/js/account-deletion.mjs && node --check www/js/account-deletion-ui.mjs && node --check www/js/personal-cloud-backup.mjs && node --check www/js/personal-cloud-store.mjs && node --check www/js/team-model.mjs && node --check www/js/activity-identity.mjs && node --check www/js/team-cloud.mjs && node --check scripts/activity-identity-migration-core.mjs && node --check scripts/migrate-activity-identity-uids.mjs && node --check functions/account-deletion-functions.mjs && node --check functions/index.mjs",
     "check:html": "node --check www/i18n.js"
   },
   "dependencies": {
