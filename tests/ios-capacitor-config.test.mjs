@@ -10,6 +10,7 @@ const packageSwift = readFileSync(new URL('../ios/App/CapApp-SPM/Package.swift',
 const ensureScript = readFileSync(new URL('../scripts/ensure-ios-capacitor-plugins.mjs', import.meta.url), 'utf8');
 const privacyManifestUrl = new URL('../ios/App/App/PrivacyInfo.xcprivacy', import.meta.url);
 const xcodeProject = readFileSync(new URL('../ios/App/App.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
+const packageResolved = JSON.parse(readFileSync(new URL('../ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', import.meta.url), 'utf8'));
 
 function loadPrivacyManifest() {
   const json = execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', fileURLToPath(privacyManifestUrl)], {
@@ -80,6 +81,7 @@ test('app privacy manifest matches the linked app-functionality data stored by t
     'NSPrivacyCollectedDataTypeOtherDiagnosticData',
     'NSPrivacyCollectedDataTypeOtherFinancialInfo',
     'NSPrivacyCollectedDataTypeOtherUserContent',
+    'NSPrivacyCollectedDataTypePaymentInfo',
     'NSPrivacyCollectedDataTypePhotosorVideos',
     'NSPrivacyCollectedDataTypeUserID',
   ];
@@ -128,4 +130,38 @@ test('App Store disclosure documents cover collected data, review, and future mo
   assert.match(monetization, /StoreKit 2/);
   assert.match(monetization, /購入を復元/);
   assert.match(monetization, /利用規約/);
+});
+
+test('privacy map separates stored bank details as linked payment information', () => {
+  const dataMap = readFileSync(new URL('../docs/app-store/privacy-data-map.md', import.meta.url), 'utf8');
+
+  assert.match(dataMap, /支払情報[^\n]*銀行名[^\n]*支店[^\n]*口座番号/);
+  assert.match(dataMap, /支払情報[^\n]*はい[^\n]*いいえ[^\n]*Appの機能/);
+  assert.doesNotMatch(dataMap, /支払情報・購入履歴[^\n]*カード番号や購入決済は扱いません/);
+});
+
+test('privacy map records the exact Google Sign-In 8.0.0 bundle disclosures used by the Release app', () => {
+  const googleSignIn = packageResolved.pins.find((pin) => pin.identity === 'googlesignin-ios');
+  const dataMap = readFileSync(new URL('../docs/app-store/privacy-data-map.md', import.meta.url), 'utf8');
+  const declarations = [
+    ['NSPrivacyCollectedDataTypeName', 'はい', 'Appの機能'],
+    ['NSPrivacyCollectedDataTypeEmailAddress', 'はい', 'Appの機能'],
+    ['NSPrivacyCollectedDataTypePhoneNumber', 'はい', 'Appの機能'],
+    ['NSPrivacyCollectedDataTypeOtherDataTypes', 'はい', 'Appの機能、分析'],
+    ['NSPrivacyCollectedDataTypeCoarseLocation', 'はい', 'Appの機能'],
+    ['NSPrivacyCollectedDataTypeUserID', 'はい', 'Appの機能、分析'],
+    ['NSPrivacyCollectedDataTypeDeviceID', 'はい', '分析'],
+    ['NSPrivacyCollectedDataTypeOtherUsageData', 'はい', '分析'],
+  ];
+
+  assert.equal(googleSignIn?.state?.version, '8.0.0');
+  for (const [type, linked, purposes] of declarations) {
+    assert.ok(
+      dataMap.includes(`| \`${type}\` | ${linked} | いいえ | ${purposes} |`),
+      `${type} should match the Release SDK manifest`,
+    );
+  }
+  assert.match(dataMap, /Xcode[^\n]*自動[^\n]*集約/);
+  assert.match(dataMap, /App側のmanifest[^\n]*重複[^\n]*不要/);
+  assert.doesNotMatch(dataMap, /デバイスID、位置情報[^\n]*取得しません/);
 });
