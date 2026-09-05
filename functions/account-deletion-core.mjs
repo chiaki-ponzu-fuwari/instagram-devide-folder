@@ -264,42 +264,13 @@ export function validateTeamDecisions(plan, decisions) {
   return normalized.sort((left, right) => left.teamId.localeCompare(right.teamId));
 }
 
-function collectIdentityStrings(value, result) {
-  if (typeof value === "string" && value.length > 0) {
-    result.add(value);
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const nestedValue of value) collectIdentityStrings(nestedValue, result);
-    return;
-  }
-  if (isPlainObject(value)) {
-    for (const nestedValue of Object.values(value)) collectIdentityStrings(nestedValue, result);
-  }
-}
-
-function cloneAndScrubActivityValue(
-  value,
-  identityStrings,
-  deletedUid,
-  replaceIdentityStrings = false,
-) {
+function cloneAndScrubActivityValue(value, deletedUid) {
   if (typeof value === "string") {
     if (value === deletedUid) return DELETED_ACTOR_UID;
-    if (!replaceIdentityStrings) return value;
-    let anonymized = value;
-    for (const identity of identityStrings) {
-      anonymized = anonymized.split(identity).join(DELETED_ACTOR_NAME);
-    }
-    return anonymized;
+    return value;
   }
   if (Array.isArray(value)) {
-    return value.map((nestedValue) => cloneAndScrubActivityValue(
-      nestedValue,
-      identityStrings,
-      deletedUid,
-      replaceIdentityStrings,
-    ));
+    return value.map((nestedValue) => cloneAndScrubActivityValue(nestedValue, deletedUid));
   }
   if (!isPlainObject(value)) return value;
 
@@ -312,14 +283,23 @@ function cloneAndScrubActivityValue(
       || SENSITIVE_ACTIVITY_FIELD.test(key)
       || (key.startsWith("actor") && key !== "actorUid" && key !== "actorName")
     ) continue;
-    copy[key] = cloneAndScrubActivityValue(
-      nestedValue,
-      identityStrings,
-      deletedUid,
-      key === "text" || key === "coreText",
-    );
+    copy[key] = cloneAndScrubActivityValue(nestedValue, deletedUid);
   }
   return copy;
+}
+
+function anonymizeActivityText(activity) {
+  if (typeof activity.text !== "string") return undefined;
+  if (typeof activity.coreText === "string") {
+    return `${DELETED_ACTOR_NAME}さんが${activity.coreText}`;
+  }
+  if (typeof activity.actorName !== "string" || activity.actorName.length === 0) {
+    return undefined;
+  }
+
+  const actorPrefix = `${activity.actorName}さんが`;
+  if (!activity.text.startsWith(actorPrefix)) return undefined;
+  return `${DELETED_ACTOR_NAME}さんが${activity.text.slice(actorPrefix.length)}`;
 }
 
 export function anonymizeActivityRecord(activity, deletedUid) {
@@ -328,24 +308,18 @@ export function anonymizeActivityRecord(activity, deletedUid) {
   }
   if (activity.actorUid !== deletedUid) return activity;
 
-  const identityStrings = new Set();
-  for (const [key, value] of Object.entries(activity)) {
-    if (
-      key === "actorName"
-      || SENSITIVE_ACTIVITY_FIELD.test(key)
-      || (key.startsWith("actor") && key !== "actorUid")
-    ) {
-      collectIdentityStrings(value, identityStrings);
-    }
-  }
-
   const sharedFacts = {};
   for (const [key, value] of Object.entries(activity)) {
-    if (ACTIVITY_SHARED_FIELDS.has(key)) sharedFacts[key] = value;
+    if (!ACTIVITY_SHARED_FIELDS.has(key) || key === "text") continue;
+    sharedFacts[key] = key === "coreText"
+      ? value
+      : cloneAndScrubActivityValue(value, deletedUid);
   }
+  const anonymizedText = anonymizeActivityText(activity);
+  if (anonymizedText !== undefined) sharedFacts.text = anonymizedText;
 
   return {
-    ...cloneAndScrubActivityValue(sharedFacts, identityStrings, deletedUid),
+    ...sharedFacts,
     actorUid: DELETED_ACTOR_UID,
     actorName: DELETED_ACTOR_NAME,
   };

@@ -360,8 +360,8 @@ test("activity anonymization preserves shared names when they equal the actor na
     action: "project_updated",
     projectName: "山田商店",
     targetName: "山田商店",
-    text: "削除済みユーザーさんが「削除済みユーザー」を更新しました",
-    coreText: "「削除済みユーザー」を更新しました",
+    text: "削除済みユーザーさんが「山田商店」を更新しました",
+    coreText: "「山田商店」を更新しました",
     createdAt: "2026-09-05T12:00:00.000Z",
   });
 });
