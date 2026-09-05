@@ -111,14 +111,14 @@ test("request normalization rejects malformed or over-permissive team decisions"
   }
 });
 
-test("deletion plan includes only the user's approved memberships with required actions", () => {
+test("deletion plan includes only the user's active memberships with required actions", () => {
   const memberships = [
     { teamId: "team-transfer", uid: "deleted", role: "admin", status: "active" },
     { teamId: "team-transfer", uid: "successor-b", role: "member", status: "approved" },
     { teamId: "team-transfer", uid: "successor-a", role: "member", status: "active" },
     { teamId: "team-transfer", uid: "pending-user", role: "member", status: "pending" },
     { teamId: "team-solo", uid: "deleted", role: "admin", status: "active" },
-    { teamId: "team-member", uid: "deleted", role: "member", status: "approved" },
+    { teamId: "team-member", uid: "deleted", role: "member", status: "active" },
     { teamId: "team-pending", uid: "deleted", role: "admin", status: "pending" },
     { teamId: "other-team", uid: "outsider", role: "member", status: "active" },
     { teamId: "team-transfer", uid: "successor-a", role: "member", status: "active" },
@@ -153,7 +153,7 @@ test("deletion plan includes only the user's approved memberships with required 
         teamName: "引き継ぐチーム",
         role: "admin",
         requiredAction: "transfer",
-        eligibleSuccessorUids: ["successor-a", "successor-b"],
+        eligibleSuccessorUids: ["successor-a"],
       },
     ],
   });
@@ -190,6 +190,30 @@ test("deletion plan is deterministic and prevents membership data crossing team 
     ],
   });
   assert.deepEqual(buildAccountDeletionPlan(input), buildAccountDeletionPlan(structuredClone(input)));
+});
+
+test("deletion plan treats only active memberships as approved", () => {
+  const input = {
+    uid: "deleted",
+    memberships: [
+      { teamId: "shared", uid: "deleted", role: "admin", status: "active" },
+      { teamId: "shared", uid: "active-successor", role: "member", status: "active" },
+      { teamId: "shared", uid: "approved-successor", role: "member", status: "approved" },
+      { teamId: "shared", uid: "pending-successor", role: "member", status: "pending" },
+      { teamId: "not-active", uid: "deleted", role: "admin", status: "approved" },
+    ],
+    teams: [{ id: "shared" }, { id: "not-active" }],
+  };
+
+  assert.deepEqual(buildAccountDeletionPlan(input), {
+    teams: [{
+      teamId: "shared",
+      teamName: "",
+      role: "admin",
+      requiredAction: "transfer",
+      eligibleSuccessorUids: ["active-successor"],
+    }],
+  });
 });
 
 test("team decision validation accepts a complete matching decision set", () => {
@@ -295,6 +319,51 @@ test("activity anonymization removes the deleted actor identity and preserves sh
     changes: { status: "完了" },
   });
   assert.deepEqual(activity, before);
+});
+
+test("activity anonymization replaces nested deleted UID references", () => {
+  const activity = {
+    actorUid: "deleted",
+    actorName: "山田",
+    action: "assignment_updated",
+    projectName: "春案件",
+    createdAt: "2026-09-05T12:00:00.000Z",
+    changes: {
+      assigneeUid: "deleted",
+      assigneeUids: ["member-2", "deleted"],
+      nested: { updatedBy: "deleted", status: "進行中" },
+    },
+  };
+
+  assert.deepEqual(anonymizeActivityRecord(activity, "deleted").changes, {
+    assigneeUid: "deleted-user",
+    assigneeUids: ["member-2", "deleted-user"],
+    nested: { updatedBy: "deleted-user", status: "進行中" },
+  });
+});
+
+test("activity anonymization preserves shared names when they equal the actor name", () => {
+  const activity = {
+    actorUid: "deleted",
+    actorName: "山田商店",
+    action: "project_updated",
+    projectName: "山田商店",
+    targetName: "山田商店",
+    text: "山田商店さんが「山田商店」を更新しました",
+    coreText: "「山田商店」を更新しました",
+    createdAt: "2026-09-05T12:00:00.000Z",
+  };
+
+  assert.deepEqual(anonymizeActivityRecord(activity, "deleted"), {
+    actorUid: "deleted-user",
+    actorName: "削除済みユーザー",
+    action: "project_updated",
+    projectName: "山田商店",
+    targetName: "山田商店",
+    text: "削除済みユーザーさんが「削除済みユーザー」を更新しました",
+    coreText: "「削除済みユーザー」を更新しました",
+    createdAt: "2026-09-05T12:00:00.000Z",
+  });
 });
 
 test("activity anonymization does not change another actor's record", () => {

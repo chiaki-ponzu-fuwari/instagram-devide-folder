@@ -6,7 +6,7 @@ const DELETED_ACTOR_NAME = "削除済みユーザー";
 const REQUEST_FIELDS = new Set(["requestId", "teamDecisions"]);
 const DECISION_FIELDS = new Set(["teamId", "action", "transferToUid"]);
 const DECISION_ACTIONS = new Set(["leave", "transfer", "dissolve"]);
-const APPROVED_STATUSES = new Set(["active", "approved"]);
+const APPROVED_MEMBERSHIP_STATUS = "active";
 const ACTIVITY_SHARED_FIELDS = new Set([
   "id",
   "type",
@@ -142,7 +142,7 @@ export function buildAccountDeletionPlan({ uid, memberships, teams } = {}) {
     isPlainObject(membership)
     && isNonEmptyString(membership.teamId)
     && isNonEmptyString(membership.uid)
-    && APPROVED_STATUSES.has(membership.status)
+    && membership.status === APPROVED_MEMBERSHIP_STATUS
     && teamsById.has(membership.teamId)
   ));
 
@@ -278,8 +278,15 @@ function collectIdentityStrings(value, result) {
   }
 }
 
-function cloneAndScrubActivityValue(value, identityStrings) {
+function cloneAndScrubActivityValue(
+  value,
+  identityStrings,
+  deletedUid,
+  replaceIdentityStrings = false,
+) {
   if (typeof value === "string") {
+    if (value === deletedUid) return DELETED_ACTOR_UID;
+    if (!replaceIdentityStrings) return value;
     let anonymized = value;
     for (const identity of identityStrings) {
       anonymized = anonymized.split(identity).join(DELETED_ACTOR_NAME);
@@ -287,7 +294,12 @@ function cloneAndScrubActivityValue(value, identityStrings) {
     return anonymized;
   }
   if (Array.isArray(value)) {
-    return value.map((nestedValue) => cloneAndScrubActivityValue(nestedValue, identityStrings));
+    return value.map((nestedValue) => cloneAndScrubActivityValue(
+      nestedValue,
+      identityStrings,
+      deletedUid,
+      replaceIdentityStrings,
+    ));
   }
   if (!isPlainObject(value)) return value;
 
@@ -300,7 +312,12 @@ function cloneAndScrubActivityValue(value, identityStrings) {
       || SENSITIVE_ACTIVITY_FIELD.test(key)
       || (key.startsWith("actor") && key !== "actorUid" && key !== "actorName")
     ) continue;
-    copy[key] = cloneAndScrubActivityValue(nestedValue, identityStrings);
+    copy[key] = cloneAndScrubActivityValue(
+      nestedValue,
+      identityStrings,
+      deletedUid,
+      key === "text" || key === "coreText",
+    );
   }
   return copy;
 }
@@ -328,7 +345,7 @@ export function anonymizeActivityRecord(activity, deletedUid) {
   }
 
   return {
-    ...cloneAndScrubActivityValue(sharedFacts, identityStrings),
+    ...cloneAndScrubActivityValue(sharedFacts, identityStrings, deletedUid),
     actorUid: DELETED_ACTOR_UID,
     actorName: DELETED_ACTOR_NAME,
   };
