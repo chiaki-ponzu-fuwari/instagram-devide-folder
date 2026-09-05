@@ -8,6 +8,11 @@ import {
   createDeleteAccountHandler,
   createGetAccountDeletionPlanHandler,
 } from '../functions/account-deletion-functions.mjs';
+import {
+  applyTeamDecision,
+  beginAccountDeletionJob,
+  removeUserIdentityFromTeam,
+} from '../functions/account-deletion-store.mjs';
 
 const REQUEST_ID = 'request_123456789012345678901234';
 
@@ -54,6 +59,7 @@ function baseDeps(overrides = {}) {
     HttpsError: TestHttpsError,
     db: {},
     nowSeconds: () => 1_100,
+    loadAccountDeletionJob: async () => null,
     loadAccountDeletionSnapshot: async () => snapshot(),
     ...overrides,
   };
@@ -137,6 +143,84 @@ test('delete validates decisions and runs cleanup in stable order with Auth dele
   assert.equal(calls[0][3][0].teamId, 'team-a');
 });
 
+test('delete resumes from the saved plan without loading a changed snapshot', async () => {
+  const calls = [];
+  const storedDecisions = [
+    { teamId: 'team-a', action: 'leave', transferToUid: null },
+    { teamId: 'team-b', action: 'transfer', transferToUid: 'successor' },
+  ];
+  const handler = createDeleteAccountHandler(baseDeps({
+    loadAccountDeletionJob: async (_db, uid, requestId) => {
+      calls.push(['load-job', uid, requestId]);
+      return {
+        requestId,
+        planHash: 'saved-plan-hash',
+        phase: 'started',
+        expectedTeams: storedDecisions,
+      };
+    },
+    loadAccountDeletionSnapshot: async () => {
+      throw new Error('changed snapshot must not be loaded');
+    },
+    beginAccountDeletionJob: async (_db, _uid, requestId, planHash, decisions) => {
+      calls.push(['begin', requestId, planHash, decisions]);
+    },
+    applyTeamDecision: async (_db, _uid, decision) => calls.push(['apply', decision.teamId]),
+    removeUserIdentityFromTeam: async (_db, _uid, teamId) => calls.push(['remove', teamId]),
+    deletePersonalCloudData: async () => calls.push(['personal']),
+    markDeletionJobReadyForAuthDelete: async () => calls.push(['ready']),
+    reverifyDeletionBeforeAuthDelete: async () => calls.push(['reverify']),
+    deleteAuthUser: async () => calls.push(['auth-delete']),
+    markDeletionJobComplete: async () => calls.push(['complete']),
+    sleep: async () => {},
+  }));
+
+  const result = await handler({
+    auth: auth(),
+    data: {
+      requestId: REQUEST_ID,
+      teamDecisions: [
+        { teamId: 'team-b', action: 'transfer', transferToUid: 'successor' },
+        { teamId: 'team-a', action: 'leave' },
+      ],
+    },
+  });
+
+  assert.deepEqual(result, { deleted: true, requestId: REQUEST_ID });
+  assert.deepEqual(calls[0], ['load-job', 'user-a', REQUEST_ID]);
+  assert.deepEqual(calls[1], ['begin', REQUEST_ID, 'saved-plan-hash', [
+    { teamId: 'team-a', action: 'leave' },
+    { teamId: 'team-b', action: 'transfer', transferToUid: 'successor' },
+  ]]);
+  assert.deepEqual(calls.filter(([name]) => name === 'apply').map(([, teamId]) => teamId), [
+    'team-a', 'team-b',
+  ]);
+});
+
+test('delete rejects changed decisions when resuming a saved job', async () => {
+  let began = false;
+  const handler = createDeleteAccountHandler(baseDeps({
+    loadAccountDeletionJob: async () => ({
+      requestId: REQUEST_ID,
+      planHash: 'saved-plan-hash',
+      phase: 'started',
+      expectedTeams: [{ teamId: 'team-a', action: 'leave', transferToUid: null }],
+    }),
+    loadAccountDeletionSnapshot: async () => {
+      throw new Error('snapshot must not be loaded');
+    },
+    beginAccountDeletionJob: async () => { began = true; },
+  }));
+  await assert.rejects(() => handler({
+    auth: auth(),
+    data: {
+      requestId: REQUEST_ID,
+      teamDecisions: [{ teamId: 'team-a', action: 'transfer', transferToUid: 'successor' }],
+    },
+  }), (error) => error.code === 'aborted' && error.details.reason === 'team-plan-mismatch');
+  assert.equal(began, false);
+});
+
 test('delete rejects a mismatched decision before creating a job or deleting Auth', async () => {
   let began = false;
   let authDeleted = false;
@@ -200,6 +284,15 @@ test('mark-complete retries three times but returns deletion success without log
 test('Auth user-not-found is idempotent success for the same ready job', async () => {
   let completed = false;
   const handler = createDeleteAccountHandler(baseDeps({
+    loadAccountDeletionJob: async () => ({
+      requestId: REQUEST_ID,
+      planHash: 'saved-plan-hash',
+      phase: 'complete',
+      expectedTeams: [{ teamId: 'team-a', action: 'transfer', transferToUid: 'successor' }],
+    }),
+    loadAccountDeletionSnapshot: async () => {
+      throw new Error('complete job must not rebuild its plan');
+    },
     beginAccountDeletionJob: async () => {},
     applyTeamDecision: async () => {},
     removeUserIdentityFromTeam: async () => {},
@@ -259,7 +352,7 @@ const emulatorAvailable = Boolean(
   && process.env.FIRESTORE_EMULATOR_HOST,
 );
 
-test('emulator callable completes transfer, leave, dissolve, personal cleanup, and Auth deletion', {
+test('emulator callable completes fresh and partially-applied account deletion jobs', {
   skip: !emulatorAvailable,
 }, async () => {
   await import('../functions/index.mjs');
@@ -349,4 +442,53 @@ test('emulator callable completes transfer, leave, dissolve, personal cleanup, a
     { headers: { authorization: `Bearer ${signedUp.idToken}` } },
   );
   assert.equal(protectedRead.ok, false);
+
+  const resumeSignupResponse = await fetch(`${authBase}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'resume-test@example.com', password: 'password123', returnSecureToken: true }),
+  });
+  assert.equal(resumeSignupResponse.ok, true, await resumeSignupResponse.clone().text());
+  const resumeUser = await resumeSignupResponse.json();
+  const resumeUid = resumeUser.localId;
+  const resumeRequestId = 'resume_request_123456789012345678';
+  const resumePlanHash = 'saved-resume-plan-hash';
+  const resumeDecisions = [
+    { teamId: 'resume-a', action: 'leave' },
+    { teamId: 'resume-b', action: 'leave' },
+  ];
+  for (const teamId of ['resume-a', 'resume-b']) {
+    await db.doc(`teams/${teamId}`).set({
+      name: teamId, createdBy: successor, memberUids: [successor, resumeUid], settings: {},
+    });
+    await db.doc(`teams/${teamId}/members/${successor}`).set(activeMember(successor, 'admin', '管理者'));
+    await db.doc(`teams/${teamId}/members/${resumeUid}`).set(activeMember(resumeUid, 'member', '再開対象'));
+  }
+  await db.doc(`users/${resumeUid}/projects/private`).set({ name: '削除対象' });
+  await beginAccountDeletionJob(
+    db, resumeUid, resumeRequestId, resumePlanHash, resumeDecisions,
+  );
+  const resumeContext = { requestId: resumeRequestId, planHash: resumePlanHash };
+  await applyTeamDecision(db, resumeUid, resumeDecisions[0], resumeContext);
+  await removeUserIdentityFromTeam(db, resumeUid, 'resume-a', resumeContext);
+  assert.equal((await db.doc(`teams/resume-a/members/${resumeUid}`).get()).exists, false);
+
+  const resumedResponse = await invoke('deleteAccount', {
+    requestId: resumeRequestId,
+    teamDecisions: [...resumeDecisions].reverse(),
+  }, resumeUser.idToken);
+  assert.equal(resumedResponse.ok, true, await resumedResponse.clone().text());
+  assert.deepEqual((await resumedResponse.json()).result, {
+    deleted: true, requestId: resumeRequestId,
+  });
+  assert.equal((await db.doc(`teams/resume-b/members/${resumeUid}`).get()).exists, false);
+  assert.equal((await db.doc(`users/${resumeUid}`).get()).exists, false);
+  assert.equal(
+    (await db.doc(`accountDeletionJobs/${resumeUid}_${resumeRequestId}`).get()).data().phase,
+    'complete',
+  );
+  await assert.rejects(
+    () => adminAuth.getUser(resumeUid),
+    (error) => error.code === 'auth/user-not-found',
+  );
 });

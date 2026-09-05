@@ -30,6 +30,7 @@ export {
   applyTeamDecision,
   beginAccountDeletionJob,
   deletePersonalCloudData,
+  loadAccountDeletionJob,
   loadAccountDeletionSnapshot,
   markDeletionJobComplete,
   markDeletionJobReadyForAuthDelete,

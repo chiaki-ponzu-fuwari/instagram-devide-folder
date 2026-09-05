@@ -17,6 +17,7 @@ import {
   applyTeamDecision,
   beginAccountDeletionJob,
   deletePersonalCloudData,
+  loadAccountDeletionJob,
   loadAccountDeletionSnapshot,
   markDeletionJobComplete,
   markDeletionJobReadyForAuthDelete,
@@ -132,6 +133,7 @@ function defaults() {
     applyTeamDecision,
     beginAccountDeletionJob,
     deletePersonalCloudData,
+    loadAccountDeletionJob,
     loadAccountDeletionSnapshot,
     markDeletionJobComplete,
     markDeletionJobReadyForAuthDelete,
@@ -183,10 +185,23 @@ export function createDeleteAccountHandler(overrides = {}) {
       const normalized = normalizeDeletionRequest(request.data);
       requestId = normalized.requestId;
       const db = deps.db ?? getFirestore();
-      const snapshot = await deps.loadAccountDeletionSnapshot(db, uid);
-      const plan = buildAccountDeletionPlan(snapshot);
-      const decisions = validateTeamDecisions(plan, normalized.teamDecisions);
-      const planHash = hashPlan(plan);
+      const existingJob = await deps.loadAccountDeletionJob(db, uid, requestId);
+      let decisions;
+      let planHash;
+      if (existingJob) {
+        const requestedDecisions = canonicalDecisions(normalized.teamDecisions);
+        const storedDecisions = canonicalDecisions(existingJob.expectedTeams);
+        if (canonicalJson(requestedDecisions) !== canonicalJson(storedDecisions)) {
+          throw new AccountDeletionStoreError('team-plan-mismatch');
+        }
+        decisions = operationalDecisions(storedDecisions);
+        planHash = existingJob.planHash;
+      } else {
+        const snapshot = await deps.loadAccountDeletionSnapshot(db, uid);
+        const plan = buildAccountDeletionPlan(snapshot);
+        decisions = validateTeamDecisions(plan, normalized.teamDecisions);
+        planHash = hashPlan(plan);
+      }
       const context = { requestId, planHash, verifiedEmail: verifiedEmail(request) };
 
       await deps.beginAccountDeletionJob(db, uid, requestId, planHash, decisions);
@@ -231,6 +246,29 @@ export function createDeleteAccountHandler(overrides = {}) {
       throw mapError(error, deps);
     }
   };
+}
+
+function canonicalDecisions(decisions) {
+  if (!Array.isArray(decisions)) throw new AccountDeletionStoreError('team-plan-mismatch');
+  const normalized = decisions.map((decision) => ({
+    teamId: decision?.teamId,
+    action: decision?.action,
+    transferToUid: decision?.action === 'transfer' ? decision?.transferToUid : null,
+  }));
+  if (normalized.some((decision) => (
+    typeof decision.teamId !== 'string'
+    || !['leave', 'transfer', 'dissolve'].includes(decision.action)
+    || (decision.action === 'transfer' && typeof decision.transferToUid !== 'string')
+  ))) throw new AccountDeletionStoreError('team-plan-mismatch');
+  return normalized.sort((left, right) => left.teamId.localeCompare(right.teamId));
+}
+
+function operationalDecisions(decisions) {
+  return decisions.map((decision) => (
+    decision.action === 'transfer'
+      ? { teamId: decision.teamId, action: decision.action, transferToUid: decision.transferToUid }
+      : { teamId: decision.teamId, action: decision.action }
+  ));
 }
 
 export { canonicalJson, hashPlan };

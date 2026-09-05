@@ -7,6 +7,7 @@ import {
   applyTeamDecision,
   beginAccountDeletionJob,
   deletePersonalCloudData,
+  loadAccountDeletionJob,
   loadAccountDeletionSnapshot,
   markDeletionJobComplete,
   markDeletionJobReadyForAuthDelete,
@@ -147,6 +148,23 @@ test('job creation is idempotent and rejects a changed plan hash', async () => {
   const lock = (await db.doc('accountDeletionLocks/deleted').get()).data();
   assert.equal(lock.requestId, requestId);
   assert.equal(lock.planHash, planHash);
+});
+
+test('job loading returns only resumable state and verifies the deletion lock', async () => {
+  assert.equal(await loadAccountDeletionJob(db, 'deleted', requestId), null);
+  const decisions = [{ teamId: 'team-a', action: 'leave' }];
+  await beginAccountDeletionJob(db, 'deleted', requestId, planHash, decisions);
+  assert.deepEqual(await loadAccountDeletionJob(db, 'deleted', requestId), {
+    requestId,
+    planHash,
+    phase: 'started',
+    expectedTeams: [{ teamId: 'team-a', action: 'leave', transferToUid: null }],
+  });
+  await db.doc('accountDeletionLocks/deleted').update({ planHash: 'tampered' });
+  await assert.rejects(
+    () => loadAccountDeletionJob(db, 'deleted', requestId),
+    /plan-hash-mismatch/,
+  );
 });
 
 test('member leave preserves shared records and removes identity only from its team', async () => {

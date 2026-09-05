@@ -273,6 +273,52 @@ export async function loadAccountDeletionSnapshot(db, uid) {
   return { uid, teams, memberships };
 }
 
+function resumableExpectedTeams(expectedTeams) {
+  if (!Array.isArray(expectedTeams)) fail('invalid-deletion-job');
+  const seen = new Set();
+  const normalized = expectedTeams.map((decision) => {
+    if (
+      !decision || typeof decision !== 'object' || Array.isArray(decision)
+      || Object.keys(decision).some((field) => !['teamId', 'action', 'transferToUid'].includes(field))
+    ) fail('invalid-deletion-job');
+    requireId(decision.teamId, 'team-id');
+    if (seen.has(decision.teamId)) fail('invalid-deletion-job');
+    seen.add(decision.teamId);
+    if (!['leave', 'transfer', 'dissolve'].includes(decision.action)) fail('invalid-deletion-job');
+    if (decision.action === 'transfer') requireId(decision.transferToUid, 'successor-uid');
+    else if (decision.transferToUid !== null) fail('invalid-deletion-job');
+    return {
+      teamId: decision.teamId,
+      action: decision.action,
+      transferToUid: decision.action === 'transfer' ? decision.transferToUid : null,
+    };
+  });
+  const sorted = [...normalized].sort((left, right) => left.teamId.localeCompare(right.teamId));
+  if (JSON.stringify(normalized) !== JSON.stringify(sorted)) fail('invalid-deletion-job');
+  return normalized;
+}
+
+export async function loadAccountDeletionJob(db, uid, requestId) {
+  requireId(uid, 'uid');
+  requireId(requestId, 'request-id');
+  const ref = jobRef(db, uid, requestId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) return null;
+  const data = snapshot.data();
+  const planHash = requireId(data?.planHash, 'plan-hash');
+  assertJob(data, uid, requestId, planHash);
+  if (typeof data.phase !== 'string' || !data.phase) fail('invalid-deletion-job');
+  const lockSnapshot = await lockRef(db, uid).get();
+  if (!lockSnapshot.exists) fail('deletion-lock-not-found');
+  assertJob(lockSnapshot.data(), uid, requestId, planHash);
+  return {
+    requestId,
+    planHash,
+    phase: data.phase,
+    expectedTeams: resumableExpectedTeams(data.expectedTeams),
+  };
+}
+
 export async function beginAccountDeletionJob(db, uid, requestId, planHash, decisions = []) {
   requireId(planHash, 'plan-hash');
   const expectedTeams = normalizedDecisions(decisions);
