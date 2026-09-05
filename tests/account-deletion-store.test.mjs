@@ -489,6 +489,15 @@ test('ready reruns personal and pending identity cleanup instead of trusting a b
   assert.equal((await db.doc('teams/pending/invites/late').get()).exists, false);
 });
 
+test('UID-only deletion can become ready when the token has no verified email', async () => {
+  const ctx = await begin([], { verifiedEmail: undefined });
+  await deletePersonalCloudData(db, 'deleted', ctx);
+  await markDeletionJobReadyForAuthDelete(db, 'deleted', ctx);
+  const job = (await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data();
+  assert.equal(job.phase, 'ready-for-auth-delete');
+  assert.equal(job.verificationPassed, true);
+});
+
 test('identity query pagination streams 450 matches without skipping duplicate document IDs', async () => {
   const writes = [];
   for (let index = 0; index < 450; index += 1) {

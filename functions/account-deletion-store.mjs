@@ -762,8 +762,7 @@ async function hasPendingIdentityReferences(db, uid, verifiedEmail) {
 
 export async function verifyNoProtectedReferences(db, uid, context = {}) {
   requireId(uid, 'uid');
-  const bound = await getBoundJob(db, uid, context);
-  if (!context.verifiedEmail) fail('verified-email-required');
+  await getBoundJob(db, uid, context);
   const checks = [
     db.collection('teams').where('memberUids', 'array-contains', uid),
     db.collection('teams').where('createdBy', '==', uid),
