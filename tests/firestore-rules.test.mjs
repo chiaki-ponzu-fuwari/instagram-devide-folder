@@ -148,7 +148,7 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
       await db.doc('accountDeletionLocks/uLocked').set({ uid: 'uLocked', phase: 'started' });
       await db.doc('users/uLocked').set({ uid: 'uLocked' });
       await db.doc('teams/tLock').set({
-        createdBy: 'u2', memberUids: ['u2', 'uLocked'], securitySchemaVersion: 2,
+        createdBy: 'u2', memberUids: ['u2'], securitySchemaVersion: 2,
         securityMigrationState: 'ready', rewardVisibility: 'admin_only',
       });
       await db.doc('teams/tLock/members/u2').set({
@@ -172,6 +172,7 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
       createdBy: 'uLocked', deletedAt: null, rewardVisibility: 'admin_only',
     }));
     await assertFails(locked.doc('teams/tLock/folders/locked-write').set({ name: 'blocked' }));
+    await assertFails(admin.doc('teams/tLock').update({ memberUids: ['u2', 'uLocked'] }));
     await assertFails(admin.doc('teams/tLock/invites/locked').set({ invitedUid: 'uLocked' }));
     await assertFails(admin.doc('teams/tLock/members/uLocked').set({
       uid: 'uLocked', role: 'member', status: 'active', displayName: 'Locked',
@@ -188,6 +189,25 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
     }));
     await assertFails(admin.doc('teams/tLock/projectRewardShares/p1_uLocked').set({
       projectId: 'p1', uid: 'uLocked', rewardYen: 0, updatedAt: 2, updatedBy: 'u2',
+    }));
+    await assertFails(admin.doc('teams/tLock/projects/locked-assignment').set({
+      id: 'locked-assignment', assignedUids: ['uLocked'], updatedBy: 'u2',
+    }));
+    await assertFails(admin.doc('teams/tLock').update({
+      settings: { assignOwnerUids: ['uLocked'] },
+    }));
+    const approval = admin.batch();
+    approval.set(admin.doc('teams/tLock/members/u3'), {
+      uid: 'u3', role: 'member', status: 'active', displayName: 'Unlocked',
+      createdAt: 3, updatedAt: 3, updatedBy: 'u2',
+    });
+    approval.update(admin.doc('teams/tLock'), { memberUids: ['u2', 'u3'] });
+    await assertSucceeds(approval.commit());
+    await assertSucceeds(admin.doc('teams/tLock/projects/multi-assignment').set({
+      id: 'multi-assignment', assignedUids: ['u2', 'u3'], updatedBy: 'u2',
+    }));
+    await assertSucceeds(admin.doc('teams/tLock').update({
+      settings: { assignOwnerUids: ['u3'] },
     }));
     await assertSucceeds(admin.doc('users/u2').set({ uid: 'u2' }));
     await assertSucceeds(admin.doc('teams/tLock/invites/other').set({ invitedUid: 'u3' }));

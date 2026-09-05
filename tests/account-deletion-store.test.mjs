@@ -357,8 +357,8 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
     legacyNote: 'deleted@example.com was shown historically',
   });
   await db.doc('teams/team-a/activity/legacy-join').set({
-    action: 'joinTeam', actorName: '山田花子', targetName: '山田花子',
-    coreText: 'チームに参加しました', text: '山田花子さんがチームに参加しました',
+    action: 'joinTeam', actorUid: 'admin', actorName: '管理者', targetName: '山田花子',
+    coreText: 'チームに参加しました', text: '管理者さんが山田花子さんの参加を承認しました',
     contactEmail: 'deleted@example.com', createdAt: 458,
   });
   const ctx = await begin([{ teamId: 'team-a', action: 'leave' }]);
@@ -378,10 +378,11 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
   assert.equal(unstructured.targetName, '山田花子');
   assert.equal(unstructured.legacyNote, undefined);
   const legacyJoin = (await db.doc('teams/team-a/activity/legacy-join').get()).data();
-  assert.equal(legacyJoin.actorName, '削除済みユーザー');
+  assert.equal(legacyJoin.actorUid, 'admin');
+  assert.equal(legacyJoin.actorName, '管理者');
   assert.equal(legacyJoin.targetName, '削除済みユーザー');
   assert.equal(legacyJoin.contactEmail, undefined);
-  assert.equal(legacyJoin.text, '削除済みユーザーさんがチームに参加しました');
+  assert.equal(legacyJoin.text, '管理者さんがチームに参加しました');
 });
 
 test('non-member pending requests and UID or verified-email invitations are deleted globally', async () => {

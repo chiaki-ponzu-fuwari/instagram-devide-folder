@@ -29,12 +29,69 @@ service cloud.firestore {
         && (!data.keys().hasAny(['invitedUid']) || isDeletionUnlocked(data.invitedUid));
     }
 
+    function uidArrayIsMemberSubset(data, field, memberUids) {
+      return !data.keys().hasAny([field])
+        || (data[field] is list
+          && data[field].toSet().size() == data[field].size()
+          && data[field].toSet().difference(memberUids.toSet()).size() == 0);
+    }
+
+    function settingsUidArraysAreMembers(settings, memberUids) {
+      return settings is map
+        && memberUids is list
+        && uidArrayIsMemberSubset(settings, 'assignOwnerUids', memberUids)
+        && uidArrayIsMemberSubset(settings, 'adminUids', memberUids)
+        && uidArrayIsMemberSubset(settings, 'ownerUids', memberUids)
+        && uidArrayIsMemberSubset(settings, 'managerUids', memberUids)
+        && uidArrayIsMemberSubset(settings, 'assignedUids', memberUids)
+        && uidArrayIsMemberSubset(settings, 'assigneeUids', memberUids);
+    }
+
     function teamPath(teamId) {
       return /databases/$(database)/documents/teams/$(teamId);
     }
 
     function memberPath(teamId, uid) {
       return /databases/$(database)/documents/teams/$(teamId)/members/$(uid);
+    }
+
+    function isValidTeamMemberUidLists(teamId, before, after) {
+      let additions = after.toSet().difference(before.toSet());
+      let addedUid = after.size() > 0 ? after[after.size() - 1] : '';
+      return before is list
+        && after is list
+        && after.toSet().size() == after.size()
+        && (additions.size() == 0
+          || (additions.size() == 1
+            && additions.hasOnly([addedUid])
+            && isDeletionUnlocked(addedUid)
+            && existsAfter(memberPath(teamId, addedUid))
+            && getAfter(memberPath(teamId, addedUid)).data.uid == addedUid
+            && getAfter(memberPath(teamId, addedUid)).data.status == 'active'));
+    }
+
+    function isValidTeamMemberUidUpdate(teamId) {
+      return (!resource.data.keys().hasAny(['memberUids'])
+          && !request.resource.data.keys().hasAny(['memberUids']))
+        || (resource.data.keys().hasAll(['memberUids'])
+          && request.resource.data.keys().hasAll(['memberUids'])
+          && isValidTeamMemberUidLists(
+            teamId, resource.data.memberUids, request.resource.data.memberUids));
+    }
+
+    function embeddedSettingsUidsAreMembers(data) {
+      return !data.keys().hasAny(['settings'])
+        || !data.keys().hasAny(['memberUids'])
+        || settingsUidArraysAreMembers(data.settings, data.memberUids);
+    }
+
+    function projectAssigneesAreMembers(teamId, data) {
+      let members = getAfter(teamPath(teamId)).data.memberUids;
+      return !data.keys().hasAny(['assignedUids'])
+        || (members is list
+          && data.assignedUids is list
+          && data.assignedUids.toSet().size() == data.assignedUids.size()
+          && data.assignedUids.toSet().difference(members.toSet()).size() == 0);
     }
 
     function memberDoc(teamId) {
@@ -316,7 +373,10 @@ service cloud.firestore {
         && request.resource.data.deletedAt == null
         && request.resource.data.rewardVisibility in ['admin_only', 'all_members', 'selected_members'];
       allow read: if (signedIn() && resource.data.memberUids.hasAny([request.auth.uid])) || isApprovedMember(teamId) || isTeamCreator(teamId);
-      allow update: if canWriteTeamData() && canManageTeam(teamId);
+      allow update: if canWriteTeamData()
+        && canManageTeam(teamId)
+        && isValidTeamMemberUidUpdate(teamId)
+        && embeddedSettingsUidsAreMembers(request.resource.data);
       allow delete: if false;
 
       match /members/{uid} {
@@ -385,7 +445,10 @@ service cloud.firestore {
       match /projects/{projectId} {
         allow read: if canManageTeam(teamId)
           || (isApprovedMember(teamId) && isMigrationReady(teamId) && hasPublicProjectShape());
-        allow create, update: if canWriteTeamData() && canReadReadyPublicTeam(teamId) && validPublicProject(projectId);
+        allow create, update: if canWriteTeamData()
+          && canReadReadyPublicTeam(teamId)
+          && validPublicProject(projectId)
+          && projectAssigneesAreMembers(teamId, request.resource.data);
         allow delete: if false;
       }
 

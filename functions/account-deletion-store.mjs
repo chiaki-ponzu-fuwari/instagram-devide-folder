@@ -523,8 +523,7 @@ function sanitizeActivity(data, uid, identity = {}) {
   const names = new Set((identity.names || []).filter((value) => typeof value === 'string' && value));
   const isKnownName = (value) => typeof value === 'string' && names.has(value);
   const actorPersonAction = data?.action === 'joinTeam' || data?.action === 'leaveTeam';
-  const actorWasDeleted = data?.actorUid === uid
-    || (actorPersonAction && (isKnownName(data?.actorName) || isKnownName(data?.targetName)));
+  const actorWasDeleted = data?.actorUid === uid;
   const targetWasDeleted = data?.targetUid === uid || data?.memberUid === uid
     || (PERSON_TARGET_ACTIONS.has(data?.action) && (isKnownName(data?.targetName) || isKnownName(data?.memberName)))
     || (actorPersonAction && isKnownName(data?.targetName));
@@ -695,11 +694,10 @@ async function deletePendingIdentityReferences(db, uid, verifiedEmail) {
         const ids = inviteIds.slice(start, start + 10);
         const linkedQuery = db.collection('teamInviteCodes').where('inviteId', 'in', ids);
         await pagedCollection(linkedQuery, async (linkedPage) => {
-          for (const candidate of linkedPage) {
-            if (inviteTeams.get(candidate.data().inviteId)?.has(candidate.data().teamId)) {
-              pageDocuments.set(candidate.ref.path, candidate);
-            }
-          }
+          const matching = linkedPage.filter((candidate) => (
+            inviteTeams.get(candidate.data().inviteId)?.has(candidate.data().teamId)
+          ));
+          await commitMutations(db, matching, (batch, document) => batch.delete(document.ref));
         });
       }
       await commitMutations(db, [...pageDocuments.values()], (batch, document) => batch.delete(document.ref));
