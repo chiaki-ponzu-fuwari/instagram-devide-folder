@@ -168,6 +168,7 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
         uid: 'u2', role: 'admin', status: 'active', displayName: 'Admin',
         createdAt: 1, updatedAt: 1, updatedBy: 'u2',
       });
+      await db.doc('teams/tSettings/joinRequests/array-ref').set({ uid: 'u2', status: 'pending' });
     });
     const locked = env.authenticatedContext('uLocked').firestore();
     const admin = env.authenticatedContext('u2').firestore();
@@ -222,6 +223,10 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
       id: 'malformed-assignment', assignedUids: 'u2', updatedBy: 'u2',
     }));
     await assertSucceeds(admin.doc('teams/tSettings/folders/unlocked-owner').set({ createdBy: 'u2' }));
+    await assertFails(admin.doc('teams/tSettings/folders/locked-array').set({ memberUids: ['uLocked'] }));
+    await assertFails(admin.doc('teams/tSettings/invites/locked-array').set({ memberUids: ['uLocked'] }));
+    await assertFails(admin.doc('teams/tSettings/joinRequests/array-ref').update({ memberUids: ['uLocked'] }));
+    await assertSucceeds(admin.doc('teams/tSettings/invites/unlocked').set({ invitedUid: 'u2' }));
     const approval = admin.batch();
     approval.set(admin.doc('teams/tLock/members/u3'), {
       uid: 'u3', role: 'member', status: 'active', displayName: 'Unlocked',

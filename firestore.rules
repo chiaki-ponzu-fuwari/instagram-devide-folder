@@ -57,13 +57,18 @@ service cloud.firestore {
     function childIdentityIsValid(teamId, data) {
       let members = getAfter(teamPath(teamId)).data.memberUids;
       return hasUnlockedIdentity(data)
-        && members is list
-        && uidArrayIsMemberSubset(data, 'assignedUids', members)
-        && uidArrayIsMemberSubset(data, 'assigneeUids', members)
-        && uidArrayIsMemberSubset(data, 'assignOwnerUids', members)
-        && uidArrayIsMemberSubset(data, 'adminUids', members)
-        && uidArrayIsMemberSubset(data, 'ownerUids', members)
-        && uidArrayIsMemberSubset(data, 'managerUids', members);
+        && (!data.keys().hasAny([
+            'assignedUids', 'assigneeUids', 'assignOwnerUids', 'memberUids',
+            'adminUids', 'ownerUids', 'managerUids'
+          ])
+          || (members is list
+            && uidArrayIsMemberSubset(data, 'assignedUids', members)
+            && uidArrayIsMemberSubset(data, 'assigneeUids', members)
+            && uidArrayIsMemberSubset(data, 'assignOwnerUids', members)
+            && uidArrayIsMemberSubset(data, 'memberUids', members)
+            && uidArrayIsMemberSubset(data, 'adminUids', members)
+            && uidArrayIsMemberSubset(data, 'ownerUids', members)
+            && uidArrayIsMemberSubset(data, 'managerUids', members)));
     }
 
     function stableTeamOwners() {
@@ -536,7 +541,7 @@ service cloud.firestore {
       match /invites/{inviteId} {
         allow read: if canManageTeam(teamId);
         allow create, update: if canWriteTeamData() && canManageTeam(teamId)
-          && hasUnlockedIdentity(request.resource.data);
+          && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if false;
       }
 
@@ -549,7 +554,7 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/teams/$(teamId)/invites/$(request.resource.data.inviteId)).data.disabledAt == null;
         allow read: if canManageTeam(teamId) || (signedIn() && resource.data.uid == request.auth.uid);
         allow update: if canWriteTeamData() && canManageTeam(teamId)
-          && hasUnlockedIdentity(request.resource.data);
+          && childIdentityIsValid(teamId, request.resource.data);
         allow delete: if false;
       }
     }

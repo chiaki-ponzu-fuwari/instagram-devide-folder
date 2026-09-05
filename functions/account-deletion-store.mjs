@@ -26,6 +26,10 @@ const DROP = Symbol('drop');
 const MANAGEMENT_UID_ARRAY_FIELDS = ['assignOwnerUids', 'adminUids', 'ownerUids', 'managerUids'];
 const SETTINGS_UID_ARRAY_FIELDS = [...MANAGEMENT_UID_ARRAY_FIELDS, 'assignedUids', 'assigneeUids'];
 const PERSON_TARGET_ACTIONS = new Set(['removeMember', 'approveMember', 'rejectMember']);
+const KNOWN_ACTIVITY_ACTIONS = new Set([
+  ...PERSON_TARGET_ACTIONS, 'joinTeam', 'leaveTeam',
+  'createProject', 'markDelivered', 'markCompleted', 'deleteProject',
+]);
 const PERSON_SHARED_FIELDS = new Set([
   'id', 'type', 'action', 'projectId', 'projectName', 'coreText', 'text',
   'createdAt', 'updatedAt', 'occurredAt',
@@ -551,6 +555,14 @@ function sanitizeActivity(data, uid, identity = {}) {
     || (actorPersonAction && isKnownName(data?.targetName));
   let next = actorWasDeleted ? anonymizeActivityRecord(data, uid) : { ...(data || {}) };
   next = sanitizeActivityValue(next, uid, identity);
+  const explicitTargetWasDeleted = data?.targetUid === uid || data?.memberUid === uid;
+  if (explicitTargetWasDeleted && !KNOWN_ACTIVITY_ACTIONS.has(data?.action)) {
+    for (const field of ['text', 'coreText']) {
+      if (typeof next[field] === 'string' && [...names].some((name) => next[field].includes(name))) {
+        delete next[field];
+      }
+    }
+  }
   if (actorWasDeleted && data?.actorUid !== uid) next.actorName = DELETED_LABEL;
   if (targetWasDeleted) {
     if (next.targetUid === uid) next.targetUid = DELETED_UID;

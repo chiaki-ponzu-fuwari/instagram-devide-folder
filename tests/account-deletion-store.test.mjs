@@ -407,6 +407,7 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
   await db.doc('teams/team-a/activity/unknown-target').set({
     action: 'futureAction', actorUid: 'admin', actorName: '管理者',
     targetUid: 'deleted', targetName: '山田花子', targetPhotoURL: 'https://private.example/photo',
+    text: '管理者が山田花子を未知の方法で変更', coreText: '山田花子を変更',
     projectId: 'shared-project', projectName: '共有案件', createdAt: 459,
     target: {
       uid: 'deleted', displayName: '山田花子', email: 'deleted@example.com',
@@ -441,6 +442,8 @@ test('activity cleanup anonymizes a deleted target while preserving another acto
   assert.equal(unknownTarget.targetUid, 'deleted-user');
   assert.equal(unknownTarget.targetName, '削除済みユーザー');
   assert.equal(unknownTarget.targetPhotoURL, undefined);
+  assert.equal(unknownTarget.text, undefined);
+  assert.equal(unknownTarget.coreText, undefined);
   assert.deepEqual(unknownTarget.target, {
     uid: 'deleted-user', displayName: '削除済みユーザー', type: 'member',
   });
