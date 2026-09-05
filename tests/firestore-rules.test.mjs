@@ -4,7 +4,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { serverTimestamp } from 'firebase/firestore';
+import { deleteField, serverTimestamp } from 'firebase/firestore';
 
 const projectId = 'dm-manager-rules';
 
@@ -169,6 +169,15 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
         createdAt: 1, updatedAt: 1, updatedBy: 'u2',
       });
       await db.doc('teams/tSettings/joinRequests/array-ref').set({ uid: 'u2', status: 'pending' });
+      await db.doc('teams/tLegacyArrays').set({
+        createdBy: 'u2', memberUids: ['u2'], assignedUids: ['legacy-user'],
+        securitySchemaVersion: 1, securityMigrationState: 'locked',
+        rewardVisibility: 'admin_only',
+      });
+      await db.doc('teams/tLegacyArrays/members/u2').set({
+        uid: 'u2', role: 'admin', status: 'active', displayName: 'Admin',
+        createdAt: 1, updatedAt: 1, updatedBy: 'u2',
+      });
     });
     const locked = env.authenticatedContext('uLocked').firestore();
     const admin = env.authenticatedContext('u2').firestore();
@@ -213,6 +222,10 @@ test('deletion lock blocks identity recreation while unrelated users keep normal
     }));
     await assertFails(admin.doc('teams/tSettings').update({ createdBy: 'uLocked' }));
     await assertFails(admin.doc('teams/tSettings').update({ ownerUid: 'uLocked' }));
+    await assertFails(admin.doc('teams/tSettings').update({ assignedUids: ['uLocked'] }));
+    await assertSucceeds(admin.doc('teams/tSettings').update({ name: 'Normal update' }));
+    await assertSucceeds(admin.doc('teams/tLegacyArrays').update({ name: 'Legacy preserved' }));
+    await assertSucceeds(admin.doc('teams/tLegacyArrays').update({ assignedUids: deleteField() }));
     await assertFails(admin.doc('teams/tSettings/folders/locked-owner').set({ createdBy: 'uLocked' }));
     await assertFails(admin.doc('teams/tSettings/templates/locked-owner').set({ ownerUid: 'uLocked' }));
     await assertFails(admin.doc('teams/tSettings/settings/locked-updater').set({ updatedBy: 'uLocked' }));
@@ -683,6 +696,8 @@ test('only signed-in users can create join requests', async () => {
       code: 'NEWCODE', teamId: 't1', inviteId: 'i-new', teamName: 'Team One',
       createdBy: 'u1', createdAt: 1778493600000, disabledAt: null,
     }));
+    await assertSucceeds(admin.doc('teamInviteCodes/NEWCODE').update({ disabledAt: 1778493600001 }));
+    await assertFails(admin.doc('teamInviteCodes/NEWCODE').update({ memberUids: ['uLocked'] }));
     await assertFails(admin.doc('teamInviteCodes/BADCODE').set({
       code: 'BADCODE', teamId: 't1', inviteId: 'i-bad', teamName: 'Team One',
       createdBy: 'u1', createdAt: 1778493600000, disabledAt: null,
