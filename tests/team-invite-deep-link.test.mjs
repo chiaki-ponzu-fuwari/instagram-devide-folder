@@ -9,11 +9,11 @@ const entitlements = readFileSync(new URL('ios/App/App/App.entitlements', root),
 const infoPlist = readFileSync(new URL('ios/App/App/Info.plist', root), 'utf8');
 const firebaseConfig = JSON.parse(readFileSync(new URL('firebase.json', root), 'utf8'));
 
-test('team invite links are configured as iOS Universal Links', () => {
+test('team invite association is retained for the later team release', () => {
   const association = JSON.parse(readFileSync(new URL('www/.well-known/apple-app-site-association', root), 'utf8'));
   const details = association?.applinks?.details || [];
 
-  assert.match(entitlements, /applinks:dm-management-ecc1f\.web\.app/);
+  assert.doesNotMatch(entitlements, /com\.apple\.developer\.associated-domains/);
   assert.ok(JSON.stringify(details).includes('5H25CFKC7N.com.chiaki.dmmanager'));
   assert.ok(JSON.stringify(details).includes('team_join'));
 });

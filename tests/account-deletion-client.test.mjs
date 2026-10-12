@@ -12,6 +12,7 @@ import {
 const adapterSource = readFileSync(new URL('../www/js/account-deletion.mjs', import.meta.url), 'utf8');
 const firestoreCoreSource = readFileSync(new URL('../www/js/firestore-core.mjs', import.meta.url), 'utf8');
 const firebaseAuthSource = readFileSync(new URL('../www/js/firebase-auth.mjs', import.meta.url), 'utf8');
+const appHtmlSource = readFileSync(new URL('../www/index.html', import.meta.url), 'utf8');
 const rootPackage = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 function user(providers = ['google.com']) {
@@ -261,8 +262,16 @@ test('Firebase adapter uses regional callables and only explicitly connects loca
   assert.doesNotMatch(adapterSource, /localStorage|sessionStorage|console\./);
 });
 
+test('iPhone content security policy permits the regional account-deletion callable', () => {
+  assert.match(
+    appHtmlSource,
+    /Content-Security-Policy[\s\S]{0,1000}https:\/\/asia-northeast1-dm-management-ecc1f\.cloudfunctions\.net/,
+  );
+});
+
 test('Firebase auth adapter reauthenticates the current user instead of signing in', () => {
   assert.match(firestoreCoreSource, /reauthenticateWithCredential\(currentUser,\s*credential\)/);
+  assert.match(firestoreCoreSource, /currentUser\.getIdToken\(true\)/);
   assert.match(firestoreCoreSource, /reauthenticateWithPopup\(\s*currentUser,\s*provider/);
   assert.match(firebaseAuthSource, /fetchAccountDeletionPlan/);
   assert.match(firebaseAuthSource, /reauthenticateForAccountDeletion/);

@@ -1,4 +1,5 @@
 let firestoreRuntimePromise = null;
+const PERSONAL_PENDING_WORKSPACE_KEY_PREFIX = 'dm-personal-cloud-pending-v1:';
 
 async function getFirestoreRuntime() {
   if (!firestoreRuntimePromise) {
@@ -44,6 +45,57 @@ function cloneRecord(value) {
     return out;
   }
   return value;
+}
+
+function pendingWorkspaceStorageKey(uid) {
+  const normalizedUid = cleanString(uid);
+  return normalizedUid ? `${PERSONAL_PENDING_WORKSPACE_KEY_PREFIX}${normalizedUid}` : '';
+}
+
+function resolveStorage(storage) {
+  if (storage && typeof storage.getItem === 'function') return storage;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  } catch {}
+  return null;
+}
+
+export function loadPendingWorkspace(uid, { storage } = {}) {
+  const key = pendingWorkspaceStorageKey(uid);
+  const targetStorage = resolveStorage(storage);
+  if (!key || !targetStorage) return null;
+  try {
+    const raw = targetStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? cloneRecord(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePendingWorkspace(uid, snapshot, { storage } = {}) {
+  const key = pendingWorkspaceStorageKey(uid);
+  const targetStorage = resolveStorage(storage);
+  if (!key || !targetStorage) return false;
+  try {
+    targetStorage.setItem(key, JSON.stringify(cloneRecord(snapshot || {})));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearPendingWorkspace(uid, { storage } = {}) {
+  const key = pendingWorkspaceStorageKey(uid);
+  const targetStorage = resolveStorage(storage);
+  if (!key || !targetStorage) return false;
+  try {
+    targetStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getRecordId(record, fallback = '') {
@@ -501,6 +553,7 @@ export function queuePersonalCloudWrite(user, snapshot) {
     ...cloneRecord(snapshot || {}),
     ownerUid: uid,
   });
+  savePendingWorkspace(uid, payload);
   personalCloudPendingPayloads.set(uid, { user, snapshot: payload });
   bumpPending(uid, +1);
   setSyncStatus({ uid, lastError: null });
@@ -523,6 +576,7 @@ export function queuePersonalCloudWrite(user, snapshot) {
           lastSyncedAt: Date.now(),
           lastError: null,
         });
+        if (!personalCloudPendingPayloads.has(uid)) clearPendingWorkspace(uid);
         return result;
       } finally {
         personalCloudInflight.delete(uid);
@@ -533,6 +587,10 @@ export function queuePersonalCloudWrite(user, snapshot) {
       }
     })
     .catch((error) => {
+      const durablePendingWorkspace = loadPendingWorkspace(uid);
+      if (durablePendingWorkspace) {
+        personalCloudPendingPayloads.set(uid, { user, snapshot: durablePendingWorkspace });
+      }
       console.warn('[personal-cloud] write failed', error);
       setSyncStatus({
         lastError: error && (error.message || String(error)) ? (error.message || String(error)) : 'sync-failed',
@@ -595,21 +653,27 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 export async function bootstrapPersonalWorkspace({ user, localState }) {
   if (!user?.uid) throw new Error('login-required');
   setSyncStatus({ uid: user.uid });
+  const localWorkspace = buildWorkspaceSnapshotFromLocal(localState, { ownerUid: user.uid });
+  const pendingWorkspace = loadPendingWorkspace(user.uid);
+  const recoverableWorkspace = pendingWorkspace
+    ? mergeWorkspaceSnapshot(localWorkspace, pendingWorkspace)
+    : localWorkspace;
   const cloud = await loadWorkspaceFromFirestore({ user });
   if (shouldMigrateLocalWorkspace({
     cloudDocCount: cloud.recordCount,
-    localRecordCount: countLocalRecords(localState),
+    localRecordCount: countLocalRecords(recoverableWorkspace),
   })) {
-    const migrated = buildWorkspaceSnapshotFromLocal(localState, { ownerUid: user.uid });
-    await writeWorkspaceToFirestore({ user, snapshot: migrated });
+    await writeWorkspaceToFirestore({ user, snapshot: recoverableWorkspace });
+    clearPendingWorkspace(user.uid);
     setSyncStatus({ lastSyncedAt: Date.now(), lastError: null });
-    return migrated;
+    return recoverableWorkspace;
+  }
+  const mergedWorkspace = mergeWorkspaceSnapshot(recoverableWorkspace, cloud.snapshot);
+  if (pendingWorkspace) {
+    queuePersonalCloudWrite(user, mergedWorkspace);
   }
   setSyncStatus({ lastSyncedAt: Date.now(), lastError: null });
-  return mergeWorkspaceSnapshot(
-    buildWorkspaceSnapshotFromLocal(localState, { ownerUid: user.uid }),
-    cloud.snapshot,
-  );
+  return mergedWorkspace;
 }
 
 export async function subscribePersonalWorkspace({ user, onChange }) {

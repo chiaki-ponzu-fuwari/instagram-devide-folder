@@ -301,10 +301,12 @@ export async function getFreshAppleReauthenticationCredential(currentUser) {
 
 export async function reauthenticateCurrentUser(currentUser, credential) {
   if (!currentUser?.uid || !credential) throw new Error('Reauthentication credential missing');
-  return withTimeout(
+  const result = await withTimeout(
     reauthenticateWithCredential(currentUser, credential),
     'Firebase reauthentication',
   );
+  await withTimeout(currentUser.getIdToken(true), 'Firebase auth token refresh');
+  return result;
 }
 
 export async function signOutGoogle() {

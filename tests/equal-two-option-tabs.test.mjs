@@ -8,7 +8,6 @@ const equalTwoOptionIds = [
   'settingsLangSwitch',
   'doneListGroup',
   'repeatClosedListGroup',
-  'schedTabs',
   'teamSchedTabs',
   'personalRewardScopeControl',
   'revTabs',
@@ -45,6 +44,16 @@ test('the shared class makes exactly two equal columns', () => {
   assert.match(
     html,
     /\.equal-two-option-tabs\s*>\s*\.settings-lang-btn\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0/,
+  );
+});
+
+test('personal schedule tabs use a dedicated three-option equal-width layout', () => {
+  const tag = html.match(/<div[^>]*id="schedTabs"[^>]*>/)?.[0];
+  assert.ok(tag);
+  assert.match(tag, /\bequal-three-option-tabs\b/);
+  assert.match(
+    html,
+    /\.equal-three-option-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
   );
 });
 

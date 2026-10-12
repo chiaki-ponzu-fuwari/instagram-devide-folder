@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import './personal-page-guide-ui.test.mjs';
 
 const html = readFileSync(new URL('../www/index.html', import.meta.url), 'utf8');
 
@@ -44,6 +45,15 @@ test('reward scope control is on the reward page and removed from personal setti
   assert.match(revenue, /id="personalAnaSelfTeam"[\s\S]*チーム報酬も含む/);
   assert.match(html, /\.personal-reward-scope\s*\{[^}]*display:grid[^}]*grid-template-columns:1fr 1fr/);
   assert.doesNotMatch(settings, /個人の分析範囲|personalAnalysisCard|personalAnaSelf/);
+});
+
+test('first release hides the team reward switch without removing its saved scope support', () => {
+  const revenue = html.match(/<!-- Revenue View -->([\s\S]*?)<!-- Team View -->/)?.[1] || '';
+  assert.match(html, /const TEAM_REWARD_SCOPE_RELEASED = false;/);
+  assert.match(revenue, /id="personalRewardScopeControl"[\s\S]*?hidden/);
+  assert.match(revenue, /id="personalTeamRewardSyncNote"[\s\S]*?hidden/);
+  assert.match(html, /\.personal-reward-scope\[hidden\],\s*\.personal-reward-sync-note\[hidden\]\s*\{\s*display:none !important;/);
+  assert.match(html, /setPersonalRewardAnalysisScope\('personal_plus_team_share'\)/);
 });
 
 test('expected reward copy stays one line without changing the two-column card width', () => {

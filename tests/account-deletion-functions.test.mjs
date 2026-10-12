@@ -75,13 +75,20 @@ function baseDeps(overrides = {}) {
   };
 }
 
-test('callable handlers reject unauthenticated and stale authentication with machine-safe details', async () => {
+test('account deletion plan only requires a signed-in user; deletion still requires fresh authentication', async () => {
   const getPlan = createGetAccountDeletionPlanHandler(baseDeps());
+  const deleteAccount = createDeleteAccountHandler(baseDeps());
   await assert.rejects(() => getPlan({ data: {}, auth: null }), (error) => (
     error.code === 'unauthenticated' && error.details.reason === 'authentication-required'
   ));
-  await assert.rejects(
+  await assert.doesNotReject(
     () => getPlan({ data: {}, auth: auth({ auth_time: 799 }) }),
+  );
+  await assert.rejects(
+    () => deleteAccount({
+      data: { requestId: REQUEST_ID, teamDecisions: [] },
+      auth: auth({ auth_time: 799 }),
+    }),
     (error) => error.code === 'failed-precondition'
       && error.details.reason === 'recent-authentication-required'
       && !JSON.stringify(error).includes('private@example.com'),
@@ -89,13 +96,19 @@ test('callable handlers reject unauthenticated and stale authentication with mac
 });
 
 test('callable handlers reject missing and future auth_time claims', async () => {
-  const getPlan = createGetAccountDeletionPlanHandler(baseDeps());
+  const deleteAccount = createDeleteAccountHandler(baseDeps());
   await assert.rejects(
-    () => getPlan({ data: {}, auth: auth({ auth_time: undefined }) }),
+    () => deleteAccount({
+      data: { requestId: REQUEST_ID, teamDecisions: [] },
+      auth: auth({ auth_time: undefined }),
+    }),
     (error) => error.code === 'failed-precondition' && error.details.reason === 'invalid-auth-time',
   );
   await assert.rejects(
-    () => getPlan({ data: {}, auth: auth({ auth_time: 1_101 }) }),
+    () => deleteAccount({
+      data: { requestId: REQUEST_ID, teamDecisions: [] },
+      auth: auth({ auth_time: 1_101 }),
+    }),
     (error) => error.code === 'failed-precondition' && error.details.reason === 'invalid-auth-time',
   );
 });

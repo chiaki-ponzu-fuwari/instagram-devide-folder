@@ -11,6 +11,7 @@ const ensureScript = readFileSync(new URL('../scripts/ensure-ios-capacitor-plugi
 const privacyManifestUrl = new URL('../ios/App/App/PrivacyInfo.xcprivacy', import.meta.url);
 const xcodeProject = readFileSync(new URL('../ios/App/App.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
 const packageResolved = JSON.parse(readFileSync(new URL('../ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', import.meta.url), 'utf8'));
+const appEntitlements = readFileSync(new URL('../ios/App/App/App.entitlements', import.meta.url), 'utf8');
 
 function loadPrivacyManifest() {
   const json = execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', fileURLToPath(privacyManifestUrl)], {
@@ -25,6 +26,11 @@ test('iOS Capacitor config registers custom native plugins used by the web app',
   assert.ok(packageClassList.includes('SignInWithApple'), 'SignInWithApple should be registered for Apple login');
   assert.ok(packageClassList.includes('AppReview'), 'AppReview should be registered for in-app review requests');
   assert.ok(packageClassList.includes('DeepLink'), 'DeepLink should be registered for app invite links');
+});
+
+test('first personal-only release keeps Apple sign-in but omits team invite domains', () => {
+  assert.match(appEntitlements, /com\.apple\.developer\.applesignin/);
+  assert.doesNotMatch(appEntitlements, /com\.apple\.developer\.associated-domains/);
 });
 
 test('iOS app initializes Firebase once and exposes safe Apple token revocation', () => {
@@ -109,6 +115,19 @@ test('Xcode App target copies PrivacyInfo.xcprivacy into the application resourc
   assert.match(xcodeProject, /PrivacyInfo\.xcprivacy \*\/ = \{isa = PBXFileReference;/);
   assert.match(xcodeProject, /PrivacyInfo\.xcprivacy in Resources \*\/ = \{isa = PBXBuildFile;/);
   assert.match(xcodeProject, /PBXResourcesBuildPhase[\s\S]*PrivacyInfo\.xcprivacy in Resources/);
+});
+
+test('the next App Store upload uses a new build number', () => {
+  assert.match(xcodeProject, /CURRENT_PROJECT_VERSION = 8;/);
+});
+
+test('Release target requests an App Store distribution signature', () => {
+  const releaseTarget = xcodeProject
+    .split('504EC3181FED79650016851F /* Release */ = {')[1]
+    ?.split('/* End XCBuildConfiguration section */')[0] || '';
+  assert.match(releaseTarget, /CODE_SIGN_STYLE = Manual;/);
+  assert.match(releaseTarget, /CODE_SIGN_IDENTITY = "Apple Distribution";/);
+  assert.match(releaseTarget, /PROVISIONING_PROFILE_SPECIFIER = "DMManager App Store Distribution 2026-09";/);
 });
 
 test('App Store disclosure documents cover collected data, review, and future monetization boundaries', () => {

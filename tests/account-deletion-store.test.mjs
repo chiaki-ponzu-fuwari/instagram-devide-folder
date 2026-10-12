@@ -499,6 +499,7 @@ test('ready checkpoints require cleanup and final verification precedes completi
   await requestAuthDeletion(db, 'deleted', ctx);
   await markDeletionJobComplete(db, 'deleted', { ...ctx, authDeletionSucceeded: true });
   assert.equal((await db.doc(`accountDeletionJobs/deleted_${requestId}`).get()).data().phase, 'complete');
+  assert.equal((await db.doc('accountDeletionLocks/deleted').get()).exists, false);
 });
 
 test('activity cleanup anonymizes a deleted target while preserving another actor and project facts', async () => {

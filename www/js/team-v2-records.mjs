@@ -98,7 +98,7 @@ export function buildV2Settings({ teamId, settings = {}, actorUid, now = Date.no
     scope: 'team',
     hideDoneProjectsInList: !!settings.hideDoneProjectsInList,
     hideRepeatClosedProjectsInRepeatList: !!settings.hideRepeatClosedProjectsInRepeatList,
-    revenueBasis: ['shoot', 'deadline', 'deadlineNext'].includes(clean(settings.revenueBasis)) ? clean(settings.revenueBasis) : 'deadline',
+    revenueBasis: ['shoot', 'deadline', 'deadlineNext', 'completed'].includes(clean(settings.revenueBasis)) ? clean(settings.revenueBasis) : 'deadline',
     createdAt: Number(settings.createdAt || now) || now,
     updatedAt: Number(settings.updatedAt || now) || now,
     updatedBy: clean(actorUid),

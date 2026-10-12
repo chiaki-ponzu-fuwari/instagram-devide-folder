@@ -1000,7 +1000,7 @@ export async function markDeletionJobComplete(db, uid, context = {}) {
     }));
     const now = Date.now();
     transaction.update(ref, { phase: 'complete', teamCheckpoints: checkpoints, completedAt: now, updatedAt: now });
-    transaction.update(lock, { phase: 'complete', updatedAt: now });
+    transaction.delete(lock);
   });
 }
 

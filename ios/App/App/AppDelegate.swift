@@ -289,3 +289,17 @@ public class AppReview: CAPPlugin, CAPBridgedPlugin {
         }
     }
 }
+
+@objc(AppInfo)
+public class AppInfo: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "AppInfo"
+    public let jsName = "AppInfo"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "getVersion", returnType: CAPPluginReturnPromise),
+    ]
+
+    @objc public func getVersion(_ call: CAPPluginCall) {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        call.resolve(["version": version])
+    }
+}

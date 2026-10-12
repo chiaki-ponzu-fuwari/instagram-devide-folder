@@ -38,11 +38,16 @@ test('badge updater counts only personal projects and the selected team full pro
   assert.match(indexHtml, /badge\.hidden = count === 0/);
 });
 
-test('review mode remains limited to overdue post dates and unpaid delivered projects', () => {
+test('review mode includes today schedule items, overdue posts, and unpaid delivered projects', () => {
   const reviewBlock = indexHtml.match(
     /if \(mode === 'review'\) \{([\s\S]*?)\n\s*return;\n\s*\}/,
   )?.[1];
   assert.ok(reviewBlock, 'review-mode schedule block should exist');
+  assert.match(indexHtml, /function _scheduleIsReviewToday\(project, field\)/);
+  assert.match(reviewBlock, /\['shootDate', shoot, 'review_today_shoot'/);
+  assert.match(reviewBlock, /\['draftAt', draft, 'review_today_draft'/);
+  assert.match(reviewBlock, /\['deadline', due, 'review_today_deadline'/);
+  assert.match(reviewBlock, /_scheduleIsReviewToday\(p, field\)/);
   assert.match(reviewBlock, /_scheduleIsReviewOverdue\(p, 'deadline'\)/);
   assert.match(reviewBlock, /st === '納品済' && !p\?\.paidConfirmed/);
   assert.doesNotMatch(reviewBlock, /_scheduleIsReviewOverdue\(p, 'shootDate'\)/);

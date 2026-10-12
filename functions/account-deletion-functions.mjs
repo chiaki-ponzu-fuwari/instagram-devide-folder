@@ -89,19 +89,24 @@ function mapError(error, deps) {
   });
 }
 
-function requireCaller(request, deps) {
+function requireAuthenticatedCaller(request, deps) {
   if (!request?.auth?.uid) {
     throw new deps.HttpsError('unauthenticated', 'Authentication is required.', {
       reason: 'authentication-required',
     });
   }
+  return request.auth.uid;
+}
+
+function requireCaller(request, deps) {
+  const uid = requireAuthenticatedCaller(request, deps);
   const authTime = request.auth.token?.auth_time;
   const now = deps.nowSeconds();
   assertRecentAuthentication(authTime, now);
   if (authTime > now) {
     throw new AccountDeletionError('invalid-auth-time', 'Authentication time cannot be in the future.');
   }
-  return request.auth.uid;
+  return uid;
 }
 
 function verifiedEmail(request) {
@@ -151,7 +156,7 @@ export function createGetAccountDeletionPlanHandler(overrides = {}) {
   const deps = dependencies(overrides);
   return async function getAccountDeletionPlanHandler(request) {
     try {
-      const uid = requireCaller(request, deps);
+      const uid = requireAuthenticatedCaller(request, deps);
       validatePlanRequest(request.data);
       const db = deps.db ?? getFirestore();
       const activeJob = await deps.loadActiveAccountDeletionJob(db, uid);

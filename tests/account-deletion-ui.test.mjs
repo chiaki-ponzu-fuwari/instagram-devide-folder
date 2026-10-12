@@ -39,6 +39,14 @@ test('settings exposes a signed-in-only danger action and an accessible deletion
   assert.match(html, /account-deletion-safe-bottom/);
 });
 
+test('settings keeps account deletion outside the collapsible login choices', () => {
+  const loginChoicesStart = html.indexOf('id="settingsLoginChoices"');
+  const deletionRowStart = html.indexOf('id="settingsAccountDeletionRow"');
+  assert.ok(loginChoicesStart >= 0);
+  assert.ok(deletionRowStart > loginChoicesStart);
+  assert.doesNotMatch(html.slice(loginChoicesStart, deletionRowStart), /id="settingsAccountDeletion"/);
+});
+
 test('account deletion visibility uses Firebase signed-in state without requiring a session provider key', () => {
   assert.equal(typeof authState.getLoginRowUiState, 'function');
   assert.equal(typeof authState.getAccountDeletionUiState, 'function');
@@ -66,6 +74,11 @@ test('Japanese and English copy covers cloud, team, device, resume, providers, a
   ]) assert.equal((i18n.match(new RegExp(`\\b${key}:`, 'g')) || []).length, 2, key);
   assert.match(i18n, /account_delete_phrase:\s*'削除'/);
   assert.match(i18n, /account_delete_phrase:\s*'DELETE'/);
+});
+
+test('Apple token revocation failures have a dedicated safe message instead of the generic deletion error', () => {
+  assert.match(html, /apple-revoke-failed[\s\S]{0,180}account_delete_error_apple_revoke/);
+  assert.equal((i18n.match(/\baccount_delete_error_apple_revoke:/g) || []).length, 2);
 });
 
 test('member leave is read-only and every admin choice is required', () => {
@@ -135,6 +148,11 @@ test('device data choice is a separate step after cloud deletion', () => {
   assert.match(html, /id="accountDeletionLocalStep"[^>]*hidden/);
   assert.match(html, /id="accountDeletionLocalConfirm"[^>]*type="button"/);
   assert.match(html, /accountDeletionFlow\.finalizeLocalData\(localChoice\)/);
+});
+
+test('account deletion keeps the selected device-data choice separate from the sign-out workspace reset', () => {
+  const sync = html.match(/async function syncPersonalWorkspaceForUser\(user\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(sync, /!accountDeletionBusy && !accountDeletionAwaitingLocalChoice/);
 });
 
 test('active jobs retain expected decisions and reuse the resume request ID', () => {

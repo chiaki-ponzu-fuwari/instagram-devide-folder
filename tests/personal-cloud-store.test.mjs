@@ -10,6 +10,9 @@ import {
   getSyncStatus,
   subscribeSyncStatus,
   hasPendingWrites,
+  loadPendingWorkspace,
+  savePendingWorkspace,
+  clearPendingWorkspace,
 } from '../www/js/personal-cloud-store.mjs';
 
 const storeSource = readFileSync(new URL('../www/js/personal-cloud-store.mjs', import.meta.url), 'utf8');
@@ -117,6 +120,79 @@ test('hasPendingWrites returns false when no writes are queued', () => {
   assert.equal(hasPendingWrites('u-test'), false);
 });
 
+test('pending personal cloud data is scoped to the signed-in user and clears only that user', () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  const snapshot = { folders: [{ id: 'f1', name: 'only user one' }], accounts: [], projects: [], templates: [], settings: null };
+
+  savePendingWorkspace('user-one', snapshot, { storage });
+  assert.deepEqual(loadPendingWorkspace('user-one', { storage }), snapshot);
+  assert.equal(loadPendingWorkspace('user-two', { storage }), null);
+  clearPendingWorkspace('user-two', { storage });
+  assert.deepEqual(loadPendingWorkspace('user-one', { storage }), snapshot);
+  clearPendingWorkspace('user-one', { storage });
+  assert.equal(loadPendingWorkspace('user-one', { storage }), null);
+});
+
+test('cloud write queue durably saves pending work before upload and clears it only after success', () => {
+  const queue = storeSource.match(/export function queuePersonalCloudWrite\([\s\S]*?\n\}/)?.[0] || '';
+  assert.match(queue, /savePendingWorkspace\(uid, payload\)/);
+  assert.match(queue, /await retryPersonalCloudWrite/);
+  assert.match(queue, /clearPendingWorkspace\(uid\)/);
+  assert.ok(
+    queue.indexOf('savePendingWorkspace(uid, payload)') < queue.indexOf('await retryPersonalCloudWrite'),
+    'pending data must be persisted before the network upload',
+  );
+  assert.ok(
+    queue.indexOf('await retryPersonalCloudWrite') < queue.indexOf('clearPendingWorkspace(uid)'),
+    'pending data must remain until the upload succeeds',
+  );
+});
+
+test('a failed cloud write remains queued for the next online retry', () => {
+  const queue = storeSource.match(/export function queuePersonalCloudWrite\([\s\S]*?\n\}/)?.[0] || '';
+  assert.match(queue, /const durablePendingWorkspace = loadPendingWorkspace\(uid\)/);
+  assert.match(queue, /personalCloudPendingPayloads\.set\(uid, \{ user, snapshot: durablePendingWorkspace \}\)/);
+});
+
+test('personal bootstrap restores only the current user pending snapshot before cloud merge', () => {
+  const bootstrap = storeSource.match(/export async function bootstrapPersonalWorkspace\([\s\S]*?\n\}/)?.[0] || '';
+  assert.match(bootstrap, /loadPendingWorkspace\(user\.uid\)/);
+  assert.match(bootstrap, /mergeWorkspaceSnapshot\(/);
+  assert.match(
+    bootstrap,
+    /if \(pendingWorkspace\) \{\s*queuePersonalCloudWrite\(user, mergedWorkspace\);/,
+    'a recovered pending snapshot must be queued again after an app restart',
+  );
+  assert.ok(
+    bootstrap.indexOf('loadPendingWorkspace(user.uid)') < bootstrap.indexOf('loadWorkspaceFromFirestore'),
+    'durable same-user work must be recovered before comparing with cloud data',
+  );
+});
+
+test('sign-in sync loads a UID-scoped local workspace and saves it after cloud bootstrap', () => {
+  const sync = sliceFunction('syncPersonalWorkspaceForUser', 'applyBackupJSON');
+  assert.match(sync, /loadPersonalWorkspaceCache\(user\.uid\)/);
+  assert.match(sync, /savePersonalWorkspaceCache\(user\.uid, bootstrapped\)/);
+  assert.ok(
+    sync.indexOf('loadPersonalWorkspaceCache(user.uid)') < sync.indexOf('bootstrapPersonalWorkspace'),
+    'a previously signed-in user must restore only their own local mirror',
+  );
+});
+
+test('logout cancels stale cloud sync and clears the displayed signed-in workspace without erasing its UID cache', () => {
+  const sync = sliceFunction('syncPersonalWorkspaceForUser', 'applyBackupJSON');
+  const signOut = htmlSource.match(/const signOutCurrent = async \(\) => \{([\s\S]*?)\n  \};\n  if \(loginRow\)/)?.[1] || '';
+  assert.match(sync, /personalCloudSyncToken \+= 1/);
+  assert.match(sync, /resetPersonalWorkspaceAfterSignOut\(/);
+  assert.match(signOut, /savePersonalWorkspaceCache\(currentUid, getWorkspaceSnapshot\(\)\)/);
+  assert.ok(signOut.indexOf('savePersonalWorkspaceCache(currentUid, getWorkspaceSnapshot())') < signOut.indexOf('signOutCurrentUser'));
+});
+
 test('personal autosave waits until cloud restore finished for the signed-in user', () => {
   const saveFn = sliceFunction('save', 'uid');
 
@@ -128,6 +204,7 @@ test('personal autosave waits until cloud restore finished for the signed-in use
       saveFn.indexOf('queuePersonalCloudWrite'),
     'autosave guard should run before queuePersonalCloudWrite',
   );
+  assert.match(saveFn, /savePersonalWorkspaceCache\(currentUser\.uid, workspace\)/);
 });
 
 test('mergeWorkspaceSnapshot hydrates account.project from cloud project docs', () => {
